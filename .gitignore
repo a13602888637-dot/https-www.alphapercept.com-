@@ -1,0 +1,124 @@
+# Dependencies
+node_modules/
+.npm/
+.pnpm/
+.pnpm-store/
+.yarn/
+.yarn-cache/
+*.tgz
+
+# Build outputs
+.next/
+build/
+dist/
+out/
+
+# Environment variables
+.env
+.env.local
+.env.*
+!.env.example
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
+
+# Prisma
+/lib/generated/prisma
+
+# Next.js specific
+.next/**
+
+# Testing
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Misc
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary files
+.tmp/
+temp/
+
+# System files
+*.sys
+*.dmp
+
+# Package files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Node modules (already covered, but being explicit)
+node_modules/
+*/node_modules/
+
+# Debug
+debug/
+*.pdb
+
+# Local development files
+.local-*
+
+# Custom project-specific ignores
+_bmad-output/
+diagnose_test_env/
+tsconfig.tsbuildinfo
+
+# Test and diagnostic files
+*.test-report.md
+*_TEST_REPORT.md
+*_TEST_SUMMARY.md
+*_VALIDATION_REPORT.md
+*_COMPLETION_REPORT.md
+diagnose_*.sh
+diagnose_*.md
+quick_*.sh
+test_*.js
+test_*.ts
+test_*.sh
+TESTING.md
+TEST_RESULTS.md
+pipeline_test_report.md
+
+# Temporary directories
+.claude/
+_bmad/
