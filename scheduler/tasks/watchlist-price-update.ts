@@ -4,8 +4,8 @@
  */
 
 import { Logger } from '../utils/logger';
-import { prisma } from '@/lib/db';
-import { fetchMultipleStocks } from '@/skills/data_crawler';
+import { prisma } from '../../lib/db';
+import { fetchMultipleStocks } from '../../skills/data_crawler';
 
 export interface WatchlistPriceUpdateConfig {
   enabled: boolean;

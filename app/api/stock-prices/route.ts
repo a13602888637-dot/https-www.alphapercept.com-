@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchMultipleStocks, MarketData } from "@/skills/data_crawler";
-import { prisma } from "@/lib/db";
+import { fetchMultipleStocks, MarketData } from "../../../skills/data_crawler";
+import { prisma } from "../../../lib/db";
 
 // GET: Get real-time stock prices for multiple symbols
 export async function GET(req: Request) {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma } from "../../../lib/db";
 
 // GET: Get stock price history for trend analysis
 export async function GET(req: Request) {

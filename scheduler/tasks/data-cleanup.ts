@@ -4,7 +4,7 @@
  */
 
 import { Logger } from '../utils/logger';
-import { prisma } from '@/lib/db';
+import { prisma } from '../../lib/db';
 
 export interface DataCleanupConfig {
   enabled: boolean;

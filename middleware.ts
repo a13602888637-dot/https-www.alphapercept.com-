@@ -1,9 +1,19 @@
-import { NextResponse } from "next/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-export default function middleware() {
-  // 暂时禁用所有认证，直接放行所有请求
-  return NextResponse.next();
-}
+export default clerkMiddleware({
+  publicRoutes: [
+    "/",
+    "/api/webhooks/clerk",
+    "/api/stock-prices(.*)",
+    "/api/stock-price-history(.*)",
+    "/api/stocks/search(.*)",
+    "/sign-in(.*)",
+    "/sign-up(.*)",
+  ],
+  ignoredRoutes: [
+    "/api/webhooks/clerk",
+  ],
+});
 
 export const config = {
   matcher: [

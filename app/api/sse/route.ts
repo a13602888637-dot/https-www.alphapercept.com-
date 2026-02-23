@@ -24,7 +24,7 @@ type MarketData = {
 
 // 动态导入函数
 async function getDataCrawler() {
-  return await import('../../skills/data_crawler');
+  return await import('../../../skills/data_crawler');
 }
 
 // 连接管理

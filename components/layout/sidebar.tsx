@@ -50,13 +50,13 @@ const navItems = [
   {
     title: "警报中心",
     icon: Bell,
-    href: "/alerts",
+    href: "/dashboard",
     badge: "5",
   },
   {
     title: "社区",
     icon: Users,
-    href: "/community",
+    href: "/dashboard",
   },
   {
     title: "设置",
@@ -70,13 +70,13 @@ const quickActions = [
     title: "快速分析",
     icon: Zap,
     description: "一键市场扫描",
-    onClick: () => window.location.href = "/quick-analysis",
+    onClick: () => window.location.href = "/dashboard",
   },
   {
     title: "趋势预测",
     icon: TrendingUp,
     description: "明日走势预测",
-    onClick: () => window.location.href = "/trend-prediction",
+    onClick: () => window.location.href = "/dashboard",
   },
 ]
 

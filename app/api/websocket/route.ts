@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { WebSocketServer, WebSocket } from 'ws';
-import { fetchMultipleStocks, MarketData } from '@/skills/data_crawler';
+import { fetchMultipleStocks, MarketData } from '../../../skills/data_crawler';
 
 // WebSocket连接管理
 interface WebSocketClient {
@@ -481,5 +481,5 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 导出WebSocket管理器用于服务器设置
-export { wsManager };
+// WebSocket管理器实例（不导出，仅在内部使用）
+// const wsManager = new WebSocketManager(); // 已在上方定义

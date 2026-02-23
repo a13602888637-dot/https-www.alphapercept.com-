@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma } from "../../../lib/db";
 
 // GET: Get user's intelligence feed
 export async function GET(req: Request) {
