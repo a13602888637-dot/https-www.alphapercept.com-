@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "next build",
-    "dev": "ts-node skills/data_crawler.ts",
+    "dev": "next dev",
     "dev:deepseek": "ts-node skills/deepseek_agent.ts",
     "verify": "bash scripts/verify_milestone.sh",
     "verify:uat": "bash scripts/verify_uat.sh",
