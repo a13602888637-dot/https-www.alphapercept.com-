@@ -177,6 +177,129 @@ export default function PortfolioPage() {
 }
 ```
 
+## Git 版本管理与回滚操作指南
+
+### 核心Git工作流
+Alpha-Quant-Copilot 采用严格的Git版本管理流程，确保代码稳定性和可追溯性。
+
+### 1. 日常开发流程
+```bash
+# 1. 开始新功能前创建分支
+git checkout -b feature/your-feature-name
+
+# 2. 开发完成后提交
+git add .
+git commit -m "feat: 添加新功能描述"
+
+# 3. 推送到远程
+git push origin feature/your-feature-name
+
+# 4. 创建Pull Request进行代码审查
+```
+
+### 2. 紧急回滚操作指南
+当遇到严重问题需要回滚时，请按以下步骤操作：
+
+#### 2.1 回滚到上一个提交
+```bash
+# 查看提交历史，确认要回滚到的提交哈希
+git log --oneline -10
+
+# 回滚到指定提交（保留工作区修改）
+git reset --soft <commit-hash>
+
+# 强制回滚到指定提交（丢弃所有修改）
+git reset --hard <commit-hash>
+
+# 回滚到上一个提交（最常用）
+git reset --hard HEAD~1
+```
+
+#### 2.2 回滚特定文件
+```bash
+# 查看文件修改历史
+git log --oneline -- path/to/file.ts
+
+# 回滚文件到指定版本
+git checkout <commit-hash> -- path/to/file.ts
+
+# 回滚文件到上一个版本
+git checkout HEAD~1 -- path/to/file.ts
+```
+
+#### 2.3 撤销已推送的提交
+```bash
+# 创建反向提交（推荐）
+git revert <commit-hash>
+
+# 强制推送（谨慎使用）
+git push origin main --force
+```
+
+### 3. 故障恢复协议
+根据《Vibe Coding 协作协议》，当连续3次修复失败时，必须执行以下操作：
+
+#### 3.1 立即回滚
+```bash
+# 停止所有开发活动
+# 执行紧急回滚
+git reset --hard HEAD~1
+
+# 确认回滚成功
+git status
+git log --oneline -5
+```
+
+#### 3.2 问题分析
+1. 创建故障分析文档
+2. 记录失败原因和修复尝试
+3. 制定新的修复方案
+
+#### 3.3 重新开始
+```bash
+# 基于稳定版本重新开发
+git checkout -b fix/issue-description
+
+# 小步提交，频繁验证
+git add .
+git commit -m "fix: 逐步修复问题"
+```
+
+### 4. 分支管理策略
+- **main**: 生产环境分支，仅接受通过测试的代码
+- **develop**: 开发分支，集成所有功能
+- **feature/***: 功能开发分支
+- **hotfix/***: 紧急修复分支
+- **release/***: 发布准备分支
+
+### 5. 提交消息规范
+```
+<类型>: <简短描述>
+
+<详细描述（可选）>
+
+- 修复了什么问题
+- 实现了什么功能
+- 需要注意什么
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+
+**类型说明**:
+- `feat`: 新功能
+- `fix`: 修复bug
+- `docs`: 文档更新
+- `style`: 代码格式调整
+- `refactor`: 代码重构
+- `test`: 测试相关
+- `chore`: 构建过程或辅助工具变动
+
+### 6. 重要提醒
+1. **跨文件重构前必须提交**: 在进行任何跨文件重构前，务必执行 `git commit -m "chore: 重构前基线"`
+2. **连续失败必须回滚**: 连续3次修复失败后，立即执行 `git reset --hard HEAD~1`
+3. **定期备份**: 重要修改前创建备份分支
+4. **小步提交**: 频繁提交，每次提交解决一个问题
+
 ## 部署
 
 ### Vercel部署（推荐）
