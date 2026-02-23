@@ -1,0 +1,150 @@
+import { DashboardHeader } from "@/components/dashboard-header";
+import { DashboardShell } from "@/components/dashboard-shell";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BarChart3, TrendingUp, DollarSign, PieChart, Clock, AlertCircle } from "lucide-react";
+
+export default function DashboardPage() {
+  return (
+    <DashboardShell>
+      <DashboardHeader
+        heading="量化投资仪表板"
+        text="实时监控五大投资流派信号与市场动态"
+      />
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">今日收益率</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-quant-green">+2.34%</div>
+            <p className="text-xs text-muted-foreground">
+              跑赢沪深300指数 +1.25%
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">活跃信号</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">18</div>
+            <p className="text-xs text-muted-foreground">
+              其中7个为高置信度信号
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">持仓风险</CardTitle>
+            <PieChart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-quant-yellow">中等</div>
+            <p className="text-xs text-muted-foreground">
+              MA60破位预警：2只股票
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">概览</TabsTrigger>
+          <TabsTrigger value="signals">信号监控</TabsTrigger>
+          <TabsTrigger value="portfolio">持仓分析</TabsTrigger>
+          <TabsTrigger value="market">市场动态</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <Card className="col-span-4">
+              <CardHeader>
+                <CardTitle>五大流派信号强度</CardTitle>
+                <CardDescription>
+                  当前各投资流派信号强度与置信度
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pl-2">
+                <div className="space-y-4">
+                  {[
+                    { name: "桥水宏观", strength: 85, confidence: "高", color: "bg-blue-500" },
+                    { name: "巴菲特价值", strength: 72, confidence: "中", color: "bg-green-500" },
+                    { name: "索罗斯反身性", strength: 63, confidence: "中", color: "bg-purple-500" },
+                    { name: "佩洛西政策", strength: 91, confidence: "高", color: "bg-red-500" },
+                    { name: "游资情绪", strength: 78, confidence: "中", color: "bg-yellow-500" },
+                  ].map((item) => (
+                    <div key={item.name} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{item.name}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {item.confidence} ({item.strength}%)
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full ${item.color}`}
+                          style={{ width: `${item.strength}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="col-span-3">
+              <CardHeader>
+                <CardTitle>实时预警</CardTitle>
+                <CardDescription>需要关注的实时风险与机会</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {[
+                    { type: "风险", message: "创业板指跌破MA60", time: "2分钟前", level: "high" },
+                    { type: "机会", message: "新能源板块政策利好", time: "15分钟前", level: "medium" },
+                    { type: "风险", message: "北向资金大幅流出", time: "30分钟前", level: "medium" },
+                    { type: "机会", message: "芯片板块技术突破", time: "1小时前", level: "low" },
+                  ].map((alert, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-start space-x-3 rounded-lg border p-3 ${
+                        alert.level === "high"
+                          ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
+                          : alert.level === "medium"
+                          ? "border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950"
+                          : "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950"
+                      }`}
+                    >
+                      <div
+                        className={`mt-0.5 h-2 w-2 rounded-full ${
+                          alert.level === "high"
+                            ? "bg-red-500"
+                            : alert.level === "medium"
+                            ? "bg-yellow-500"
+                            : "bg-blue-500"
+                        }`}
+                      />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{alert.type}</span>
+                          <span className="text-xs text-muted-foreground">{alert.time}</span>
+                        </div>
+                        <p className="text-sm">{alert.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </DashboardShell>
+  );
+}

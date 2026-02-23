@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String             @id @default(cuid())
+  clerkUserId       String             @unique
+  email             String?
+  username          String?
+  firstName         String?
+  lastName          String?
+  imageUrl          String?
+  metadata          Json?
+  settings          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  intelligenceFeeds IntelligenceFeed[]
+  watchlists        Watchlist[]
+
+  @@index([clerkUserId])
+  @@index([email])
+  @@index([username])
+  @@index([createdAt])
+}
+
+model Watchlist {
+  id            String   @id @default(cuid())
+  userId        String
+  stockCode     String
+  stockName     String
+  buyPrice      Decimal?
+  stopLossPrice Decimal?
+  targetPrice   Decimal?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stockCode])
+  @@index([userId])
+  @@index([stockCode])
+}
+
+model IntelligenceFeed {
+  id              String   @id @default(cuid())
+  userId          String?
+  stockCode       String
+  stockName       String
+  eventSummary    String
+  industryTrend   String
+  trapProbability Int      @default(0)
+  actionSignal    String   @default("HOLD")
+  targetPrice     Decimal?
+  stopLoss        Decimal?
+  logicChain      Json?
+  rawData         Json?
+  createdAt       DateTime @default(now())
+  user            User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([stockCode])
+  @@index([actionSignal])
+  @@index([createdAt])
+}
+
+model StockPriceHistory {
+  id          String   @id @default(cuid())
+  stockCode   String
+  price       Decimal
+  volume      Decimal?
+  turnover    Decimal?
+  highPrice   Decimal?
+  lowPrice    Decimal?
+  change      Decimal?
+  changePercent Decimal?
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([stockCode])
+  @@index([timestamp])
+  @@index([stockCode, timestamp])
+  @@unique([stockCode, timestamp])
+}

@@ -122,3 +122,4 @@ pipeline_test_report.md
 # Temporary directories
 .claude/
 _bmad/
+.vercel

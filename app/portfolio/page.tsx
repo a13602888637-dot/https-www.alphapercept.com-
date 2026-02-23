@@ -1,0 +1,452 @@
+"use client"
+
+import { useState } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
+import { Input } from "@/components/ui/input"
+import { StockSearch } from "@/components/portfolio/stock-search"
+import { SearchResults, StockResult } from "@/components/portfolio/search-results"
+import {
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  PieChart,
+  BarChart3,
+  Target,
+  Shield,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  Download,
+  Filter,
+  Search,
+  DollarSign,
+  Calendar,
+  Star,
+  CheckCircle,
+  AlertTriangle,
+  Brain
+} from "lucide-react"
+
+// 自选股接口定义
+interface WatchlistItem {
+  id: string
+  code: string
+  name: string
+  market: string
+  addedAt: Date
+  notes?: string
+}
+
+// 模拟投资组合数据
+interface PortfolioItem {
+  id: string
+  stockCode: string
+  stockName: string
+  industry: string
+  quantity: number
+  avgCost: number
+  currentPrice: number
+  marketValue: number
+  profitLoss: number
+  profitLossPercent: number
+  weight: number
+  targetWeight: number
+  status: "持有" | "加仓" | "减仓" | "观望"
+  lastUpdated: string
+}
+
+export default function PortfolioPage() {
+  const [activeTab, setActiveTab] = useState("overview")
+  const [showValues, setShowValues] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+
+  // 自选股相关状态
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
+  const [searchResults, setSearchResults] = useState<StockResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [showWatchlist, setShowWatchlist] = useState(false)
+
+  // 模拟投资组合
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([
+    {
+      id: "1",
+      stockCode: "600519",
+      stockName: "贵州茅台",
+      industry: "白酒",
+      quantity: 100,
+      avgCost: 1600,
+      currentPrice: 1750,
+      marketValue: 175000,
+      profitLoss: 15000,
+      profitLossPercent: 9.38,
+      weight: 35,
+      targetWeight: 30,
+      status: "持有",
+      lastUpdated: "2026-02-23",
+    },
+  ])
+
+  // 搜索股票
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
+
+    setSearchLoading(true)
+    try {
+      const response = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`)
+      const data = await response.json()
+
+      if (data.success) {
+        setSearchResults(data.data)
+      } else {
+        console.error("搜索失败:", data.error)
+        setSearchResults([])
+      }
+    } catch (error) {
+      console.error("搜索请求失败:", error)
+      setSearchResults([])
+    } finally {
+      setSearchLoading(false)
+    }
+  }
+
+  // 添加股票到自选股
+  const handleAddToWatchlist = (stock: StockResult) => {
+    const exists = watchlist.some(item =>
+      item.code === stock.code && item.market === stock.market
+    )
+
+    if (exists) {
+      alert("该股票已在自选股中")
+      return
+    }
+
+    const newWatchlistItem: WatchlistItem = {
+      id: `${stock.code}-${stock.market}-${Date.now()}`,
+      code: stock.code,
+      name: stock.name,
+      market: stock.market,
+      addedAt: new Date()
+    }
+
+    setWatchlist(prev => [...prev, newWatchlistItem])
+    setSearchResults([])
+    alert(`已添加 ${stock.name} (${stock.code}) 到自选股`)
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* 页面标题 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center">
+            <Wallet className="h-8 w-8 mr-3 text-blue-500" />
+            投资组合管理
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            实时跟踪您的投资组合表现，智能分析持仓结构与风险
+          </p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" onClick={() => setShowWatchlist(!showWatchlist)}>
+            {showWatchlist ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+            {showWatchlist ? "返回投资组合" : "查看自选股"}
+          </Button>
+          <Button variant="outline" onClick={() => setShowValues(!showValues)}>
+            {showValues ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+            {showValues ? "隐藏金额" : "显示金额"}
+          </Button>
+        </div>
+      </div>
+
+      {/* 自选股搜索和显示 */}
+      {showWatchlist ? (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Star className="h-5 w-5 mr-2 text-yellow-500" />
+                自选股管理
+              </CardTitle>
+              <CardDescription>
+                添加和管理您关注的股票，实时跟踪价格变化
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* 搜索组件 */}
+                <div>
+                  <h3 className="text-sm font-medium mb-3">搜索股票</h3>
+                  <StockSearch onSearch={handleSearch} />
+                </div>
+
+                {/* 搜索结果 */}
+                <div>
+                  <h3 className="text-sm font-medium mb-3">搜索结果</h3>
+                  <SearchResults
+                    results={searchResults}
+                    onAdd={handleAddToWatchlist}
+                    loading={searchLoading}
+                    emptyMessage={searchLoading ? "搜索中..." : "输入股票代码或名称开始搜索"}
+                  />
+                </div>
+
+                {/* 自选股列表 */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium">我的自选股 ({watchlist.length})</h3>
+                    {watchlist.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm("确定要清空所有自选股吗？")) {
+                            setWatchlist([])
+                          }
+                        }}
+                      >
+                        清空全部
+                      </Button>
+                    )}
+                  </div>
+
+                  {watchlist.length === 0 ? (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="flex flex-col items-center justify-center py-8">
+                          <Star className="h-12 w-12 text-gray-300 mb-4" />
+                          <p className="text-gray-500 mb-4">暂无自选股</p>
+                          <p className="text-sm text-gray-400 text-center">
+                            使用上方搜索框添加您关注的股票
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="space-y-3">
+                          {watchlist.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors"
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <h3 className="font-semibold text-gray-900">{item.name}</h3>
+                                      <span
+                                        className={`px-2 py-0.5 text-xs font-medium rounded-full border ${
+                                          item.market === "SH"
+                                            ? "text-red-600 bg-red-50 border-red-200"
+                                            : "text-green-600 bg-green-50 border-green-200"
+                                        }`}
+                                      >
+                                        {item.market === "SH" ? "上证" : "深证"}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm text-gray-500">{item.code}</p>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      添加时间: {item.addedAt.toLocaleDateString()}{" "}
+                                      {item.addedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => {
+                                  if (confirm("确定要从自选股中移除吗？")) {
+                                    setWatchlist(prev => prev.filter(w => w.id !== item.id))
+                                  }
+                                }}
+                              >
+                                移除
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div>
+          {/* 投资组合概览 */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-2">
+                    <DollarSign className="h-5 w-5 text-blue-500 mr-2" />
+                    <span className="text-sm text-muted-foreground">总市值</span>
+                  </div>
+                  <div className="text-3xl font-bold">
+                    {showValues ? `¥${portfolio.reduce((sum, item) => sum + item.marketValue, 0).toLocaleString()}` : "******"}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-2">
+                    <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
+                    <span className="text-sm text-muted-foreground">总盈亏</span>
+                  </div>
+                  <div className="text-3xl font-bold text-green-500">
+                    {showValues ? `¥${portfolio.reduce((sum, item) => sum + item.profitLoss, 0).toLocaleString()}` : "******"}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-2">
+                    <BarChart3 className="h-5 w-5 text-purple-500 mr-2" />
+                    <span className="text-sm text-muted-foreground">持仓数量</span>
+                  </div>
+                  <div className="text-3xl font-bold">{portfolio.length}</div>
+                  <div className="text-sm text-muted-foreground mt-1">只股票</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-2">
+                    <Calendar className="h-5 w-5 text-yellow-500 mr-2" />
+                    <span className="text-sm text-muted-foreground">最后更新</span>
+                  </div>
+                  <div className="text-3xl font-bold">今日</div>
+                  <div className="text-sm text-muted-foreground mt-1">15:30</div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* 持仓列表 */}
+          <Card className="mt-6">
+            <CardHeader>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <CardTitle>持仓明细</CardTitle>
+                  <CardDescription>实时跟踪您的股票持仓</CardDescription>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="搜索股票..."
+                      className="pl-9 w-full md:w-48"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    添加持仓
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="mb-6">
+                  <TabsTrigger value="overview">全部持仓</TabsTrigger>
+                  <TabsTrigger value="gainers">盈利持仓</TabsTrigger>
+                  <TabsTrigger value="losers">亏损持仓</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview">
+                  <div className="space-y-4">
+                    {portfolio.map((item) => (
+                      <Card key={item.id} className="hover:shadow-md transition-shadow">
+                        <CardContent className="pt-6">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                  <div>
+                                    <h3 className="font-semibold">{item.stockName}</h3>
+                                    <div className="text-sm text-muted-foreground">
+                                      {item.stockCode} · {item.industry}
+                                    </div>
+                                  </div>
+                                  <Badge className={
+                                    item.status === "持有" ? "bg-blue-100 text-blue-800" :
+                                    item.status === "加仓" ? "bg-green-100 text-green-800" :
+                                    item.status === "减仓" ? "bg-yellow-100 text-yellow-800" :
+                                    "bg-gray-100 text-gray-800"
+                                  }>
+                                    {item.status}
+                                  </Badge>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-bold text-green-500">
+                                    {showValues ? `¥${item.marketValue.toLocaleString()}` : "******"}
+                                  </div>
+                                  <div className="text-sm text-green-500">
+                                    +{item.profitLossPercent.toFixed(2)}%
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                  <div className="text-muted-foreground">持仓数量</div>
+                                  <div className="font-medium">{item.quantity.toLocaleString()} 股</div>
+                                </div>
+                                <div>
+                                  <div className="text-muted-foreground">成本价</div>
+                                  <div className="font-medium">¥{item.avgCost.toFixed(2)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-muted-foreground">现价</div>
+                                  <div className="font-medium">¥{item.currentPrice.toFixed(2)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-muted-foreground">持仓权重</div>
+                                  <div className="flex items-center">
+                                    <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden mr-2">
+                                      <div
+                                        className="h-full bg-blue-500 rounded-full"
+                                        style={{ width: `${item.weight}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-medium">{item.weight.toFixed(1)}%</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}

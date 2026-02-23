@@ -1,0 +1,32 @@
+{
+  "name": "alpha-quant-copilot",
+  "version": "0.1.0",
+  "description": "AI-powered quantitative trading assistant with real-time market data",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc --noEmit",
+    "dev": "ts-node skills/data_crawler.ts",
+    "dev:deepseek": "ts-node skills/deepseek_agent.ts",
+    "verify": "bash scripts/verify_milestone.sh"
+  },
+  "keywords": [
+    "quantitative-trading",
+    "ai",
+    "stock-analysis",
+    "real-time-data"
+  ],
+  "author": "Alpha-Quant-Copilot Team",
+  "license": "MIT",
+  "dependencies": {
+    "iconv-lite": "^0.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
