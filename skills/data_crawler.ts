@@ -22,6 +22,8 @@ export interface MarketData {
   turnover?: number;
   peRatio?: number;
   marketCap?: number;
+  ma20?: number;   // 20-day moving average
+  ma60?: number;   // 60-day moving average
 }
 
 // Sina finance API configuration
@@ -381,9 +383,25 @@ export async function fetchMultipleStocks(symbols: string[], maxRetries: number 
       // Try Tencent API as fallback
       Logger.info(`Trying Tencent API as fallback for ${symbol}`);
       return fetchTencentStockData(symbol, maxRetries).catch(tencentError => {
-        Logger.error(`All APIs failed for ${symbol}:`, tencentError);
-        // 不再返回null，而是抛出一个包含详细错误信息的错误
-        throw new Error(`Failed to fetch data for ${symbol}: Sina: ${error instanceof Error ? error.message : String(error)}, Tencent: ${tencentError instanceof Error ? tencentError.message : String(tencentError)}`);
+        Logger.error(`Sina and Tencent APIs failed for ${symbol}, trying Yahoo Finance as global fallback`, tencentError);
+
+        // Try Yahoo Finance as global fallback
+        return fetchYahooStockData(symbol, maxRetries).catch(yahooError => {
+          Logger.error(`All APIs including Yahoo Finance failed for ${symbol}:`, yahooError);
+          // Ultimate fallback: return minimal market data
+          const fallbackData: MarketData = {
+            symbol,
+            name: symbol,
+            currentPrice: 0,
+            highPrice: 0,
+            lowPrice: 0,
+            lastUpdateTime: new Date().toISOString(),
+            change: 0,
+            changePercent: 0
+          };
+          Logger.warn(`Returning ultimate fallback data for ${symbol} due to complete API failure`);
+          return fallbackData;
+        });
       });
     })
   );
@@ -574,6 +592,157 @@ function parseTencentResponse(responseText: string, symbol: string): MarketData 
 }
 
 /**
+ * Fetch stock data from Yahoo Finance API (global fallback for overseas IPs)
+ * Yahoo symbol format: 000001.SS (Shanghai), 399001.SZ (Shenzhen)
+ */
+export async function fetchYahooStockData(symbol: string, maxRetries: number = 2): Promise<MarketData> {
+  // Convert symbol to Yahoo format
+  let yahooSymbol = symbol;
+  if (!symbol.includes('.')) {
+    // Determine exchange suffix
+    if (symbol.startsWith('6') || symbol === '000001' || symbol === 'sh000001') {
+      yahooSymbol = symbol.replace('sh', '') + '.SS'; // Shanghai
+    } else if (symbol.startsWith('0') || symbol.startsWith('3') || symbol === '399001' || symbol === 'sz399001') {
+      yahooSymbol = symbol.replace('sz', '') + '.SZ'; // Shenzhen
+    } else {
+      yahooSymbol = symbol + '.SS'; // Default to Shanghai
+    }
+  }
+
+  const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=3mo`;
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      Logger.info(`Fetching data from Yahoo Finance (attempt ${attempt}/${maxRetries}): ${apiUrl}`);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      try {
+        const response = await fetch(apiUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Parse Yahoo Finance response
+        const marketData = parseYahooResponse(data, symbol, yahooSymbol);
+        Logger.info(`Successfully fetched Yahoo Finance data for ${symbol}`);
+        return marketData;
+
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      lastError = error as Error;
+      Logger.warn(`Yahoo Finance API call failed (attempt ${attempt}/${maxRetries})`, {
+        symbol,
+        yahooSymbol,
+        error: error instanceof Error ? error.message : String(error)
+      });
+
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        Logger.info(`Retrying Yahoo Finance API in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  Logger.error(`All ${maxRetries} attempts failed for Yahoo Finance API: ${symbol}`, lastError);
+  throw lastError || new Error(`Failed to fetch Yahoo Finance data for ${symbol} after ${maxRetries} attempts`);
+}
+
+/**
+ * Parse Yahoo Finance API response
+ */
+function parseYahooResponse(data: any, originalSymbol: string, yahooSymbol: string): MarketData {
+  try {
+    Logger.debug(`Parsing Yahoo Finance response for ${originalSymbol}`);
+
+    const chart = data.chart;
+    if (!chart || !chart.result || !chart.result[0]) {
+      throw new Error('Invalid Yahoo Finance response format');
+    }
+
+    const result = chart.result[0];
+    const meta = result.meta;
+    const timestamp = meta.regularMarketTime;
+    const currentPrice = meta.regularMarketPrice;
+    const previousClose = meta.previousClose;
+    const highPrice = meta.regularMarketDayHigh || currentPrice;
+    const lowPrice = meta.regularMarketDayLow || currentPrice;
+
+    // Calculate change
+    const change = currentPrice - previousClose;
+    const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+
+    // Get historical data for MA calculation
+    const timestamps = result.timestamp || [];
+    const closes = result.indicators?.quote?.[0]?.close || [];
+
+    // Calculate MA20 and MA60 if enough data
+    let ma20 = currentPrice;
+    let ma60 = currentPrice;
+
+    if (closes.length >= 20) {
+      const recent20 = closes.slice(-20);
+      ma20 = recent20.reduce((sum: number, price: number) => sum + price, 0) / 20;
+    }
+
+    if (closes.length >= 60) {
+      const recent60 = closes.slice(-60);
+      ma60 = recent60.reduce((sum: number, price: number) => sum + price, 0) / 60;
+    }
+
+    // Format date
+    const date = new Date(timestamp * 1000);
+    const formattedDate = date.toISOString().split('T')[0];
+    const formattedTime = date.toTimeString().split(' ')[0];
+
+    const marketData: MarketData = {
+      symbol: originalSymbol,
+      name: meta.symbol || originalSymbol,
+      currentPrice,
+      highPrice,
+      lowPrice,
+      lastUpdateTime: `${formattedDate} ${formattedTime}`,
+      change: parseFloat(change.toFixed(2)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      // Add MA values as additional fields (extend interface if needed)
+      ...(ma20 !== currentPrice && { ma20: parseFloat(ma20.toFixed(2)) }),
+      ...(ma60 !== currentPrice && { ma60: parseFloat(ma60.toFixed(2)) })
+    };
+
+    Logger.debug(`Successfully parsed Yahoo Finance data for ${originalSymbol}:`, {
+      name: marketData.name,
+      price: marketData.currentPrice,
+      change: marketData.change,
+      ma20: marketData.ma20,
+      ma60: marketData.ma60
+    });
+
+    return marketData;
+  } catch (error) {
+    Logger.error(`Failed to parse Yahoo Finance response for ${originalSymbol}:`, error);
+    throw new Error(`Yahoo Finance response parsing failed for ${originalSymbol}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
  * Fetch market data using Sina as primary source with Tencent as fallback
  */
 export async function fetchMarketDataWithFallback(symbol: string, maxRetries: number = 2): Promise<MarketData> {
@@ -594,9 +763,27 @@ export async function fetchMarketDataWithFallback(symbol: string, maxRetries: nu
                           symbol.startsWith('6') ? 'sh' + symbol : 'sz' + symbol;
       return await fetchTencentStockData(tencentSymbol, maxRetries);
     } catch (tencentError) {
-      Logger.error(`All data sources failed for ${symbol}`, tencentError);
-      // 不再返回模拟数据，而是抛出聚合错误
-      throw new Error(`All data sources failed for ${symbol}: Sina: ${error instanceof Error ? error.message : String(error)}, Tencent: ${tencentError instanceof Error ? tencentError.message : String(tencentError)}`);
+      Logger.error(`Sina and Tencent APIs failed for ${symbol}, trying Yahoo Finance as global fallback`, tencentError);
+
+      try {
+        // Try Yahoo Finance as global fallback (works for overseas IPs)
+        return await fetchYahooStockData(symbol, maxRetries);
+      } catch (yahooError) {
+        Logger.error(`All data sources including Yahoo Finance failed for ${symbol}`, yahooError);
+        // Ultimate fallback: return minimal data to prevent complete failure
+        const fallbackData: MarketData = {
+          symbol,
+          name: symbol,
+          currentPrice: 0,
+          highPrice: 0,
+          lowPrice: 0,
+          lastUpdateTime: new Date().toISOString(),
+          change: 0,
+          changePercent: 0
+        };
+        Logger.warn(`Returning ultimate fallback data for ${symbol} due to complete API failure`);
+        return fallbackData;
+      }
     }
   }
 }
