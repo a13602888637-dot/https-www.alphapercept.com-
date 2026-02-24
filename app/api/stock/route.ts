@@ -9,7 +9,14 @@ export async function GET(req: Request) {
     if (!symbol) {
       return NextResponse.json(
         { error: "Symbol parameter is required" },
-        { status: 400 }
+        {
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          }
+        }
       );
     }
 
@@ -85,6 +92,13 @@ export async function GET(req: Request) {
         yahooSymbol,
         source: 'yahoo-finance-proxy',
         timestamp: new Date().toISOString(),
+      }, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Cache-Control': 'public, max-age=60', // 缓存60秒
+        }
       });
 
     } catch (fetchError) {
@@ -102,7 +116,14 @@ export async function GET(req: Request) {
         details: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+      }
     );
   }
 }

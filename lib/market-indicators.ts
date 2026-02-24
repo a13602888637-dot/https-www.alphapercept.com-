@@ -10,8 +10,8 @@ export const MARKET_INDEX_SYMBOLS = {
   SHANGHAI: '000001',      // 上证指数
   SHENZHEN: '399001',      // 深证成指
   CHUANGYE: '399006',      // 创业板指
-  // 北向资金需要特殊处理，暂时使用沪深300作为替代
-  NORTHBOUND: '000300',    // 沪深300 (替代北向资金)
+  // 北向资金特殊符号
+  NORTHBOUND: 'NORTHBOUND',    // 北向资金
 };
 
 // Market indicator interface for header display
@@ -72,16 +72,26 @@ function convertToIndicator(
 
   if (isNorthbound) {
     // 北向资金特殊处理：显示净流入金额
-    const netFlow = marketData.currentPrice; // 假设currentPrice代表净流入金额（单位：亿）
+    const netFlow = marketData.currentPrice; // currentPrice代表净流入金额（单位：亿）
     const change = marketData.change || 0;
-    const sign = change >= 0 ? '+' : '';
+    const sign = netFlow >= 0 ? '+' : '';
+
+    // 格式化变化百分比
+    let changeDisplay = '--';
+    if (marketData.changePercent !== undefined) {
+      const changePercent = marketData.changePercent;
+      const changeSign = changePercent >= 0 ? '+' : '';
+      changeDisplay = `${changeSign}${Math.abs(changePercent).toFixed(2)}%`;
+    } else if (change !== 0) {
+      changeDisplay = change >= 0 ? '+' : '-';
+    }
 
     return {
       label,
       value: `${sign}${Math.abs(netFlow).toFixed(1)}亿`,
-      change: change >= 0 ? '+' : '-',
+      change: changeDisplay,
       rawValue: netFlow,
-      rawChange: change,
+      rawChange: marketData.changePercent || change,
     };
   }
 

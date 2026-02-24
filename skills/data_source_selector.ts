@@ -139,7 +139,7 @@ export class DataSourceManager {
       retryCount: 2,
       healthCheckInterval: 45000, // 45秒
       region: 'global',
-      endpoints: ['https://query1.finance.yahoo.com']
+      endpoints: ['/api/stock'] // 使用本地代理接口
     });
 
     // 模拟数据源配置
@@ -409,12 +409,13 @@ export class DataSourceManager {
   }
 
   /**
-   * 检查雅虎API健康状态
+   * 检查雅虎API代理健康状态
    */
   private async checkYahooHealth(): Promise<boolean> {
     try {
-      const testSymbol = '000001.SS';
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${testSymbol}?interval=1d&range=1d`;
+      // 使用代理接口检查Yahoo Finance健康状态
+      const testSymbol = '000001'; // 使用原始符号，代理接口会转换为Yahoo格式
+      const url = `/api/stock?symbol=${testSymbol}`;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -433,8 +434,9 @@ export class DataSourceManager {
         return false;
       }
 
-      const data = await response.json();
-      return data.chart && data.chart.result;
+      const proxyResponse = await response.json();
+      // 代理接口返回包装过的数据，需要检查success字段和data.chart.result
+      return proxyResponse.success && proxyResponse.data && proxyResponse.data.chart && proxyResponse.data.chart.result;
 
     } catch {
       return false;

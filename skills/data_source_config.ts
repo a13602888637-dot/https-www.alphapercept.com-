@@ -64,7 +64,7 @@ const DEFAULT_CONFIG_TEMPLATE: DataSourceSystemConfig = {
       retryCount: 2,
       healthCheckInterval: 45000,
       region: 'global',
-      endpoints: ['https://query1.finance.yahoo.com'],
+      endpoints: ['/api/stock'], // 使用本地代理接口
       metadata: {
         description: '全球备用数据源，支持海外访问',
         rateLimit: '2000次/小时',

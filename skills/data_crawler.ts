@@ -380,8 +380,29 @@ function safeParseFloat(value: string | undefined, defaultValue: number = 0): nu
  * @returns Array of market data
  */
 export async function fetchMultipleStocks(symbols: string[], maxRetries: number = 2): Promise<MarketData[]> {
-  const promises = symbols.map(symbol =>
-    fetchSinaStockData(symbol, maxRetries).catch(error => {
+  const promises = symbols.map(symbol => {
+    // Special handling for northbound capital symbol
+    if (symbol === 'NORTHBOUND' || symbol === '000300') {
+      return fetchNorthboundCapitalData(maxRetries).catch(error => {
+        Logger.error(`Northbound capital API failed:`, error);
+        // Fallback for northbound data
+        const fallbackData: MarketData = {
+          symbol: 'NORTHBOUND',
+          name: '北向资金',
+          currentPrice: 0,
+          highPrice: 0,
+          lowPrice: 0,
+          lastUpdateTime: new Date().toISOString(),
+          change: 0,
+          changePercent: 0
+        };
+        Logger.warn(`Returning fallback data for northbound capital`);
+        return fallbackData;
+      });
+    }
+
+    // Regular stock/index data
+    return fetchSinaStockData(symbol, maxRetries).catch(error => {
       Logger.error(`Sina API failed for ${symbol}:`, error);
 
       // Try Tencent API as fallback
@@ -407,8 +428,8 @@ export async function fetchMultipleStocks(symbols: string[], maxRetries: number 
           return fallbackData;
         });
       });
-    })
-  );
+    });
+  });
 
   try {
     const results = await Promise.all(promises);
@@ -641,15 +662,34 @@ function parseTencentResponse(responseText: string, symbol: string): MarketData 
 }
 
 /**
- * Fetch stock data from Yahoo Finance API (global fallback for overseas IPs)
+ * Fetch stock data via Yahoo Finance proxy API (global fallback for overseas IPs)
+ * Uses local proxy interface: /api/stock?symbol=xxx
  * Yahoo symbol format: 000001.SS (Shanghai), 399001.SZ (Shenzhen)
+ * Special mapping for A-share indices:
+ * - 上证指数 -> 000001.SS / ^SSEC
+ * - 深证成指 -> 399001.SZ
+ * - 创业板指 -> 399006.SZ
  */
 export async function fetchYahooStockData(symbol: string, maxRetries: number = 2): Promise<MarketData> {
   // Convert symbol to Yahoo format
   let yahooSymbol = symbol;
 
-  // If symbol already has .SS or .SZ suffix, use it as is
-  if (!symbol.includes('.')) {
+  // Special mapping for A-share indices
+  const indexMapping: Record<string, string> = {
+    // Sina/Tencent format to Yahoo format
+    'sh000001': '000001.SS',  // 上证指数 (also can use ^SSEC)
+    'sz399001': '399001.SZ',  // 深证成指
+    'sz399006': '399006.SZ',  // 创业板指
+    // Raw symbols to Yahoo format
+    '000001': '000001.SS',    // 上证指数
+    '399001': '399001.SZ',    // 深证成指
+    '399006': '399006.SZ',    // 创业板指
+  };
+
+  // Check if symbol has special mapping
+  if (indexMapping[symbol]) {
+    yahooSymbol = indexMapping[symbol];
+  } else if (!symbol.includes('.')) {
     // Remove sh/sz prefix if present
     let cleanSymbol = symbol.replace(/^(sh|sz)/i, '');
 
@@ -666,13 +706,15 @@ export async function fetchYahooStockData(symbol: string, maxRetries: number = 2
     yahooSymbol = yahooSymbol.toUpperCase();
   }
 
-  const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=3mo`;
+  // 使用代理接口代替直接调用Yahoo Finance
+  // 传递转换后的雅虎符号给代理接口
+  const apiUrl = `/api/stock?symbol=${yahooSymbol}`;
 
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      Logger.info(`Fetching data from Yahoo Finance (attempt ${attempt}/${maxRetries}): ${apiUrl}`);
+      Logger.info(`Fetching data via Yahoo Finance proxy (attempt ${attempt}/${maxRetries}): ${apiUrl}`);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -705,11 +747,16 @@ export async function fetchYahooStockData(symbol: string, maxRetries: number = 2
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        const data = await response.json();
+        const proxyResponse = await response.json();
 
-        // Parse Yahoo Finance response
-        const marketData = parseYahooResponse(data, symbol, yahooSymbol);
-        Logger.info(`Successfully fetched Yahoo Finance data for ${symbol}`);
+        // 代理接口返回包装过的数据，需要提取其中的data字段
+        if (!proxyResponse.success || !proxyResponse.data) {
+          throw new Error(`Proxy API error: ${proxyResponse.error || 'Invalid response format'}`);
+        }
+
+        // Parse Yahoo Finance response from proxy data
+        const marketData = parseYahooResponse(proxyResponse.data, symbol, yahooSymbol);
+        Logger.info(`Successfully fetched Yahoo Finance data via proxy for ${symbol}`);
         return marketData;
 
       } finally {
@@ -717,7 +764,7 @@ export async function fetchYahooStockData(symbol: string, maxRetries: number = 2
       }
     } catch (error) {
       lastError = error as Error;
-      Logger.warn(`Yahoo Finance API call failed (attempt ${attempt}/${maxRetries})`, {
+      Logger.warn(`Yahoo Finance proxy API call failed (attempt ${attempt}/${maxRetries})`, {
         symbol,
         yahooSymbol,
         error: error instanceof Error ? error.message : String(error)
@@ -725,14 +772,14 @@ export async function fetchYahooStockData(symbol: string, maxRetries: number = 2
 
       if (attempt < maxRetries) {
         const delay = Math.pow(2, attempt - 1) * 1000;
-        Logger.info(`Retrying Yahoo Finance API in ${delay}ms...`);
+        Logger.info(`Retrying Yahoo Finance proxy API in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
 
-  Logger.error(`All ${maxRetries} attempts failed for Yahoo Finance API: ${symbol}`, lastError);
-  throw lastError || new Error(`Failed to fetch Yahoo Finance data for ${symbol} after ${maxRetries} attempts`);
+  Logger.error(`All ${maxRetries} attempts failed for Yahoo Finance proxy API: ${symbol}`, lastError);
+  throw lastError || new Error(`Failed to fetch Yahoo Finance data via proxy for ${symbol} after ${maxRetries} attempts`);
 }
 
 /**
@@ -808,6 +855,108 @@ function parseYahooResponse(data: any, originalSymbol: string, yahooSymbol: stri
   } catch (error) {
     Logger.error(`Failed to parse Yahoo Finance response for ${originalSymbol}:`, error);
     throw new Error(`Yahoo Finance response parsing failed for ${originalSymbol}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Fetch Northbound capital flow data from East Money API
+ * API endpoint: http://push2.eastmoney.com/api/qt/kamt.rt/get
+ * Returns real-time northbound capital flow data
+ */
+export async function fetchNorthboundCapitalData(maxRetries: number = 2): Promise<MarketData> {
+  const apiUrl = 'http://push2.eastmoney.com/api/qt/kamt.rt/get';
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      Logger.info(`Fetching northbound capital data from East Money API (attempt ${attempt}/${maxRetries})`);
+
+      // Use fetchWithEncoding to handle HTTP request, gzip decompression, and encoding conversion
+      const responseText = await fetchWithEncoding(apiUrl);
+
+      // Parse the response
+      const northboundData = parseNorthboundResponse(responseText);
+      Logger.info(`Successfully fetched northbound capital data`);
+
+      return northboundData;
+    } catch (error) {
+      lastError = error as Error;
+      Logger.warn(`East Money API call failed for northbound data (attempt ${attempt}/${maxRetries})`, {
+        error: error instanceof Error ? error.message : String(error)
+      });
+
+      if (attempt < maxRetries) {
+        // Exponential backoff: wait 1s, 2s, 4s...
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        Logger.info(`Retrying East Money API in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  Logger.error(`All ${maxRetries} attempts failed for East Money northbound API`, lastError);
+  throw lastError || new Error(`Failed to fetch northbound capital data after ${maxRetries} attempts`);
+}
+
+/**
+ * Parse East Money northbound capital response
+ * Response format: JSON with nested data structure
+ */
+function parseNorthboundResponse(responseText: string): MarketData {
+  try {
+    Logger.debug(`Parsing northbound response: ${responseText.substring(0, 200)}...`);
+
+    // Parse JSON response
+    const response = JSON.parse(responseText);
+
+    if (!response.data || !response.data.northMoney) {
+      throw new Error('Invalid northbound API response format');
+    }
+
+    const northMoney = response.data.northMoney;
+
+    // Extract data from response
+    // The API returns data in format: { hk2sh: { netIn: 123.45 }, hk2sz: { netIn: 67.89 }, ... }
+    const shNetFlow = northMoney.hk2sh?.netIn || 0;  // 沪股通净流入
+    const szNetFlow = northMoney.hk2sz?.netIn || 0;  // 深股通净流入
+    const totalNetFlow = shNetFlow + szNetFlow;      // 北向资金总净流入
+
+    // Get timestamp
+    const timestamp = northMoney.updateTime || new Date().toISOString();
+
+    // Calculate change (if previous data available)
+    const prevTotalNetFlow = northMoney.prevTotalNetFlow || totalNetFlow;
+    const change = totalNetFlow - prevTotalNetFlow;
+
+    // For northbound data, we use currentPrice to store total net flow
+    // and change/changePercent to store the change
+    const marketData: MarketData = {
+      symbol: 'NORTHBOUND',
+      name: '北向资金',
+      currentPrice: totalNetFlow,  // 总净流入金额
+      highPrice: totalNetFlow,     // 最高净流入（同当前值）
+      lowPrice: totalNetFlow,      // 最低净流入（同当前值）
+      lastUpdateTime: timestamp,
+      change: parseFloat(change.toFixed(2)),
+      changePercent: prevTotalNetFlow !== 0 ? parseFloat(((change / Math.abs(prevTotalNetFlow)) * 100).toFixed(2)) : 0,
+      // Additional metadata
+      volume: shNetFlow,           // 沪股通净流入
+      turnover: szNetFlow,         // 深股通净流入
+    };
+
+    Logger.debug(`Successfully parsed northbound data:`, {
+      totalNetFlow: marketData.currentPrice,
+      shNetFlow: marketData.volume,
+      szNetFlow: marketData.turnover,
+      change: marketData.change,
+      time: marketData.lastUpdateTime
+    });
+
+    return marketData;
+  } catch (error) {
+    Logger.error(`Failed to parse northbound response:`, error);
+    throw new Error(`Northbound response parsing failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

@@ -55,7 +55,7 @@
       "healthCheckInterval": 45000,
       "region": "global",
       "endpoints": [
-        "https://query1.finance.yahoo.com"
+        "/api/stock"
       ],
       "metadata": {
         "description": "全球备用数据源，支持海外访问",

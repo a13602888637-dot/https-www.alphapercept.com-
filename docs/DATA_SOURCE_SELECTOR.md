@@ -336,7 +336,7 @@ const stocks = await fetchMultipleStocksSmart(['000001', '600000']);
 系统保持向后兼容，现有API继续工作:
 - `fetchSinaStockData()` - 直接使用新浪API
 - `fetchTencentStockData()` - 直接使用腾讯API
-- `fetchYahooStockData()` - 直接使用雅虎API
+- `fetchYahooStockData()` - 通过代理接口使用雅虎API
 - `fetchMarketDataWithFallback()` - 顺序回退机制
 - `fetchMultipleStocks()` - 批量顺序回退
 
