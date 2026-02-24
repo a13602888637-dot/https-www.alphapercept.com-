@@ -34,6 +34,25 @@ function searchStocks(query: string): StockResult[] {
 
   const lowercaseQuery = query.toLowerCase()
 
+  // 优先精确匹配股票代码
+  const exactCodeMatches = mockStocks.filter(stock =>
+    stock.code === query
+  )
+
+  if (exactCodeMatches.length > 0) {
+    return exactCodeMatches
+  }
+
+  // 其次精确匹配股票名称
+  const exactNameMatches = mockStocks.filter(stock =>
+    stock.name.toLowerCase() === lowercaseQuery
+  )
+
+  if (exactNameMatches.length > 0) {
+    return exactNameMatches
+  }
+
+  // 最后进行模糊匹配
   return mockStocks.filter(stock =>
     stock.code.includes(query) ||
     stock.name.toLowerCase().includes(lowercaseQuery) ||

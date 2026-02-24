@@ -163,6 +163,8 @@ export async function fetchAndAnalyzeNews(keywords: string[] = []): Promise<{
 
 /**
  * 计算技术指标
+ * 注意：此函数需要历史数据来计算真实的技术指标
+ * 当前版本返回占位符值，实际应用中应从历史K线数据计算
  */
 export function calculateTechnicalIndicators(
   marketData: MarketData[],
@@ -171,34 +173,42 @@ export function calculateTechnicalIndicators(
   const indicators: Record<string, any> = {};
 
   for (const stock of marketData) {
-    // 这里可以扩展为从历史数据计算真实的技术指标
-    // 目前使用简化版本
     const currentPrice = stock.currentPrice;
 
-    // 模拟MA60计算（实际应从历史数据计算）
-    const ma60 = currentPrice * (0.95 + Math.random() * 0.1); // 模拟值
+    // 如果没有历史数据，返回占位符值并记录警告
+    if (!historicalData || historicalData.length === 0) {
+      Logger.warn(`缺少历史数据，无法为 ${stock.symbol} 计算真实技术指标`);
 
-    // 计算MD60（60日动量方向）
-    const md60 = ((currentPrice - ma60) / ma60) * 100;
+      indicators[stock.symbol] = {
+        ma60: null,
+        md60: null,
+        rsi: null,
+        macd: null,
+        volumeRatio: stock.volume ? stock.volume / 1000000 : null,
+        note: '需要历史数据来计算真实技术指标'
+      };
+      continue;
+    }
 
-    // 模拟其他技术指标
-    const rsi = 30 + Math.random() * 40; // 30-70之间的随机值
-    const macd = {
-      diff: (Math.random() - 0.5) * 2,
-      signal: (Math.random() - 0.5) * 1.5,
-      histogram: (Math.random() - 0.5) * 1
-    };
+    // TODO: 实现真实的技术指标计算逻辑
+    // 这里应该从historicalData中提取该股票的历史价格数据
+    // 计算真实的MA60、MD60、RSI、MACD等指标
 
+    // 临时占位符
     indicators[stock.symbol] = {
-      ma60: parseFloat(ma60.toFixed(2)),
-      md60: parseFloat(md60.toFixed(2)),
-      rsi: parseFloat(rsi.toFixed(2)),
-      macd,
-      volumeRatio: stock.volume ? stock.volume / 1000000 : 1 // 简化成交量比率
+      ma60: null,
+      md60: null,
+      rsi: null,
+      macd: null,
+      volumeRatio: stock.volume ? stock.volume / 1000000 : null,
+      note: '技术指标计算功能待实现，需要历史K线数据'
     };
   }
 
-  Logger.info('技术指标计算完成', { stocks: Object.keys(indicators).length });
+  Logger.info('技术指标计算完成', {
+    stocks: Object.keys(indicators).length,
+    note: '当前为占位符实现，需要历史数据来计算真实指标'
+  });
   return indicators;
 }
 
@@ -228,7 +238,7 @@ function buildEnhancedPrompt(
   - MA60: ${indicators.ma60 || 'N/A'}
   - MD60: ${indicators.md60 ? indicators.md60.toFixed(2) + '%' : 'N/A'}
   - RSI: ${indicators.rsi || 'N/A'}
-  - MACD: ${indicators.macd ? `DIFF=${indicators.macd.diff.toFixed(3)}, SIGNAL=${indicators.macd.signal.toFixed(3)}` : 'N/A'}
+  - MACD: ${indicators.macd && typeof indicators.macd === 'object' && 'diff' in indicators.macd && 'signal' in indicators.macd ? `DIFF=${(indicators.macd as any).diff.toFixed(3)}, SIGNAL=${(indicators.macd as any).signal.toFixed(3)}` : 'N/A'}
 `;
   }).join('\n');
 
@@ -362,53 +372,80 @@ function extractAntiHumanityRules(strategyRules: string): string {
 async function callDeepSeekAPI(
   prompt: string,
   apiKey: string,
-  isEnhanced: boolean = false
+  isEnhanced: boolean = false,
+  maxRetries: number = 3
 ): Promise<string> {
-  try {
-    const systemPrompt = isEnhanced
-      ? `你是一个严格遵守量化交易规则的AI交易员。你必须：
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      Logger.info(`调用DeepSeek API (尝试 ${attempt}/${maxRetries})...`);
+
+      const systemPrompt = isEnhanced
+        ? `你是一个严格遵守量化交易规则的AI交易员。你必须：
 1. 严格遵循提供的策略规则，特别是反人性破解器模块
 2. 输出必须为有效的JSON格式
 3. 所有决策必须有明确的数据支持
 4. 风险控制优先于收益追求
 5. 必须识别并规避市场陷阱
 6. 所有分析必须基于具体规则条款`
-      : '你是一个严格遵守量化交易规则的AI交易员。你必须：1. 严格遵循提供的策略规则 2. 输出必须为有效的JSON格式 3. 所有决策必须有明确的数据支持 4. 风险控制优先于收益追求';
+        : '你是一个严格遵守量化交易规则的AI交易员。你必须：1. 严格遵循提供的策略规则 2. 输出必须为有效的JSON格式 3. 所有决策必须有明确的数据支持 4. 风险控制优先于收益追求';
 
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.2, // 更低的温度确保一致性
-        max_tokens: 3000,
-        response_format: { type: 'json_object' }
-      }),
-    });
+      const response = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: DEEPSEEK_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.2, // 更低的温度确保一致性
+          max_tokens: 3000,
+          response_format: { type: 'json_object' }
+        })
+      });
 
-    if (!response.ok) {
-      throw new Error(`DeepSeek API错误: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`DeepSeek API错误 (${response.status}): ${response.statusText}. 响应: ${errorText}`);
+      }
+
+      const data = await response.json() as any;
+
+      if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+        throw new Error('DeepSeek API返回了无效的响应格式');
+      }
+
+      const content = data.choices[0].message.content;
+      Logger.info(`DeepSeek API调用成功 (尝试 ${attempt})`, { contentLength: content.length });
+      return content;
+
+    } catch (error: any) {
+      lastError = error;
+      Logger.warn(`DeepSeek API调用失败 (尝试 ${attempt}/${maxRetries}):`, error.message);
+
+      // 如果不是最后一次尝试，等待一段时间后重试
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // 指数退避，最大10秒
+        Logger.info(`等待 ${delay}ms 后重试...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-
-    const data = await response.json() as any;
-    return data.choices[0].message.content;
-  } catch (error) {
-    Logger.error('调用DeepSeek API失败:', error);
-    throw error;
   }
+
+  // 所有重试都失败
+  Logger.error('DeepSeek API调用失败，所有重试均未成功');
+  throw lastError || new Error('DeepSeek API调用失败');
 }
 
 /**
@@ -840,30 +877,9 @@ export async function generateEnhancedIntelligenceAnalysis(
       }
     }
 
-    // 9. 如果没有生成任何智能情报，为每个股票生成默认分析
+    // 9. 如果没有生成任何智能情报，抛出错误而不是使用默认分析
     if (Object.keys(intelligenceFeeds).length === 0 && marketData.length > 0) {
-      Logger.warn('AI未生成有效智能情报，使用默认分析');
-      for (const stock of marketData) {
-        const defaultAnalysis: IntelligenceFeedData = {
-          event_summary: '市场数据不足，无法进行详细分析',
-          industry_trend: '需要更多行业数据进行分析',
-          trap_probability: 50,
-          action_signal: 'HOLD',
-          target_price: null,
-          stop_loss: null,
-          logic_chain: {
-            macro_analysis: '数据不足',
-            value_assessment: '数据不足',
-            sentiment_analysis: '数据不足',
-            event_impact: '数据不足',
-            anti_humanity_check: '数据不足，无法进行反人性破解器分析',
-            risk_assessment: '高风险（数据不足）'
-          },
-          stock_code: stock.symbol,
-          stock_name: stock.name
-        };
-        intelligenceFeeds[stock.symbol] = defaultAnalysis;
-      }
+      throw new Error('AI未生成有效的智能情报分析。请检查：1) API密钥是否正确 2) 网络连接 3) AI响应格式');
     }
 
     Logger.info(`成功生成 ${Object.keys(intelligenceFeeds).length} 个智能情报分析`);
@@ -914,8 +930,8 @@ export async function runCompleteIntelligencePipeline(
 
     // 3. 获取API密钥
     const deepseekApiKey = apiKey || process.env.DEEPSEEK_API_KEY;
-    if (!deepseekApiKey || deepseekApiKey === 'your_deepseek_api_key_here') {
-      throw new Error('未设置有效的DeepSeek API密钥');
+    if (!deepseekApiKey) {
+      throw new Error('未设置DeepSeek API密钥。请设置环境变量 DEEPSEEK_API_KEY');
     }
 
     // 4. 生成智能情报分析
@@ -1033,23 +1049,12 @@ async function testDeepSeekAgent() {
 
     // 检查API密钥
     const apiKey = process.env.DEEPSEEK_API_KEY;
-    if (!apiKey || apiKey === 'your_deepseek_api_key_here') {
-      console.warn('未设置DeepSeek API密钥，使用模拟模式测试');
-
-      // 模拟响应
-      const mockDecision: TradingDecision = {
-        action: 'hold',
-        target_price: 11.20,
-        stop_loss: 10.50,
-        reasoning: '测试模式：当前处于震荡市，建议观望。MA60位于10.80，当前价格10.96略高于MA60，但MD60动量不足。',
-        confidence: 65,
-        position_size: 0,
-        time_horizon: 'short',
-        risk_level: 'low'
-      };
-
-      console.log('模拟决策:', mockDecision);
-      return { '000001': mockDecision };
+    if (!apiKey) {
+      console.error('错误：未设置DeepSeek API密钥');
+      console.log('请设置环境变量 DEEPSEEK_API_KEY');
+      console.log('获取API密钥：https://platform.deepseek.com/api_keys');
+      console.log('或在.env.local文件中添加：DEEPSEEK_API_KEY=your_api_key_here');
+      return {};
     }
 
     // 使用真实API
@@ -1094,34 +1099,15 @@ export async function testEnhancedIntelligenceAnalysis(): Promise<{
 
     // 检查API密钥
     const apiKey = process.env.DEEPSEEK_API_KEY;
-    if (!apiKey || apiKey === 'your_deepseek_api_key_here') {
-      Logger.warn('未设置DeepSeek API密钥，使用模拟模式测试');
-
-      // 模拟智能情报数据
-      const mockFeed: IntelligenceFeedData = {
-        event_summary: '测试模式：市场处于震荡整理阶段，无明显催化剂事件',
-        industry_trend: '银行业整体估值处于历史低位，但面临息差收窄压力',
-        trap_probability: 35,
-        action_signal: 'HOLD',
-        target_price: null,
-        stop_loss: null,
-        logic_chain: {
-          macro_analysis: '宏观经济处于复苏初期，货币政策保持宽松',
-          value_assessment: '当前PE处于历史30%分位，具备一定安全边际',
-          sentiment_analysis: '市场情绪中性偏谨慎，成交量萎缩',
-          event_impact: '无重大事件影响',
-          anti_humanity_check: '未发现明显诱多或洗盘模式',
-          risk_assessment: '中等风险'
-        },
-        stock_code: '000001',
-        stock_name: '平安银行',
-        raw_data: { test_mode: true }
-      };
-
-      Logger.info('模拟智能情报数据:', mockFeed);
+    if (!apiKey) {
+      Logger.error('错误：未设置DeepSeek API密钥');
+      Logger.info('请设置环境变量 DEEPSEEK_API_KEY');
+      Logger.info('获取API密钥：https://platform.deepseek.com/api_keys');
+      Logger.info('或在.env.local文件中添加：DEEPSEEK_API_KEY=your_api_key_here');
       return {
-        success: true,
-        feeds: [mockFeed]
+        success: false,
+        feeds: [],
+        error: '未设置DeepSeek API密钥'
       };
     }
 

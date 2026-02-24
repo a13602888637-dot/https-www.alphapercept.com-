@@ -14,6 +14,7 @@ interface SearchResultsProps {
   results: StockResult[]
   onAdd: (stock: StockResult) => void
   loading?: boolean
+  addingStock?: string | null
   emptyMessage?: string
 }
 
@@ -21,6 +22,7 @@ export function SearchResults({
   results,
   onAdd,
   loading = false,
+  addingStock = null,
   emptyMessage = "搜索股票代码或名称"
 }: SearchResultsProps) {
   // 格式化市场显示
@@ -104,9 +106,19 @@ export function SearchResults({
                 variant="outline"
                 onClick={() => onAdd(stock)}
                 className="ml-4"
+                disabled={addingStock === stock.code}
               >
-                <Plus className="h-4 w-4 mr-2" />
-                添加
+                {addingStock === stock.code ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    添加中...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    添加
+                  </>
+                )}
               </Button>
             </div>
           ))}

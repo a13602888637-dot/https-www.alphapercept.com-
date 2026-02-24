@@ -1,35 +1,26 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { StockSearch } from "@/components/portfolio/stock-search"
 import { SearchResults, StockResult } from "@/components/portfolio/search-results"
+import { SignInButton, useAuth } from "@clerk/nextjs"
+import { useToast } from "@/hooks/use-toast"
 import {
   Wallet,
   TrendingUp,
-  TrendingDown,
-  PieChart,
   BarChart3,
-  Target,
-  Shield,
   Plus,
-  Edit,
-  Trash2,
   Eye,
   EyeOff,
-  RefreshCw,
-  Download,
-  Filter,
   Search,
   DollarSign,
   Calendar,
   Star,
-  CheckCircle,
   AlertTriangle,
   Brain,
   Zap,
@@ -42,11 +33,14 @@ import {
 // 自选股接口定义
 interface WatchlistItem {
   id: string
-  code: string
-  name: string
-  market: string
-  addedAt: Date
-  notes?: string
+  stockCode: string
+  stockName: string
+  buyPrice: number | null
+  stopLossPrice: number | null
+  targetPrice: number | null
+  notes: string | null
+  createdAt: Date
+  updatedAt: Date
 }
 
 // 模拟投资组合数据
@@ -95,12 +89,16 @@ export default function PortfolioPage() {
   const [showValues, setShowValues] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [addingStock, setAddingStock] = useState<string | null>(null)
+  const { toast } = useToast()
+  const { isSignedIn } = useAuth()
 
   // 自选股相关状态
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [searchResults, setSearchResults] = useState<StockResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [showWatchlist, setShowWatchlist] = useState(false)
+  const [watchlistLoading, setWatchlistLoading] = useState(false)
 
   // AI深度推演相关状态
   const [aiAnalysis, setAiAnalysis] = useState<any[]>([])
@@ -109,7 +107,7 @@ export default function PortfolioPage() {
   const [showAnalysis, setShowAnalysis] = useState(false)
 
   // 模拟投资组合
-  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([
+  const [portfolio] = useState<PortfolioItem[]>([
     {
       id: "1",
       stockCode: "600519",
@@ -127,6 +125,43 @@ export default function PortfolioPage() {
       lastUpdated: "2026-02-23",
     },
   ])
+
+  // 加载自选股数据
+  const loadWatchlist = useCallback(async () => {
+    setWatchlistLoading(true)
+    try {
+      const response = await fetch('/api/watchlist')
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("请先登录以查看自选股")
+        }
+        throw new Error(`获取自选股失败: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        setWatchlist(data.watchlist)
+        setError(null) // 清除之前的错误
+      } else {
+        console.error("获取自选股失败:", data.error)
+        setError(data.error || "获取自选股失败")
+      }
+    } catch (error) {
+      console.error("加载自选股失败:", error)
+      setError(error instanceof Error ? error.message : "加载自选股失败")
+    } finally {
+      setWatchlistLoading(false)
+    }
+  }, [])
+
+  // 初始化加载自选股
+  useEffect(() => {
+    if (showWatchlist) {
+      loadWatchlist()
+    }
+  }, [showWatchlist, loadWatchlist])
 
   // AI深度推演分析
   const handleAiAnalysis = async () => {
@@ -155,12 +190,25 @@ export default function PortfolioPage() {
 
       if (data.success && data.analysis) {
         setAiAnalysis(data.analysis)
+        // 显示成功提示
+        toast({
+          title: "分析完成",
+          description: `成功分析 ${data.analysis.length} 只股票，保存了 ${data.savedCount || 0} 条记录`,
+          variant: "default",
+        })
       } else {
         setAiError(data.message || '分析结果为空')
       }
     } catch (error) {
       console.error('AI分析失败:', error)
-      setAiError(error instanceof Error ? error.message : '未知错误')
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+      setAiError(errorMessage)
+      // 显示错误提示
+      toast({
+        title: "分析失败",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setAiLoading(false)
     }
@@ -177,7 +225,12 @@ export default function PortfolioPage() {
     setSearchLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`)
+      const response = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      })
 
       if (!response.ok) {
         throw new Error(`API请求失败: ${response.status} ${response.statusText}`)
@@ -201,28 +254,225 @@ export default function PortfolioPage() {
     }
   }
 
-  // 添加股票到自选股
-  const handleAddToWatchlist = (stock: StockResult) => {
-    const exists = watchlist.some(item =>
-      item.code === stock.code && item.market === stock.market
-    )
-
-    if (exists) {
-      alert("该股票已在自选股中")
+  // 直接添加股票（按回车或失去焦点时调用）
+  const handleDirectAdd = async (query: string) => {
+    if (!query.trim()) {
       return
     }
 
-    const newWatchlistItem: WatchlistItem = {
-      id: `${stock.code}-${stock.market}-${Date.now()}`,
-      code: stock.code,
-      name: stock.name,
-      market: stock.market,
-      addedAt: new Date()
+    // 检查是否已登录
+    if (!isSignedIn) {
+      toast({
+        title: "请先登录",
+        description: "登录后即可添加自选股",
+        variant: "destructive",
+      })
+      return
     }
 
-    setWatchlist(prev => [...prev, newWatchlistItem])
-    setSearchResults([])
-    alert(`已添加 ${stock.name} (${stock.code}) 到自选股`)
+    // 先搜索股票
+    setSearchLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`API请求失败: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.data.length > 0) {
+        // 找到匹配的股票，取第一个结果
+        const stock = data.data[0]
+
+        // 检查是否已在自选股中
+        const exists = watchlist.some(item =>
+          item.stockCode === stock.code
+        )
+
+        if (exists) {
+          toast({
+            title: "股票已在自选股中",
+            description: `股票 ${stock.name} (${stock.code}) 已在您的自选股列表中`,
+            variant: "destructive",
+          })
+          return
+        }
+
+        // 添加到自选股
+        await handleAddToWatchlist(stock)
+      } else {
+        toast({
+          title: "未找到股票",
+          description: `未找到股票代码或名称: ${query}`,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("直接添加失败:", error)
+      const errorMessage = error instanceof Error ? error.message : "添加失败"
+
+      toast({
+        title: "添加失败",
+        description: errorMessage,
+        variant: "destructive",
+      })
+
+      setError(errorMessage)
+    } finally {
+      setSearchLoading(false)
+    }
+  }
+
+  // 添加股票到自选股
+  const handleAddToWatchlist = async (stock: StockResult) => {
+    // 检查是否已登录
+    if (!isSignedIn) {
+      toast({
+        title: "请先登录",
+        description: "登录后即可添加自选股",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const exists = watchlist.some(item =>
+      item.stockCode === stock.code
+    )
+
+    if (exists) {
+      toast({
+        title: "股票已在自选股中",
+        description: `股票 ${stock.name} (${stock.code}) 已在您的自选股列表中`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    setAddingStock(stock.code)
+    try {
+      const response = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stockCode: stock.code,
+          stockName: stock.name,
+          buyPrice: null,
+          stopLossPrice: null,
+          targetPrice: null,
+          notes: null
+        })
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("请先登录以添加自选股")
+        }
+        const data = await response.json()
+        throw new Error(data.error || `添加失败: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        // 重新加载自选股列表
+        await loadWatchlist()
+        setSearchResults([])
+        setError(null) // 清除之前的错误
+
+        // 显示成功Toast通知
+        toast({
+          title: "添加成功",
+          description: `已成功添加 ${stock.name} (${stock.code}) 到自选股`,
+          variant: "default",
+        })
+      } else {
+        throw new Error(data.error || "添加失败")
+      }
+    } catch (error) {
+      console.error("添加自选股失败:", error)
+      const errorMessage = error instanceof Error ? error.message : "添加自选股失败"
+
+      toast({
+        title: "添加失败",
+        description: errorMessage,
+        variant: "destructive",
+      })
+
+      // 同时显示在错误区域（可选）
+      setError(errorMessage)
+    } finally {
+      setAddingStock(null)
+    }
+  }
+
+  // 从自选股中移除股票
+  const handleRemoveFromWatchlist = async (id: string) => {
+    // 检查是否已登录
+    if (!isSignedIn) {
+      toast({
+        title: "请先登录",
+        description: "登录后即可管理自选股",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // 使用自定义确认对话框而不是原生的confirm
+    const itemToRemove = watchlist.find(item => item.id === id)
+    if (!itemToRemove) return
+
+    // 创建自定义确认对话框
+    const userConfirmed = window.confirm(`确定要从自选股中移除 ${itemToRemove.stockName} (${itemToRemove.stockCode}) 吗？`)
+    if (!userConfirmed) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/watchlist?id=${id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("请先登录以管理自选股")
+        }
+        const data = await response.json()
+        throw new Error(data.error || `移除失败: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        // 重新加载自选股列表
+        await loadWatchlist()
+
+        toast({
+          title: "移除成功",
+          description: `已从自选股中移除 ${itemToRemove.stockName} (${itemToRemove.stockCode})`,
+          variant: "default",
+        })
+      } else {
+        throw new Error(data.error || "移除失败")
+      }
+    } catch (error) {
+      console.error("移除自选股失败:", error)
+      const errorMessage = error instanceof Error ? error.message : "移除自选股失败"
+
+      toast({
+        title: "移除失败",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -254,9 +504,21 @@ export default function PortfolioPage() {
       {error && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
-            <div className="flex items-center text-red-600">
-              <AlertCircle className="h-5 w-5 mr-2" />
-              <span>{error}</span>
+            <div className="space-y-3">
+              <div className="flex items-center text-red-600">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                <span>{error}</span>
+              </div>
+              {error.includes("请先登录") && (
+                <div className="flex items-center gap-2">
+                  <SignInButton mode="modal">
+                    <Button variant="default" size="sm">
+                      立即登录
+                    </Button>
+                  </SignInButton>
+                  <span className="text-sm text-gray-600">登录后即可使用自选股功能</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -280,7 +542,17 @@ export default function PortfolioPage() {
                 {/* 搜索组件 */}
                 <div>
                   <h3 className="text-sm font-medium mb-3">搜索股票</h3>
-                  <StockSearch onSearch={handleSearch} />
+                  <div className="space-y-2">
+                    <StockSearch
+                      onSearch={handleSearch}
+                      onEnter={handleDirectAdd}
+                      onBlur={handleDirectAdd}
+                      placeholder="输入股票代码或名称，按回车或点击空白处自动添加"
+                    />
+                    <p className="text-xs text-gray-500">
+                      提示：输入股票代码（如600519）或名称（如贵州茅台），按回车键或点击空白处即可自动添加到自选股
+                    </p>
+                  </div>
                 </div>
 
                 {/* 搜索结果 */}
@@ -290,6 +562,7 @@ export default function PortfolioPage() {
                     results={searchResults}
                     onAdd={handleAddToWatchlist}
                     loading={searchLoading}
+                    addingStock={addingStock}
                     emptyMessage={searchLoading ? "搜索中..." : "输入股票代码或名称开始搜索"}
                   />
                 </div>
@@ -323,9 +596,56 @@ export default function PortfolioPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              if (confirm("确定要清空所有自选股吗？")) {
-                                setWatchlist([])
+                            onClick={async () => {
+                              // 检查是否已登录
+                              if (!isSignedIn) {
+                                toast({
+                                  title: "请先登录",
+                                  description: "登录后即可管理自选股",
+                                  variant: "destructive",
+                                })
+                                return
+                              }
+
+                              // 使用自定义确认对话框
+                              const userConfirmed = window.confirm(`确定要清空所有 ${watchlist.length} 个自选股吗？此操作不可撤销。`)
+                              if (!userConfirmed) {
+                                return
+                              }
+
+                              try {
+                                // 逐个删除所有自选股
+                                for (const item of watchlist) {
+                                  const response = await fetch(`/api/watchlist?id=${item.id}`, {
+                                    method: 'DELETE',
+                                  })
+
+                                  if (!response.ok) {
+                                    if (response.status === 401) {
+                                      throw new Error("请先登录以管理自选股")
+                                    }
+                                    const data = await response.json()
+                                    throw new Error(data.error || `删除失败: ${response.status}`)
+                                  }
+                                }
+
+                                // 重新加载自选股列表
+                                await loadWatchlist()
+
+                                toast({
+                                  title: "清空成功",
+                                  description: `已清空所有 ${watchlist.length} 个自选股`,
+                                  variant: "default",
+                                })
+                              } catch (error) {
+                                console.error("清空自选股失败:", error)
+                                const errorMessage = error instanceof Error ? error.message : "清空自选股失败"
+
+                                toast({
+                                  title: "清空失败",
+                                  description: errorMessage,
+                                  variant: "destructive",
+                                })
                               }
                             }}
                           >
@@ -336,7 +656,16 @@ export default function PortfolioPage() {
                     </div>
                   </div>
 
-                  {watchlist.length === 0 ? (
+                  {watchlistLoading ? (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="flex flex-col items-center justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+                          <p className="text-gray-500">加载自选股中...</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : watchlist.length === 0 ? (
                     <Card>
                       <CardContent className="pt-6">
                         <div className="flex flex-col items-center justify-center py-8">
@@ -352,48 +681,57 @@ export default function PortfolioPage() {
                     <Card>
                       <CardContent className="pt-6">
                         <div className="space-y-3">
-                          {watchlist.map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors"
-                            >
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                                      <span
-                                        className={`px-2 py-0.5 text-xs font-medium rounded-full border ${
-                                          item.market === "SH"
-                                            ? "text-red-600 bg-red-50 border-red-200"
-                                            : "text-green-600 bg-green-50 border-green-200"
-                                        }`}
-                                      >
-                                        {item.market === "SH" ? "上证" : "深证"}
-                                      </span>
+                          {watchlist.map((item) => {
+                            // 从股票代码推断市场
+                            const market = item.stockCode.startsWith('6') ? 'SH' :
+                                          item.stockCode.startsWith('0') || item.stockCode.startsWith('3') ? 'SZ' : 'Unknown';
+
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors"
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="font-semibold text-gray-900">{item.stockName}</h3>
+                                        <span
+                                          className={`px-2 py-0.5 text-xs font-medium rounded-full border ${
+                                            market === "SH"
+                                              ? "text-red-600 bg-red-50 border-red-200"
+                                              : market === "SZ"
+                                              ? "text-green-600 bg-green-50 border-green-200"
+                                              : "text-gray-600 bg-gray-50 border-gray-200"
+                                          }`}
+                                        >
+                                          {market === "SH" ? "上证" : market === "SZ" ? "深证" : "其他"}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-gray-500">{item.stockCode}</p>
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        添加时间: {new Date(item.createdAt).toLocaleDateString()}{" "}
+                                        {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </p>
+                                      {item.notes && (
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          备注: {item.notes}
+                                        </p>
+                                      )}
                                     </div>
-                                    <p className="text-sm text-gray-500">{item.code}</p>
-                                    <p className="text-xs text-gray-400 mt-1">
-                                      添加时间: {item.addedAt.toLocaleDateString()}{" "}
-                                      {item.addedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
                                   </div>
                                 </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => handleRemoveFromWatchlist(item.id)}
+                                >
+                                  移除
+                                </Button>
                               </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => {
-                                  if (confirm("确定要从自选股中移除吗？")) {
-                                    setWatchlist(prev => prev.filter(w => w.id !== item.id))
-                                  }
-                                }}
-                              >
-                                移除
-                              </Button>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </CardContent>
                     </Card>
@@ -484,6 +822,9 @@ export default function PortfolioPage() {
                                       )}
                                     </div>
                                     <div className="flex items-center gap-4 text-sm text-gray-600">
+                                      {item.currentPrice > 0 && (
+                                        <span className="font-medium">现价: ¥{item.currentPrice.toFixed(2)}</span>
+                                      )}
                                       {item.buyPrice && (
                                         <span>买入价: ¥{item.buyPrice.toFixed(2)}</span>
                                       )}

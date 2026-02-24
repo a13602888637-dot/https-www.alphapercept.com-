@@ -5,9 +5,7 @@
  * Fallback data source: Tencent Finance API
  */
 
-import * as https from 'https';
-import * as http from 'http';
-import * as iconv from 'iconv-lite';
+import iconv from 'iconv-lite';
 import * as zlib from 'zlib';
 
 // Market data interface for internal system use
@@ -41,6 +39,114 @@ const DEFAULT_HEADERS = {
   'Connection': 'keep-alive',
   'Cache-Control': 'max-age=0',
 };
+
+/**
+ * Generic fetch function with enhanced error handling, gzip decompression, and encoding conversion
+ * @param url The URL to fetch
+ * @param options Optional fetch options
+ * @returns Decoded text response
+ */
+async function fetchWithEncoding(
+  url: string,
+  options: RequestInit = {}
+): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+  try {
+    const fetchOptions: RequestInit = {
+      ...options,
+      headers: {
+        ...DEFAULT_HEADERS,
+        ...(options.headers || {})
+      },
+      signal: controller.signal
+    };
+
+    Logger.debug(`Fetching URL: ${url}`);
+    const response = await fetch(url, fetchOptions);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText} for ${url}`);
+    }
+
+    // Get response as ArrayBuffer to handle binary data
+    const arrayBuffer = await response.arrayBuffer();
+    let buffer = Buffer.from(new Uint8Array(arrayBuffer)) as Buffer;
+
+    // Handle gzip decompression if needed
+    const contentEncoding = response.headers.get('content-encoding');
+    if (contentEncoding === 'gzip' || contentEncoding === 'deflate') {
+      try {
+        buffer = await new Promise<Buffer>((resolve, reject) => {
+          zlib.gunzip(buffer, (error, result) => {
+            if (error) {
+              // Try inflate if gunzip fails
+              zlib.inflate(buffer, (inflateError, inflateResult) => {
+                if (inflateError) {
+                  reject(new Error(`Failed to decompress response: ${inflateError.message}`));
+                } else {
+                  resolve(inflateResult);
+                }
+              });
+            } else {
+              resolve(result);
+            }
+          });
+        });
+      } catch (decompressError) {
+        Logger.warn(`Failed to decompress response, using raw data: ${decompressError}`);
+        // Continue with raw buffer
+      }
+    }
+
+    // Try to detect and decode the encoding
+    let decodedText: string;
+
+    // For Chinese financial APIs (Sina/Tencent), they typically use GBK or GB18030
+    // Try GBK first (most common for these APIs)
+    let decodedWithGBK = iconv.decode(buffer, 'gbk');
+    if (!decodedWithGBK.includes('�') && (decodedWithGBK.includes('=') || decodedWithGBK.includes('~'))) {
+      decodedText = decodedWithGBK;
+      Logger.debug(`Successfully decoded with GBK, length: ${decodedText.length}`);
+    } else {
+      // Try GB18030 (superset of GBK)
+      let decodedWithGB18030 = iconv.decode(buffer, 'gb18030');
+      if (!decodedWithGB18030.includes('�') && (decodedWithGB18030.includes('=') || decodedWithGB18030.includes('~'))) {
+        decodedText = decodedWithGB18030;
+        Logger.debug(`Successfully decoded with GB18030, length: ${decodedText.length}`);
+      } else {
+        // Try UTF-8
+        let decodedWithUTF8 = buffer.toString('utf-8');
+        if (!decodedWithUTF8.includes('�') && (decodedWithUTF8.includes('=') || decodedWithUTF8.includes('~'))) {
+          decodedText = decodedWithUTF8;
+          Logger.debug(`Successfully decoded with UTF-8, length: ${decodedText.length}`);
+        } else {
+          // Try GB2312
+          try {
+            decodedText = iconv.decode(buffer, 'gb2312');
+            Logger.warn('Using GB2312 encoding for API response');
+          } catch (e) {
+            // Last resort: use UTF-8 with replacement characters
+            decodedText = buffer.toString('utf-8');
+            Logger.warn('Using UTF-8 with replacement characters for API response');
+          }
+        }
+      }
+    }
+
+    Logger.debug(`Successfully fetched and decoded response from ${url}, length: ${decodedText.length}`);
+    return decodedText;
+
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after 10 seconds for ${url}`);
+    }
+    throw new Error(`Fetch failed for ${url}: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 // Enhanced Logger utility with log levels and file output support
 class Logger {
@@ -97,76 +203,12 @@ export async function fetchSinaStockData(symbol: string, maxRetries: number = 3)
     try {
       Logger.info(`Fetching data from Sina API (attempt ${attempt}/${maxRetries}): ${apiUrl}`);
 
-      const marketData = await new Promise<MarketData>((resolve, reject) => {
-        const req = http.get(apiUrl, { headers: DEFAULT_HEADERS }, (res) => {
-          let rawData: Buffer[] = [];
+      // Use fetchWithEncoding to handle HTTP request, gzip decompression, and encoding conversion
+      const responseText = await fetchWithEncoding(apiUrl);
 
-          res.on('data', (chunk: Buffer) => {
-            rawData.push(chunk);
-          });
-
-          res.on('end', () => {
-            try {
-              const buffer = Buffer.concat(rawData);
-
-              // Check if response is gzip compressed
-              const contentEncoding = res.headers['content-encoding'];
-              let processedBuffer = buffer;
-
-              if (contentEncoding === 'gzip') {
-                processedBuffer = zlib.gunzipSync(buffer);
-              }
-
-              // Enhanced encoding detection for Sina API
-              let decodedText: string;
-              try {
-                // Try UTF-8 first
-                decodedText = processedBuffer.toString('utf-8');
-                // Check if UTF-8 decoding produced valid text (not garbled)
-                if (decodedText.includes('�') || !decodedText.includes('=')) {
-                  throw new Error('UTF-8 decoding may be garbled');
-                }
-              } catch (e) {
-                try {
-                  // Try GB18030 (Sina's primary encoding)
-                  decodedText = iconv.decode(processedBuffer, 'gb18030');
-                } catch (e2) {
-                  try {
-                    // Try GBK as fallback
-                    decodedText = iconv.decode(processedBuffer, 'gbk');
-                  } catch (e3) {
-                    // Try other common Chinese encodings
-                    try {
-                      decodedText = iconv.decode(processedBuffer, 'gb2312');
-                    } catch (e4) {
-                      // Last resort: try with replacement characters
-                      decodedText = processedBuffer.toString('utf-8');
-                      Logger.warn('Using UTF-8 with replacement characters for Sina API response');
-                    }
-                  }
-                }
-              }
-
-              // Parse the response
-              const marketData = parseSinaResponse(decodedText, symbol);
-              Logger.info(`Successfully fetched Sina data for ${symbol}`);
-              resolve(marketData);
-            } catch (error) {
-              Logger.error('解析新浪API响应时出错:', error);
-              reject(new Error(`Failed to parse Sina response: ${error}`));
-            }
-          });
-        });
-
-        req.on('error', (error) => {
-          reject(new Error(`HTTP request failed: ${error.message}`));
-        });
-
-        req.setTimeout(10000, () => {
-          req.destroy();
-          reject(new Error('Request timeout after 10 seconds'));
-        });
-      });
+      // Parse the response
+      const marketData = parseSinaResponse(responseText, symbol);
+      Logger.info(`Successfully fetched Sina data for ${symbol}`);
 
       return marketData;
     } catch (error) {
@@ -315,55 +357,6 @@ function safeParseFloat(value: string | undefined, defaultValue: number = 0): nu
   return isNaN(parsed) ? defaultValue : parsed;
 }
 
-/**
- * Clean non-standard JSON responses (JSONP, wrapped JSON, etc.)
- */
-function cleanJsonResponse(rawData: string): string {
-  let cleaned = rawData.trim();
-
-  // Remove JSONP wrapper: callback({...}) or callback(...);
-  const jsonpMatch = cleaned.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(\s*({[\s\S]*})\s*\)\s*;?\s*$/);
-  if (jsonpMatch) {
-    cleaned = jsonpMatch[1];
-    Logger.debug('Removed JSONP wrapper');
-  }
-
-  // Remove potential function wrappers
-  cleaned = cleaned.replace(/^[^{[]*([{[])/, '$1');
-  cleaned = cleaned.replace(/([}\]])[^}\]]*$/, '$1');
-
-  // Fix common JSON issues
-  cleaned = cleaned
-    // Replace single quotes with double quotes (carefully)
-    .replace(/([{,]\s*)'([^']+)'(?=\s*[:,\]}])/g, '$1"$2"')
-    // Remove trailing commas
-    .replace(/,(\s*[}\]])/g, '$1')
-    // Fix unquoted property names
-    .replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
-
-  // Validate JSON structure
-  try {
-    JSON.parse(cleaned);
-    return cleaned;
-  } catch (e) {
-    Logger.warn('Cleaned JSON still invalid, trying more aggressive cleaning', {
-      cleanedPreview: cleaned.substring(0, 200)
-    });
-
-    // More aggressive cleaning: extract JSON object/array
-    const jsonObjectMatch = cleaned.match(/({[\s\S]*})/);
-    if (jsonObjectMatch) {
-      return jsonObjectMatch[1];
-    }
-
-    const jsonArrayMatch = cleaned.match(/(\[[\s\S]*\])/);
-    if (jsonArrayMatch) {
-      return jsonArrayMatch[1];
-    }
-
-    throw new Error('无法清理JSON响应，响应格式无效');
-  }
-}
 
 /**
  * Fetch multiple stocks data in parallel with enhanced error handling
@@ -406,66 +399,11 @@ export async function fetchTencentStockData(symbol: string, maxRetries: number =
     try {
       Logger.info(`Fetching data from Tencent API (attempt ${attempt}/${maxRetries}): ${apiUrl}`);
 
-      const marketData = await new Promise<MarketData>((resolve, reject) => {
-        const req = https.get(apiUrl, { headers: DEFAULT_HEADERS }, (res) => {
-          let rawData: Buffer[] = [];
+      // Use fetchWithEncoding to handle HTTP request, gzip decompression, and encoding conversion
+      const responseText = await fetchWithEncoding(apiUrl);
 
-          res.on('data', (chunk: Buffer) => {
-            rawData.push(chunk);
-          });
-
-          res.on('end', () => {
-            try {
-              const buffer = Buffer.concat(rawData);
-
-              // Check if response is gzip compressed
-              const contentEncoding = res.headers['content-encoding'];
-              let processedBuffer = buffer;
-
-              if (contentEncoding === 'gzip') {
-                processedBuffer = zlib.gunzipSync(buffer);
-              }
-
-              // Enhanced encoding detection for Tencent API
-              let decodedText: string;
-              try {
-                // Try GBK first (Tencent's primary encoding)
-                decodedText = iconv.decode(processedBuffer, 'gbk');
-              } catch (e) {
-                try {
-                  // Try GB18030
-                  decodedText = iconv.decode(processedBuffer, 'gb18030');
-                } catch (e2) {
-                  try {
-                    // Try UTF-8
-                    decodedText = processedBuffer.toString('utf-8');
-                  } catch (e3) {
-                    // Last resort
-                    decodedText = processedBuffer.toString('utf-8');
-                    Logger.warn('Using UTF-8 with replacement characters for Tencent API response');
-                  }
-                }
-              }
-
-              const marketData = parseTencentResponse(decodedText, symbol);
-              Logger.info(`Successfully fetched Tencent data for ${symbol}`);
-              resolve(marketData);
-            } catch (error) {
-              Logger.error('解析腾讯API响应时出错:', error);
-              reject(new Error(`Failed to parse Tencent response: ${error}`));
-            }
-          });
-        });
-
-        req.on('error', (error) => {
-          reject(new Error(`HTTP request failed: ${error.message}`));
-        });
-
-        req.setTimeout(10000, () => {
-          req.destroy();
-          reject(new Error('Request timeout after 10 seconds'));
-        });
-      });
+      const marketData = parseTencentResponse(responseText, symbol);
+      Logger.info(`Successfully fetched Tencent data for ${symbol}`);
 
       return marketData;
     } catch (error) {

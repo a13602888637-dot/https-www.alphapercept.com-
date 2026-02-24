@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
 import { runCompleteIntelligencePipeline } from "../../../skills/deepseek_agent";
-import { MarketData, fetchMultipleStocks } from "../../../skills/data_crawler";
+import { fetchMultipleStocks } from "../../../skills/data_crawler";
 
 // GET: 分析用户的自选股列表
 export async function GET() {
@@ -110,10 +110,25 @@ export async function GET() {
       distinct: ['stockCode'] // 每个股票只取最新的一条
     });
 
+    // 获取当前市场价格
+    let currentPrices: Record<string, number> = {};
+    try {
+      const marketData = await fetchMultipleStocks(stockSymbols);
+      marketData.forEach(stock => {
+        currentPrices[stock.symbol] = stock.currentPrice;
+      });
+    } catch (error) {
+      console.warn('获取市场价格失败，使用默认值:', error);
+      // 如果获取失败，使用默认值
+      stockSymbols.forEach(symbol => {
+        currentPrices[symbol] = 0;
+      });
+    }
+
     // 格式化分析结果
     const analysis = watchlist.map(item => {
       const feed = recentFeeds.find(f => f.stockCode === item.stockCode);
-      const currentPrice = 0; // 这里需要从市场数据获取实际价格
+      const currentPrice = currentPrices[item.stockCode] || 0;
 
       return {
         id: item.id,
@@ -219,7 +234,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { stockSymbols, forceRefresh } = body;
+    const { stockSymbols } = body;
 
     let targetSymbols: string[] = [];
 
@@ -276,6 +291,21 @@ export async function POST(req: Request) {
       distinct: ['stockCode'] // 每个股票只取最新的一条
     });
 
+    // 获取当前市场价格
+    let currentPrices: Record<string, number> = {};
+    try {
+      const marketData = await fetchMultipleStocks(targetSymbols);
+      marketData.forEach(stock => {
+        currentPrices[stock.symbol] = stock.currentPrice;
+      });
+    } catch (error) {
+      console.warn('获取市场价格失败，使用默认值:', error);
+      // 如果获取失败，使用默认值
+      targetSymbols.forEach(symbol => {
+        currentPrices[symbol] = 0;
+      });
+    }
+
     // 获取自选股详细信息
     const watchlistItems = await prisma.watchlist.findMany({
       where: {
@@ -288,10 +318,12 @@ export async function POST(req: Request) {
     const analysis = targetSymbols.map(stockCode => {
       const feed = recentFeeds.find(f => f.stockCode === stockCode);
       const watchlistItem = watchlistItems.find(w => w.stockCode === stockCode);
+      const currentPrice = currentPrices[stockCode] || 0;
 
       return {
         stockCode: stockCode,
         stockName: feed?.stockName || watchlistItem?.stockName || stockCode,
+        currentPrice: currentPrice,
         analysis: feed ? {
           eventSummary: feed.eventSummary,
           industryTrend: feed.industryTrend,

@@ -6,12 +6,16 @@ import { Search } from "lucide-react"
 
 interface StockSearchProps {
   onSearch: (query: string) => void
+  onEnter?: (query: string) => void
+  onBlur?: (query: string) => void
   placeholder?: string
   debounceMs?: number
 }
 
 export function StockSearch({
   onSearch,
+  onEnter,
+  onBlur,
   placeholder = "搜索股票代码或名称...",
   debounceMs = 300
 }: StockSearchProps) {
@@ -46,6 +50,18 @@ export function StockSearch({
     onSearch("")
   }, [onSearch])
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && onEnter) {
+      onEnter(query.trim())
+    }
+  }, [query, onEnter])
+
+  const handleBlur = useCallback(() => {
+    if (onBlur) {
+      onBlur(query.trim())
+    }
+  }, [query, onBlur])
+
   return (
     <div className="relative w-full">
       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -54,6 +70,8 @@ export function StockSearch({
         placeholder={placeholder}
         value={query}
         onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
         className="pl-9 pr-10"
       />
       {query && (

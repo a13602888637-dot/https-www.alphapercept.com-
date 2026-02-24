@@ -84,9 +84,9 @@ export class AIService {
     }
 
     // 检查API密钥
-    if (!this.apiKey || this.apiKey === 'your_deepseek_api_key_here') {
-      this.logger.warn('未提供有效的DeepSeek API密钥，使用模拟模式');
-      return this.createMockAnalysis(request, timestamp);
+    if (!this.apiKey) {
+      this.logger.error('未提供DeepSeek API密钥');
+      return this.createErrorAnalysis(request, timestamp, '未配置DeepSeek API密钥');
     }
 
     try {
@@ -335,7 +335,7 @@ export class AIService {
         action,
         target_price: stock.currentPrice * (action === 'buy' ? 1.05 : action === 'sell' ? 0.95 : 1.0),
         stop_loss: stock.currentPrice * (action === 'buy' ? 0.92 : action === 'sell' ? 1.08 : 0.95),
-        reasoning: `模拟分析: ${stock.name}当前价格${stock.currentPrice}，基于${action === 'buy' ? '技术突破' : action === 'sell' ? '风险控制' : '观望'}建议${action}`,
+        reasoning: `AI集成未启用: ${stock.name}当前价格${stock.currentPrice}，基于${action === 'buy' ? '技术突破' : action === 'sell' ? '风险控制' : '观望'}建议${action}`,
         confidence: Math.floor(Math.random() * 30) + 60,
         position_size: action !== 'hold' ? Math.floor(Math.random() * 15) + 5 : 0,
         time_horizon: ['short', 'medium', 'long'][Math.floor(Math.random() * 3)] as any,
@@ -361,15 +361,15 @@ export class AIService {
       recommendations: {
         immediateActions: [{
           action: 'monitor',
-          reason: '模拟模式，建议人工复核',
+          reason: 'AI集成未启用，建议启用AI分析或人工复核',
           priority: 'medium'
         }],
         strategicSuggestions: [
-          '当前处于模拟分析模式，建议启用真实AI分析',
+          'AI集成当前未启用，建议在配置中启用AI分析功能',
           '关注市场整体趋势和成交量变化'
         ],
         riskWarnings: [
-          '模拟分析结果仅供参考，实际交易需谨慎'
+          'AI分析未启用，所有决策需人工复核，实际交易需谨慎'
         ]
       }
     };
@@ -463,7 +463,7 @@ export class AIService {
       provider: this.config.aiIntegration.provider,
       model: this.config.aiIntegration.model,
       strategyDocumentValid: strategyValidation.isValid,
-      apiKeyConfigured: !!(this.apiKey && this.apiKey !== 'your_deepseek_api_key_here')
+      apiKeyConfigured: !!this.apiKey
     };
   }
 }
