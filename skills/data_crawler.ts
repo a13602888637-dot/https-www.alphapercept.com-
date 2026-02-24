@@ -62,7 +62,7 @@ async function fetchWithEncoding(
   options: RequestInit = {}
 ): Promise<string> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+  let timeoutId: NodeJS.Timeout | null = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
   try {
     const fetchOptions: RequestInit = {
@@ -159,7 +159,10 @@ async function fetchWithEncoding(
     }
     throw new Error(`Fetch failed for ${url}: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
-    clearTimeout(timeoutId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
   }
 }
 
@@ -717,7 +720,7 @@ export async function fetchYahooStockData(symbol: string, maxRetries: number = 2
       Logger.info(`Fetching data via Yahoo Finance proxy (attempt ${attempt}/${maxRetries}): ${apiUrl}`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      let timeoutId: NodeJS.Timeout | null = setTimeout(() => controller.abort(), 10000);
 
       try {
         const response = await fetch(apiUrl, {
@@ -741,7 +744,10 @@ export async function fetchYahooStockData(symbol: string, maxRetries: number = 2
           signal: controller.signal,
         });
 
-        clearTimeout(timeoutId);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -760,7 +766,10 @@ export async function fetchYahooStockData(symbol: string, maxRetries: number = 2
         return marketData;
 
       } finally {
-        clearTimeout(timeoutId);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
       }
     } catch (error) {
       lastError = error as Error;

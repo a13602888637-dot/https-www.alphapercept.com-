@@ -104,8 +104,25 @@ function convertToIndicator(
   };
 }
 
+// Cache for market data during non-trading hours
+let cachedMarketIndicators: MarketIndicator[] | null = null;
+let lastCacheTime: number = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
 // Fetch all market indicators
 export async function fetchMarketIndicators(): Promise<MarketIndicator[]> {
+  const isOpen = isMarketOpen();
+
+  // If market is closed and we have recent cache, return cached data
+  if (!isOpen && cachedMarketIndicators && Date.now() - lastCacheTime < CACHE_DURATION) {
+    console.log('Market is closed, returning cached data from', new Date(lastCacheTime).toLocaleTimeString());
+    return cachedMarketIndicators.map(indicator => ({
+      ...indicator,
+      // Add a note that this is previous close data
+      value: indicator.value + ' (昨收)',
+    }));
+  }
+
   try {
     const symbols = [
       MARKET_INDEX_SYMBOLS.SHANGHAI,
@@ -124,9 +141,24 @@ export async function fetchMarketIndicators(): Promise<MarketIndicator[]> {
       convertToIndicator(marketDataList[3], '北向资金', true),
     ];
 
+    // Cache the data if market is open
+    if (isOpen) {
+      cachedMarketIndicators = indicators;
+      lastCacheTime = Date.now();
+    }
+
     return indicators;
   } catch (error) {
     console.error('Failed to fetch market indicators:', error);
+
+    // If we have cached data, use it as fallback
+    if (cachedMarketIndicators) {
+      console.log('API failed, returning cached data as fallback');
+      return cachedMarketIndicators.map(indicator => ({
+        ...indicator,
+        value: indicator.value + ' (缓存)',
+      }));
+    }
 
     // Return fallback indicators with error state
     return [

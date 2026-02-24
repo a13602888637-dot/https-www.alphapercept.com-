@@ -147,14 +147,24 @@ export function Header({ onMenuClick }: HeaderProps) {
     fetchIndicators()
   }, [fetchIndicators])
 
-  // Auto-refresh every 30 seconds when market is open
+  // Auto-refresh with different intervals based on market status
   React.useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
     if (marketStatus === "open") {
-      const intervalId = setInterval(() => {
+      // Refresh every 30 seconds during trading hours
+      intervalId = setInterval(() => {
         fetchIndicators()
       }, 30000) // 30 seconds
+    } else {
+      // Refresh every 5 minutes during non-trading hours
+      intervalId = setInterval(() => {
+        fetchIndicators()
+      }, 300000) // 5 minutes
+    }
 
-      return () => clearInterval(intervalId)
+    return () => {
+      if (intervalId) clearInterval(intervalId)
     }
   }, [marketStatus, fetchIndicators])
 
@@ -244,7 +254,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             <div className="flex items-center space-x-1">
               <div className={`h-2 w-2 rounded-full ${marketStatus === "open" ? "bg-green-500" : "bg-gray-400"}`} />
               <span className="text-xs text-muted-foreground">
-                {marketStatus === "open" ? "交易中" : "休市"}
+                {marketStatus === "open" ? "交易中" : "休市(昨收)"}
               </span>
             </div>
 
@@ -432,7 +442,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               <div className="flex items-center space-x-1">
                 <div className={`h-2 w-2 rounded-full ${marketStatus === "open" ? "bg-green-500" : "bg-gray-400"}`} />
                 <span className="text-xs text-muted-foreground">
-                  {marketStatus === "open" ? "交易中" : "休市"}
+                  {marketStatus === "open" ? "交易中" : "休市(昨收)"}
                 </span>
               </div>
             </div>
