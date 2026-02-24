@@ -37,9 +37,10 @@ function getClientIp(request: NextRequest): string | undefined {
 }
 
 export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const query = searchParams.get("q") || "";
+
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const query = searchParams.get("q") || "";
     const source = searchParams.get("source") || undefined; // 可选：指定数据源
 
     // 获取客户端IP
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
     // 使用搜索服务的降级机制
     const searchService = getSearchService();
     const fallbackResults = searchService.search({
-      query: searchParams.get("q") || "",
+      query,
       useCache: false, // 不使用缓存，直接获取降级数据
     }).then(result => result.data).catch(() => []);
 
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
       success: results.length > 0,
       data: results,
       count: results.length,
-      query: searchParams.get("q") || "",
+      query,
       source: 'fallback',
       cached: false,
       error: results.length > 0 ? undefined : 'Search service failed',
