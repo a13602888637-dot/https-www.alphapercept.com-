@@ -1,0 +1,150 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-02-24T00:00:00.000Z",
+  "dataSources": [
+    {
+      "type": "sina",
+      "name": "新浪财经API",
+      "enabled": true,
+      "priority": 90,
+      "weight": 85,
+      "timeout": 10000,
+      "retryCount": 3,
+      "healthCheckInterval": 30000,
+      "region": "cn",
+      "endpoints": [
+        "http://hq.sinajs.cn"
+      ],
+      "metadata": {
+        "description": "主要A股数据源，覆盖沪深股票",
+        "rateLimit": "无公开限制，建议1秒1次",
+        "dataFreshness": "实时（3-5秒延迟）",
+        "coverage": "A股、指数、基金",
+        "reliability": "高（国内网络）"
+      }
+    },
+    {
+      "type": "tencent",
+      "name": "腾讯财经API",
+      "enabled": true,
+      "priority": 80,
+      "weight": 75,
+      "timeout": 10000,
+      "retryCount": 3,
+      "healthCheckInterval": 30000,
+      "region": "cn",
+      "endpoints": [
+        "https://qt.gtimg.cn"
+      ],
+      "metadata": {
+        "description": "备用A股数据源",
+        "rateLimit": "无公开限制",
+        "dataFreshness": "实时（3-5秒延迟）",
+        "coverage": "A股、指数",
+        "reliability": "高（国内网络）"
+      }
+    },
+    {
+      "type": "yahoo",
+      "name": "雅虎财经API",
+      "enabled": true,
+      "priority": 70,
+      "weight": 65,
+      "timeout": 15000,
+      "retryCount": 2,
+      "healthCheckInterval": 45000,
+      "region": "global",
+      "endpoints": [
+        "https://query1.finance.yahoo.com"
+      ],
+      "metadata": {
+        "description": "全球备用数据源，支持海外访问",
+        "rateLimit": "2000次/小时",
+        "dataFreshness": "15分钟延迟（免费版）",
+        "coverage": "全球股票、指数、基金",
+        "reliability": "中（依赖国际网络）"
+      }
+    },
+    {
+      "type": "simulated",
+      "name": "模拟数据源",
+      "enabled": true,
+      "priority": 10,
+      "weight": 5,
+      "timeout": 100,
+      "retryCount": 0,
+      "healthCheckInterval": 60000,
+      "region": "local",
+      "endpoints": [
+        "local"
+      ],
+      "metadata": {
+        "description": "最终降级数据源，返回模拟数据",
+        "rateLimit": "无限制",
+        "dataFreshness": "静态数据",
+        "coverage": "有限A股",
+        "reliability": "100%（本地）"
+      }
+    }
+  ],
+  "routing": {
+    "strategy": "smart",
+    "enableGeoRouting": true,
+    "enableSymbolRouting": true,
+    "failoverThreshold": 3,
+    "recoveryCheckInterval": 30000,
+    "maxRetries": 3,
+    "retryDelay": 1000,
+    "enableCircuitBreaker": true,
+    "circuitBreakerThreshold": 5,
+    "circuitBreakerTimeout": 60000
+  },
+  "monitoring": {
+    "enableStats": true,
+    "statsRetentionDays": 7,
+    "enableHealthChecks": true,
+    "healthCheckInterval": 60000,
+    "enableAlerting": false,
+    "alertThresholds": {
+      "successRate": 80,
+      "avgLatency": 5000,
+      "consecutiveFailures": 3
+    }
+  },
+  "regions": {
+    "cn": {
+      "name": "中国",
+      "preferredSources": [
+        "sina",
+        "tencent"
+      ],
+      "fallbackSources": [
+        "yahoo",
+        "simulated"
+      ],
+      "estimatedLatency": {
+        "sina": 100,
+        "tencent": 150,
+        "yahoo": 2000,
+        "simulated": 0
+      }
+    },
+    "global": {
+      "name": "全球",
+      "preferredSources": [
+        "yahoo"
+      ],
+      "fallbackSources": [
+        "sina",
+        "tencent",
+        "simulated"
+      ],
+      "estimatedLatency": {
+        "sina": 2000,
+        "tencent": 2000,
+        "yahoo": 500,
+        "simulated": 0
+      }
+    }
+  }
+}

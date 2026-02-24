@@ -20,7 +20,11 @@
     "next:dev": "next dev",
     "next:build": "next build",
     "next:start": "next start",
-    "next:lint": "next lint"
+    "next:lint": "next lint",
+    "search:test": "ts-node lib/search-proxy/test.ts",
+    "search:status": "ts-node -e \"import { getSearchService } from './lib/search-proxy'; console.log(JSON.stringify(getSearchService().getStatus(), null, 2));\"",
+    "test:smart-selector": "node scripts/test_smart_selector.js",
+    "test:data-sources": "ts-node -e \"import { testSmartDataSourceSelector } from './skills/data_crawler'; testSmartDataSourceSelector().then(result => console.log('Test result:', result ? 'PASS' : 'FAIL')).catch(console.error);\""
   },
   "keywords": [
     "quantitative-trading",
