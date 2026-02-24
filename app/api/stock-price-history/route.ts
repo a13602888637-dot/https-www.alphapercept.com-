@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
 
+// Disable caching for historical data
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 // GET: Get stock price history for trend analysis
 export async function GET(req: Request) {
   try {
@@ -142,6 +147,7 @@ function calculateTrendIndicators(priceHistory: any[]) {
   const sma5 = calculateSMA(prices, 5);
   const sma10 = calculateSMA(prices, 10);
   const sma20 = calculateSMA(prices, 20);
+  const sma60 = calculateSMA(prices, 60);
 
   // Determine trend direction
   const recentPrices = prices.slice(-10);
@@ -171,7 +177,8 @@ function calculateTrendIndicators(priceHistory: any[]) {
     movingAverages: {
       sma5: sma5 ? parseFloat(sma5.toFixed(2)) : null,
       sma10: sma10 ? parseFloat(sma10.toFixed(2)) : null,
-      sma20: sma20 ? parseFloat(sma20.toFixed(2)) : null
+      sma20: sma20 ? parseFloat(sma20.toFixed(2)) : null,
+      sma60: sma60 ? parseFloat(sma60.toFixed(2)) : null
     },
     volumeAnalysis: {
       averageVolume: parseFloat(avgVolume.toFixed(0)),

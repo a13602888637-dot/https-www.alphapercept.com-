@@ -29,15 +29,19 @@ const SINA_API_BASE = 'http://hq.sinajs.cn';
 const SINA_STOCK_PREFIX = 'sh'; // Shanghai stock exchange
 const SINA_STOCK_SUFFIX = 'sz'; // Shenzhen stock exchange
 
-// User-Agent and headers to avoid 403 errors
+// User-Agent and headers to avoid 403 errors and bypass Vercel IP blocking
 const DEFAULT_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Referer': 'http://finance.sina.com.cn',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Referer': 'https://finance.sina.com.cn',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
   'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-  'Accept-Encoding': 'gzip, deflate',
+  'Accept-Encoding': 'gzip, deflate, br',
   'Connection': 'keep-alive',
   'Cache-Control': 'max-age=0',
+  'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+  'Sec-Ch-Ua-Mobile': '?0',
+  'Sec-Ch-Ua-Platform': '"Windows"',
+  'Upgrade-Insecure-Requests': '1',
 };
 
 /**
@@ -194,8 +198,13 @@ class Logger {
  */
 export async function fetchSinaStockData(symbol: string, maxRetries: number = 3): Promise<MarketData> {
   // Determine exchange prefix based on symbol
-  const exchangePrefix = symbol.startsWith('6') ? SINA_STOCK_PREFIX : SINA_STOCK_SUFFIX;
-  const apiUrl = `${SINA_API_BASE}/list=${exchangePrefix}${symbol}`;
+  // If symbol already starts with 'sh' or 'sz', use it as is
+  let fullSymbol = symbol;
+  if (!symbol.startsWith('sh') && !symbol.startsWith('sz')) {
+    const exchangePrefix = symbol.startsWith('6') ? SINA_STOCK_PREFIX : SINA_STOCK_SUFFIX;
+    fullSymbol = `${exchangePrefix}${symbol}`;
+  }
+  const apiUrl = `${SINA_API_BASE}/list=${fullSymbol}`;
 
   let lastError: Error | null = null;
 
@@ -367,22 +376,27 @@ function safeParseFloat(value: string | undefined, defaultValue: number = 0): nu
 export async function fetchMultipleStocks(symbols: string[], maxRetries: number = 2): Promise<MarketData[]> {
   const promises = symbols.map(symbol =>
     fetchSinaStockData(symbol, maxRetries).catch(error => {
-      Logger.error(`Failed to fetch data for ${symbol}:`, error);
+      Logger.error(`Sina API failed for ${symbol}:`, error);
 
       // Try Tencent API as fallback
       Logger.info(`Trying Tencent API as fallback for ${symbol}`);
       return fetchTencentStockData(symbol, maxRetries).catch(tencentError => {
         Logger.error(`All APIs failed for ${symbol}:`, tencentError);
-        return null;
+        // 不再返回null，而是抛出一个包含详细错误信息的错误
+        throw new Error(`Failed to fetch data for ${symbol}: Sina: ${error instanceof Error ? error.message : String(error)}, Tencent: ${tencentError instanceof Error ? tencentError.message : String(tencentError)}`);
       });
     })
   );
 
-  const results = await Promise.all(promises);
-  const validResults = results.filter((data): data is MarketData => data !== null);
-
-  Logger.info(`Fetched ${validResults.length}/${symbols.length} stocks successfully`);
-  return validResults;
+  try {
+    const results = await Promise.all(promises);
+    Logger.info(`Fetched ${results.length}/${symbols.length} stocks successfully`);
+    return results;
+  } catch (error) {
+    Logger.error(`Error fetching multiple stocks:`, error);
+    // 重新抛出错误，让调用方处理
+    throw error;
+  }
 }
 
 /**
@@ -581,21 +595,8 @@ export async function fetchMarketDataWithFallback(symbol: string, maxRetries: nu
       return await fetchTencentStockData(tencentSymbol, maxRetries);
     } catch (tencentError) {
       Logger.error(`All data sources failed for ${symbol}`, tencentError);
-
-      // Create a minimal market data object to prevent complete failure
-      const fallbackData: MarketData = {
-        symbol,
-        name: symbol,
-        currentPrice: 0,
-        highPrice: 0,
-        lowPrice: 0,
-        lastUpdateTime: new Date().toISOString(),
-        change: 0,
-        changePercent: 0
-      };
-
-      Logger.warn(`Returning fallback data for ${symbol} due to complete API failure`);
-      return fallbackData;
+      // 不再返回模拟数据，而是抛出聚合错误
+      throw new Error(`All data sources failed for ${symbol}: Sina: ${error instanceof Error ? error.message : String(error)}, Tencent: ${tencentError instanceof Error ? tencentError.message : String(tencentError)}`);
     }
   }
 }

@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { fetchMultipleStocks, MarketData } from "../../../skills/data_crawler";
 import { prisma } from "../../../lib/db";
 
+// Disable caching for real-time stock prices
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 // GET: Get real-time stock prices for multiple symbols
 export async function GET(req: Request) {
   try {

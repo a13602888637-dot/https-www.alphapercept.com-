@@ -166,17 +166,50 @@ export async function fetchAndAnalyzeNews(keywords: string[] = []): Promise<{
  * 注意：此函数需要历史数据来计算真实的技术指标
  * 当前版本返回占位符值，实际应用中应从历史K线数据计算
  */
-export function calculateTechnicalIndicators(
+export async function calculateTechnicalIndicators(
   marketData: MarketData[],
   historicalData?: any[]
-): Record<string, any> {
+): Promise<Record<string, any>> {
   const indicators: Record<string, any> = {};
 
   for (const stock of marketData) {
     const currentPrice = stock.currentPrice;
 
+    // 尝试获取历史数据
+    let stockHistoricalData = historicalData;
+    if (!stockHistoricalData || stockHistoricalData.length === 0) {
+      // 从数据库查询最近60天的价格历史
+      try {
+        const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+        const priceHistory = await prisma.stockPriceHistory.findMany({
+          where: {
+            stockCode: stock.symbol,
+            timestamp: {
+              gte: sixtyDaysAgo,
+            },
+          },
+          orderBy: {
+            timestamp: 'asc',
+          },
+          select: {
+            price: true,
+            timestamp: true,
+          },
+        });
+
+        if (priceHistory.length >= 60) {
+          stockHistoricalData = priceHistory.map(record => Number(record.price));
+          Logger.info(`从数据库获取 ${stock.symbol} 的历史数据，共 ${priceHistory.length} 条记录`);
+        } else {
+          Logger.warn(`历史数据不足，无法为 ${stock.symbol} 计算真实技术指标，仅有 ${priceHistory.length} 条记录`);
+        }
+      } catch (error) {
+        Logger.error(`查询历史数据失败 ${stock.symbol}:`, error);
+      }
+    }
+
     // 如果没有历史数据，返回占位符值并记录警告
-    if (!historicalData || historicalData.length === 0) {
+    if (!stockHistoricalData || stockHistoricalData.length < 60) {
       Logger.warn(`缺少历史数据，无法为 ${stock.symbol} 计算真实技术指标`);
 
       indicators[stock.symbol] = {
@@ -185,31 +218,124 @@ export function calculateTechnicalIndicators(
         rsi: null,
         macd: null,
         volumeRatio: stock.volume ? stock.volume / 1000000 : null,
-        note: '需要历史数据来计算真实技术指标'
+        note: '历史数据不足，无法计算真实技术指标'
       };
       continue;
     }
 
-    // TODO: 实现真实的技术指标计算逻辑
-    // 这里应该从historicalData中提取该股票的历史价格数据
-    // 计算真实的MA60、MD60、RSI、MACD等指标
+    // 计算真实技术指标
+    try {
+      const prices = stockHistoricalData.map(price => Number(price));
+      const recentPrices = prices.slice(-60); // 最近60个数据点
 
-    // 临时占位符
-    indicators[stock.symbol] = {
-      ma60: null,
-      md60: null,
-      rsi: null,
-      macd: null,
-      volumeRatio: stock.volume ? stock.volume / 1000000 : null,
-      note: '技术指标计算功能待实现，需要历史K线数据'
-    };
+      // 计算MA60（60日移动平均线）
+      const ma60 = recentPrices.reduce((sum, price) => sum + price, 0) / recentPrices.length;
+
+      // 计算MD60（60日动量方向）
+      const md60 = recentPrices.length >= 60 ?
+        ((recentPrices[recentPrices.length - 1] - recentPrices[0]) / recentPrices[0]) * 100 : 0;
+
+      // 计算RSI（相对强弱指数）- 简化版本
+      const rsi = calculateRSI(prices.slice(-14)); // 使用最近14天数据
+
+      // 计算MACD - 简化版本
+      const macd = calculateMACD(prices);
+
+      indicators[stock.symbol] = {
+        ma60: parseFloat(ma60.toFixed(2)),
+        md60: parseFloat(md60.toFixed(2)),
+        rsi: rsi ? parseFloat(rsi.toFixed(1)) : null,
+        macd: macd,
+        volumeRatio: stock.volume ? stock.volume / 1000000 : null,
+        note: '基于数据库历史数据计算的真实技术指标'
+      };
+
+      Logger.debug(`技术指标计算完成 ${stock.symbol}:`, {
+        ma60: indicators[stock.symbol].ma60,
+        md60: indicators[stock.symbol].md60,
+        rsi: indicators[stock.symbol].rsi,
+        dataPoints: recentPrices.length
+      });
+    } catch (error) {
+      Logger.error(`计算技术指标失败 ${stock.symbol}:`, error);
+
+      indicators[stock.symbol] = {
+        ma60: null,
+        md60: null,
+        rsi: null,
+        macd: null,
+        volumeRatio: stock.volume ? stock.volume / 1000000 : null,
+        note: '技术指标计算失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
   }
 
   Logger.info('技术指标计算完成', {
     stocks: Object.keys(indicators).length,
-    note: '当前为占位符实现，需要历史数据来计算真实指标'
+    note: '基于真实历史数据计算的技术指标'
   });
   return indicators;
+}
+
+// 辅助函数：计算RSI
+function calculateRSI(prices: number[]): number | null {
+  if (prices.length < 14) return null;
+
+  let gains = 0;
+  let losses = 0;
+
+  for (let i = 1; i < prices.length; i++) {
+    const change = prices[i] - prices[i-1];
+    if (change > 0) {
+      gains += change;
+    } else {
+      losses += Math.abs(change);
+    }
+  }
+
+  const avgGain = gains / 14;
+  const avgLoss = losses / 14;
+
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  const rsi = 100 - (100 / (1 + rs));
+
+  return rsi;
+}
+
+// 辅助函数：计算MACD
+function calculateMACD(prices: number[]): { diff: number; signal: number; histogram: number } | null {
+  if (prices.length < 26) return null;
+
+  // 简化版本：使用固定周期
+  const ema12 = calculateEMA(prices, 12);
+  const ema26 = calculateEMA(prices, 26);
+
+  if (ema12 === null || ema26 === null) return null;
+
+  const diff = ema12 - ema26;
+  const signal = calculateEMA(prices.slice(-9), 9) || diff; // 使用最近9天计算信号线
+  const histogram = diff - signal;
+
+  return {
+    diff: parseFloat(diff.toFixed(3)),
+    signal: parseFloat(signal.toFixed(3)),
+    histogram: parseFloat(histogram.toFixed(3))
+  };
+}
+
+// 辅助函数：计算指数移动平均线
+function calculateEMA(prices: number[], period: number): number | null {
+  if (prices.length < period) return null;
+
+  const multiplier = 2 / (period + 1);
+  let ema = prices.slice(0, period).reduce((sum, price) => sum + price, 0) / period;
+
+  for (let i = period; i < prices.length; i++) {
+    ema = (prices[i] - ema) * multiplier + ema;
+  }
+
+  return ema;
 }
 
 /**
@@ -797,7 +923,7 @@ export async function generateEnhancedIntelligenceAnalysis(
     let technicalIndicators = context.technicalIndicators;
     if (!technicalIndicators) {
       Logger.info('开始计算技术指标...');
-      technicalIndicators = calculateTechnicalIndicators(marketData);
+      technicalIndicators = await calculateTechnicalIndicators(marketData);
       Logger.info('技术指标计算完成', { stocks: Object.keys(technicalIndicators).length });
     }
 
