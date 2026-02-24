@@ -643,15 +643,23 @@ function parseTencentResponse(responseText: string, symbol: string): MarketData 
 export async function fetchYahooStockData(symbol: string, maxRetries: number = 2): Promise<MarketData> {
   // Convert symbol to Yahoo format
   let yahooSymbol = symbol;
+
+  // If symbol already has .SS or .SZ suffix, use it as is
   if (!symbol.includes('.')) {
+    // Remove sh/sz prefix if present
+    let cleanSymbol = symbol.replace(/^(sh|sz)/i, '');
+
     // Determine exchange suffix
-    if (symbol.startsWith('6') || symbol === '000001' || symbol === 'sh000001') {
-      yahooSymbol = symbol.replace('sh', '') + '.SS'; // Shanghai
-    } else if (symbol.startsWith('0') || symbol.startsWith('3') || symbol === '399001' || symbol === 'sz399001') {
-      yahooSymbol = symbol.replace('sz', '') + '.SZ'; // Shenzhen
+    if (cleanSymbol.startsWith('6') || cleanSymbol === '000001') {
+      yahooSymbol = cleanSymbol + '.SS'; // Shanghai
+    } else if (cleanSymbol.startsWith('0') || cleanSymbol.startsWith('3') || cleanSymbol === '399001') {
+      yahooSymbol = cleanSymbol + '.SZ'; // Shenzhen
     } else {
-      yahooSymbol = symbol + '.SS'; // Default to Shanghai
+      yahooSymbol = cleanSymbol + '.SS'; // Default to Shanghai
     }
+  } else {
+    // Symbol already has suffix, ensure it's uppercase
+    yahooSymbol = yahooSymbol.toUpperCase();
   }
 
   const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=3mo`;
