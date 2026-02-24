@@ -29,11 +29,49 @@ export async function GET(req: Request) {
       );
     }
 
-    // Fetch real-time stock data
-    const marketData = await fetchMultipleStocks(symbolList, 2);
+    // 设置超时（5秒）
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Stock prices request timeout after 5 seconds')), 5000);
+    });
 
-    // Store price history in database
-    await storePriceHistory(marketData);
+    let marketData;
+    let isFallback = false;
+
+    try {
+      // 尝试获取数据，但最多等待5秒
+      marketData = await Promise.race([
+        fetchMultipleStocks(symbolList, 1), // 减少重试次数
+        timeoutPromise,
+      ]);
+    } catch (timeoutError) {
+      console.warn('Stock prices fetch timeout, using simulated data');
+      isFallback = true;
+
+      // 生成模拟数据
+      marketData = symbolList.map(symbol => {
+        const basePrice = 10 + Math.random() * 100;
+        const change = (Math.random() - 0.5) * 5;
+        const changePercent = (change / basePrice) * 100;
+
+        return {
+          symbol,
+          name: symbol,
+          currentPrice: parseFloat(basePrice.toFixed(2)),
+          highPrice: parseFloat((basePrice + Math.random() * 5).toFixed(2)),
+          lowPrice: parseFloat((basePrice - Math.random() * 3).toFixed(2)),
+          lastUpdateTime: new Date().toISOString(),
+          change: parseFloat(change.toFixed(2)),
+          changePercent: parseFloat(changePercent.toFixed(2)),
+          volume: Math.floor(Math.random() * 1000000),
+          turnover: Math.floor(Math.random() * 10000000),
+        };
+      });
+    }
+
+    // 只有真实数据才存储到数据库
+    if (!isFallback) {
+      await storePriceHistory(marketData);
+    }
 
     // Format response
     const priceData = marketData.reduce((acc, data) => {
@@ -56,7 +94,8 @@ export async function GET(req: Request) {
       prices: priceData,
       timestamp: new Date().toISOString(),
       count: marketData.length,
-      totalRequested: symbolList.length
+      totalRequested: symbolList.length,
+      isFallback
     });
   } catch (error) {
     console.error("Error fetching stock prices:", error);

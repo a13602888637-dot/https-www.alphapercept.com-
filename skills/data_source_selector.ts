@@ -161,7 +161,7 @@ export class DataSourceManager {
    * 初始化统计数据
    */
   private initializeStats(): void {
-    for (const [type, config] of this.configs) {
+    for (const [type, config] of Array.from(this.configs)) {
       this.stats.set(type, {
         type,
         totalRequests: 0,
@@ -451,7 +451,7 @@ export class DataSourceManager {
       .map(config => config.type);
 
     // 并行执行健康检查
-    const promises = enabledSources.map(source =>
+    const promises = Array.from(enabledSources).map(source =>
       this.performHealthCheck(source)
     );
 

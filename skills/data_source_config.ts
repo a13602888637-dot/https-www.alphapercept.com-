@@ -3,8 +3,8 @@
  * 支持动态配置、持久化存储、热更新
  */
 
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import { DataSourceType, DataSourceConfig } from './data_source_selector';
 
 // 配置文件路径
@@ -12,7 +12,7 @@ const CONFIG_FILE_PATH = path.join(process.cwd(), 'config', 'data_sources.json')
 const BACKUP_DIR = path.join(process.cwd(), 'config', 'backups');
 
 // 默认配置模板
-const DEFAULT_CONFIG_TEMPLATE = {
+const DEFAULT_CONFIG_TEMPLATE: DataSourceSystemConfig = {
   version: '1.0.0',
   lastUpdated: new Date().toISOString(),
   dataSources: [

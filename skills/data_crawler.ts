@@ -5,7 +5,7 @@
  * Fallback data source: Tencent Finance API
  */
 
-import iconv from 'iconv-lite';
+import * as iconv from 'iconv-lite';
 import * as zlib from 'zlib';
 import {
   DataSourceType,
@@ -679,6 +679,18 @@ export async function fetchYahooStockData(symbol: string, maxRetries: number = 2
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': 'application/json',
             'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'max-age=0',
+            'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'DNT': '1',
           },
           signal: controller.signal,
         });
@@ -802,19 +814,15 @@ export async function fetchMarketDataWithFallback(symbol: string, maxRetries: nu
   try {
     Logger.info(`Fetching market data for ${symbol} using Sina with ${maxRetries} retries`);
 
-    // Try Sina first
-    const sinaSymbol = symbol.replace(/\.(SH|SZ)$/, ''); // Remove .SH/.SZ suffix if present
-    return await fetchSinaStockData(sinaSymbol, maxRetries);
+    // Try Sina first - it will handle symbol normalization internally
+    return await fetchSinaStockData(symbol, maxRetries);
 
   } catch (error) {
     Logger.error(`Sina API failed for ${symbol}, trying Tencent`, error);
 
     try {
-      // Try Tencent API as fallback
-      const tencentSymbol = symbol.includes('.SH') ? 'sh' + symbol.replace('.SH', '') :
-                          symbol.includes('.SZ') ? 'sz' + symbol.replace('.SZ', '') :
-                          symbol.startsWith('6') ? 'sh' + symbol : 'sz' + symbol;
-      return await fetchTencentStockData(tencentSymbol, maxRetries);
+      // Try Tencent API as fallback - it will handle symbol normalization internally
+      return await fetchTencentStockData(symbol, maxRetries);
     } catch (tencentError) {
       Logger.error(`Sina and Tencent APIs failed for ${symbol}, trying Yahoo Finance as global fallback`, tencentError);
 
