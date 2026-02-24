@@ -90,7 +90,8 @@ async function fetchWithEncoding(
     if (contentEncoding === 'gzip' || contentEncoding === 'deflate') {
       try {
         buffer = await new Promise<Buffer>((resolve, reject) => {
-          zlib.gunzip(buffer, (error, result) => {
+          // 修复：使用独立的回调函数避免嵌套导致的监听器泄漏
+          const gunzipCallback = (error: Error | null, result: Buffer) => {
             if (error) {
               // Try inflate if gunzip fails
               zlib.inflate(buffer, (inflateError, inflateResult) => {
@@ -103,7 +104,10 @@ async function fetchWithEncoding(
             } else {
               resolve(result);
             }
-          });
+          };
+
+          // 确保回调函数只被调用一次
+          zlib.gunzip(buffer, gunzipCallback);
         });
       } catch (decompressError) {
         Logger.warn(`Failed to decompress response, using raw data: ${decompressError}`);
