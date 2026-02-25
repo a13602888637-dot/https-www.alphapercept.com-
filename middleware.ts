@@ -9,6 +9,12 @@ export default clerkMiddleware({
     "/api/stocks/search(.*)",
     "/sign-in(.*)",
     "/sign-up(.*)",
+    "/ai-inference-demo",
+    "/market-pulse-test",
+    "/watchlist-gestures-demo",
+    "/ai-inference-test",
+    "/watchlist",
+    "/test",
   ],
   ignoredRoutes: [
     "/api/webhooks/clerk",
