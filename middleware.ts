@@ -7,6 +7,7 @@ export default clerkMiddleware({
     "/api/stock-prices(.*)",
     "/api/stock-price-history(.*)",
     "/api/stocks/search(.*)",
+    "/api/intelligence-feed(.*)",
     "/sign-in(.*)",
     "/sign-up(.*)",
     "/ai-inference-demo",

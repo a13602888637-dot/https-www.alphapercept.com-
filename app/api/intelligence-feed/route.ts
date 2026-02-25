@@ -5,7 +5,14 @@ import { prisma } from "../../../lib/db";
 // GET: Get user's intelligence feed
 export async function GET(req: Request) {
   try {
-    const { userId: clerkUserId } = await auth();
+    let clerkUserId = null;
+    try {
+      const authResult = await auth();
+      clerkUserId = authResult.userId;
+    } catch (authError) {
+      console.warn("Clerk auth failed, using public feed:", authError);
+      // Continue with public feed (clerkUserId will be null)
+    }
 
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "20");
