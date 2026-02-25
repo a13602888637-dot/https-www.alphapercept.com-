@@ -12,6 +12,7 @@ import {
   Users,
   Wallet,
   Zap,
+  Star,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -24,6 +25,12 @@ const navItems = [
     icon: Home,
     href: "/dashboard",
     active: true,
+  },
+  {
+    title: "自选股",
+    icon: Star,
+    href: "/watchlist",
+    badge: "新",
   },
   {
     title: "实时市场",
