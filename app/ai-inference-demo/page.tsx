@@ -467,7 +467,7 @@ function StockCard({ stock }) {
             </div>
             <div className="flex items-center gap-1">
               <div className="h-2 w-2 rounded-full bg-orange-500"></div>
-              <span>风险预警：陷阱概率 > 80%</span>
+              <span>风险预警：陷阱概率 &gt; 80%</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="h-2 w-2 rounded-full bg-green-500"></div>

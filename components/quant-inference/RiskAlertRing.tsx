@@ -187,10 +187,10 @@ export function RiskAlertRing({
                         className={cn(
                           'h-1.5 rounded-full transition-all duration-300',
                           i < intensity
-                            ? priority === 'critical' && 'bg-red-500'
-                            : priority === 'high' && 'bg-orange-500'
-                            : priority === 'medium' && 'bg-yellow-500'
-                            : priority === 'low' && 'bg-green-500'
+                            ? (priority === 'critical' ? 'bg-red-500' :
+                               priority === 'high' ? 'bg-orange-500' :
+                               priority === 'medium' ? 'bg-yellow-500' :
+                               priority === 'low' ? 'bg-green-500' : 'bg-gray-300')
                             : 'bg-gray-300'
                         )}
                         style={{
