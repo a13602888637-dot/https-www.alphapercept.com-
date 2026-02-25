@@ -11,7 +11,6 @@ export default clerkMiddleware({
     "/sign-up(.*)",
     "/ai-inference-demo",
     "/market-pulse-test",
-    "/watchlist-gestures-demo",
     "/ai-inference-test",
     "/watchlist",
     "/test",
