@@ -1,19 +1,25 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
 import { runCompleteIntelligencePipeline } from "../../../skills/deepseek_agent";
 import { fetchMultipleStocks } from "../../../skills/data_crawler";
+import { safeAuth, emptyDataResponse, authErrorResponse } from "../../../lib/utils/auth";
 
 // GET: 分析用户的自选股列表
 export async function GET() {
   try {
-    const { userId: clerkUserId } = await auth();
+    // 对于GET请求，不需要严格认证
+    const authResult = await safeAuth(false, "watchlist analysis");
+
+    if (!authResult.success) {
+      // 如果认证失败，返回空数据
+      return NextResponse.json(emptyDataResponse("未登录，返回空分析结果"));
+    }
+
+    const clerkUserId = authResult.clerkUserId;
 
     if (!clerkUserId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      // 如果用户未登录，返回空数据
+      return NextResponse.json(emptyDataResponse("未登录，返回空分析结果"));
     }
 
     // 获取用户
@@ -178,12 +184,34 @@ export async function GET() {
 // POST: 手动触发自选股分析（支持指定股票）
 export async function POST(req: Request) {
   try {
-    const { userId: clerkUserId } = await auth();
+    // 对于POST请求，需要严格认证
+    const authResult = await safeAuth(true, "watchlist analysis");
+
+    if (!authResult.success) {
+      // 如果认证失败，返回401错误
+      const error = authResult.error!;
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          details: error.details
+        },
+        { status: error.status }
+      );
+    }
+
+    const clerkUserId = authResult.clerkUserId;
 
     if (!clerkUserId) {
+      // 如果用户未登录，返回401错误
+      const error = authErrorResponse("watchlist analysis");
       return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
+        {
+          success: false,
+          error: error.error,
+          details: error.details
+        },
+        { status: error.status }
       );
     }
 

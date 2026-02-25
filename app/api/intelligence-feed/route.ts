@@ -93,11 +93,28 @@ export async function GET(req: Request) {
 // POST: Create new intelligence feed item
 export async function POST(req: Request) {
   try {
-    const { userId: clerkUserId } = await auth();
+    let clerkUserId = null;
+    try {
+      const authResult = await auth();
+      clerkUserId = authResult.userId;
+    } catch (authError) {
+      console.warn("Clerk auth failed:", authError);
+      // 对于POST请求，需要认证，返回401错误
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          details: "Clerk authentication failed. Please sign in to create intelligence feed items."
+        },
+        { status: 401 }
+      );
+    }
 
     if (!clerkUserId) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        {
+          error: "Authentication required",
+          details: "User authentication failed. Please sign in to create intelligence feed items."
+        },
         { status: 401 }
       );
     }

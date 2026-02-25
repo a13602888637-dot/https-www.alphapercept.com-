@@ -4,11 +4,30 @@ import { prisma } from "../../../../lib/db";
 
 export async function POST(req: Request) {
   try {
-    const { userId: clerkUserId } = await auth();
+    let clerkUserId = null;
+    try {
+      const authResult = await auth();
+      clerkUserId = authResult.userId;
+    } catch (authError) {
+      console.warn("Clerk auth failed:", authError);
+      // 对于用户同步POST请求，需要认证，返回401错误
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required",
+          details: "Clerk authentication failed. Please sign in to sync user data."
+        },
+        { status: 401 }
+      );
+    }
 
     if (!clerkUserId) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        {
+          success: false,
+          error: "Authentication required",
+          details: "User authentication failed. Please sign in to sync user data."
+        },
         { status: 401 }
       );
     }
@@ -69,13 +88,26 @@ export async function POST(req: Request) {
 
 export async function GET() {
   try {
-    const { userId: clerkUserId } = await auth();
+    let clerkUserId = null;
+    try {
+      const authResult = await auth();
+      clerkUserId = authResult.userId;
+    } catch (authError) {
+      console.warn("Clerk auth failed:", authError);
+      // 对于用户信息GET请求，返回空用户信息而不是401错误
+      return NextResponse.json({
+        success: true,
+        message: "未登录，返回空用户信息",
+        user: null
+      });
+    }
 
     if (!clerkUserId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({
+        success: true,
+        message: "未登录，返回空用户信息",
+        user: null
+      });
     }
 
     const user = await prisma.user.findUnique({

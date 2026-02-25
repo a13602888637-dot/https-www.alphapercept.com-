@@ -5,13 +5,28 @@ import { prisma } from "../../../lib/db";
 // GET: Get user's watchlist
 export async function GET() {
   try {
-    const { userId: clerkUserId } = await auth();
+    let clerkUserId = null;
+    try {
+      const authResult = await auth();
+      clerkUserId = authResult.userId;
+    } catch (authError) {
+      console.warn("Clerk auth failed, returning empty watchlist:", authError);
+      // 对于GET请求，返回空自选股列表而不是401错误
+      return NextResponse.json({
+        success: true,
+        message: "未登录，返回空自选股列表",
+        watchlist: [],
+        count: 0
+      });
+    }
 
     if (!clerkUserId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({
+        success: true,
+        message: "未登录，返回空自选股列表",
+        watchlist: [],
+        count: 0
+      });
     }
 
     // Get or create user in database
@@ -87,11 +102,30 @@ export async function GET() {
 // POST: Add item to watchlist
 export async function POST(req: Request) {
   try {
-    const { userId: clerkUserId } = await auth();
+    let clerkUserId = null;
+    try {
+      const authResult = await auth();
+      clerkUserId = authResult.userId;
+    } catch (authError) {
+      console.warn("Clerk auth failed:", authError);
+      // 对于POST请求，需要认证，返回401错误
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required",
+          details: "Clerk authentication failed. Please sign in to manage watchlist."
+        },
+        { status: 401 }
+      );
+    }
 
     if (!clerkUserId) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        {
+          success: false,
+          error: "Authentication required",
+          details: "User authentication failed. Please sign in to manage watchlist."
+        },
         { status: 401 }
       );
     }
@@ -203,11 +237,30 @@ export async function POST(req: Request) {
 // PUT: Update watchlist item
 export async function PUT(req: Request) {
   try {
-    const { userId: clerkUserId } = await auth();
+    let clerkUserId = null;
+    try {
+      const authResult = await auth();
+      clerkUserId = authResult.userId;
+    } catch (authError) {
+      console.warn("Clerk auth failed:", authError);
+      // 对于PUT请求，需要认证，返回401错误
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required",
+          details: "Clerk authentication failed. Please sign in to update watchlist items."
+        },
+        { status: 401 }
+      );
+    }
 
     if (!clerkUserId) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        {
+          success: false,
+          error: "Authentication required",
+          details: "User authentication failed. Please sign in to update watchlist items."
+        },
         { status: 401 }
       );
     }
@@ -316,11 +369,30 @@ export async function PUT(req: Request) {
 // DELETE: Remove item from watchlist
 export async function DELETE(req: Request) {
   try {
-    const { userId: clerkUserId } = await auth();
+    let clerkUserId = null;
+    try {
+      const authResult = await auth();
+      clerkUserId = authResult.userId;
+    } catch (authError) {
+      console.warn("Clerk auth failed:", authError);
+      // 对于DELETE请求，需要认证，返回401错误
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required",
+          details: "Clerk authentication failed. Please sign in to delete watchlist items."
+        },
+        { status: 401 }
+      );
+    }
 
     if (!clerkUserId) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        {
+          success: false,
+          error: "Authentication required",
+          details: "User authentication failed. Please sign in to delete watchlist items."
+        },
         { status: 401 }
       );
     }
