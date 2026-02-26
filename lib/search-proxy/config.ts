@@ -114,10 +114,12 @@ export const CACHE_CONFIG: CacheConfig = {
 // 代理配置
 export const PROXY_CONFIG: ProxyConfig = {
   enabled: true,
-  type: 'cloud-function', // 默认使用云函数代理
-  timeout: 10000,
+  type: (process.env.SEARCH_PROXY_TYPE as 'direct' | 'proxy' | 'cloud-function') || 'direct', // 从环境变量读取，默认为direct模式
+  timeout: process.env.SEARCH_PROXY_TIMEOUT ? parseInt(process.env.SEARCH_PROXY_TIMEOUT) : 10000,
+  // 代理服务器地址
+  proxyUrl: process.env.SEARCH_PROXY_URL,
   // 云函数地址（需要部署到国内服务器）
-  cloudFunctionUrl: process.env.SEARCH_PROXY_CLOUD_FUNCTION_URL || 'https://your-cloud-function-url.com/api/search-proxy',
+  cloudFunctionUrl: process.env.SEARCH_PROXY_CLOUD_FUNCTION_URL,
 };
 
 // 解析新浪API响应

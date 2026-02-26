@@ -8,6 +8,7 @@ import {
   StockResult,
   selectOptimalSource,
   getEnabledSources,
+  PROXY_CONFIG,
 } from './config';
 import { getCache, cacheable } from './cache';
 import { getProxyService, ProxyRequest } from './proxy-service';
@@ -362,8 +363,8 @@ export class SearchService {
         retryCount: source.retryCount,
       })),
       proxy: {
-        type: 'cloud-function', // 从配置读取
-        enabled: true,
+        type: PROXY_CONFIG.type, // 从配置读取
+        enabled: PROXY_CONFIG.enabled,
       },
     };
   }

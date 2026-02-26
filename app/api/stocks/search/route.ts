@@ -7,11 +7,11 @@ export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
 // 股票搜索结果接口（保持向后兼容）
-interface StockResult {
-  code: string
-  name: string
-  market: string
-}
+// interface StockResult {
+//   code: string
+//   name: string
+//   market: string
+// }
 
 // 获取客户端IP地址
 function getClientIp(request: NextRequest): string | undefined {
@@ -71,23 +71,15 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("股票搜索API错误:", error);
 
-    // 使用搜索服务的降级机制
-    const searchService = getSearchService();
-    const fallbackResults = searchService.search({
-      query,
-      useCache: false, // 不使用缓存，直接获取降级数据
-    }).then(result => result.data).catch(() => []);
-
-    const results = await fallbackResults;
-
+    // 直接返回空结果，搜索服务内部的降级机制应该已经处理了错误
     return NextResponse.json({
-      success: results.length > 0,
-      data: results,
-      count: results.length,
+      success: false,
+      data: [],
+      count: 0,
       query,
-      source: 'fallback',
+      source: 'error',
       cached: false,
-      error: results.length > 0 ? undefined : 'Search service failed',
+      error: 'Search service failed',
     });
   }
 }
