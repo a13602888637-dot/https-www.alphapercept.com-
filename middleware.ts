@@ -18,6 +18,7 @@ export default clerkMiddleware({
     "/ai-inference-test",
     "/watchlist",
     "/test",
+    "/realtime-prices",
   ],
   ignoredRoutes: [
     "/api/webhooks/clerk",

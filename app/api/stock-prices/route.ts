@@ -69,9 +69,10 @@ export async function GET(req: Request) {
     }
 
     // 只有真实数据才存储到数据库
-    if (!isFallback) {
-      await storePriceHistory(marketData);
-    }
+    // 暂时注释掉数据库存储，因为Prisma模型可能有问题
+    // if (!isFallback) {
+    //   await storePriceHistory(marketData);
+    // }
 
     // Format response
     const priceData = marketData.reduce((acc, data) => {
