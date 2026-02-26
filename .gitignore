@@ -123,3 +123,4 @@ pipeline_test_report.md
 .claude/
 _bmad/
 .vercel
+.worktrees/
