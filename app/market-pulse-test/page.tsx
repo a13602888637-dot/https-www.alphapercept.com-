@@ -1,5 +1,6 @@
 "use client"
 
+import { PageLayout } from "@/components/layout/page-layout"
 import { MarketPulseHeader, MarketPulseMobile } from "@/components/market-pulse/MarketPulseHeader"
 import { MarketIndicator } from "@/components/market-pulse/MarketIndicator"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -7,7 +8,7 @@ import { Separator } from "@/components/ui/separator"
 
 export default function MarketPulseTestPage() {
   return (
-    <div className="container mx-auto p-6 space-y-8">
+    <PageLayout title="市场脉搏组件测试">
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">市场脉搏组件测试</h1>
         <p className="text-gray-600 dark:text-gray-400">
@@ -252,6 +253,6 @@ function MyComponent() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageLayout>
   )
 }

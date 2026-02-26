@@ -1,5 +1,6 @@
 "use client"
 
+import { PageLayout } from "@/components/layout/page-layout"
 import { WatchlistToggle, CompactWatchlistToggle, LabeledWatchlistToggle } from "@/components/watchlist/WatchlistToggle"
 import { useState } from "react"
 
@@ -26,7 +27,7 @@ export default function TestPage() {
   }
 
   return (
-    <div className="container mx-auto p-8">
+    <PageLayout title="Toggle状态机测试">
       <h1 className="text-3xl font-bold mb-8">Milestone 6.5 - Toggle状态机测试</h1>
 
       <div className="mb-8 p-6 border rounded-lg bg-card">
@@ -208,6 +209,6 @@ export default function TestPage() {
           </div>
         </div>
       </div>
-    </div>
+    </PageLayout>
   )
 }

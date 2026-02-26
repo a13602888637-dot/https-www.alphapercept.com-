@@ -6,6 +6,7 @@
 "use client";
 
 import { useState } from 'react';
+import { PageLayout } from '@/components/layout/page-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -129,7 +130,7 @@ export default function AIInferenceTestPage() {
     : 0;
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <PageLayout title="AI推理代理测试">
       {/* 页面标题 */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
@@ -417,6 +418,6 @@ export default function AIInferenceTestPage() {
           </div>
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }

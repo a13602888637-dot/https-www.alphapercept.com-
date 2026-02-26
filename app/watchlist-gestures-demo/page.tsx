@@ -1,12 +1,13 @@
 "use client";
 
+import { PageLayout } from "@/components/layout/page-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, Share2, Settings } from "lucide-react";
 
 export default function WatchlistGesturesDemoPage() {
   return (
-    <div className="container mx-auto py-8 px-4">
+    <PageLayout title="手势交互演示">
       <div className="space-y-8">
         {/* 页面标题 */}
         <div className="text-center">
@@ -179,6 +180,6 @@ import { LongPressPreview } from "@/components/watchlist/gestures/LongPressPrevi
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageLayout>
   );
 }
