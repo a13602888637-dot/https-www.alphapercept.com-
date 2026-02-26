@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PageLayout } from "@/components/layout/page-layout";
 import { WatchlistMainList } from "@/components/watchlist/WatchlistMainList";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -91,7 +92,7 @@ export default function WatchlistPage() {
   };
 
   return (
-    <div className="container mx-auto py-6 px-4">
+    <PageLayout title="自选股">
       <div className="space-y-6">
         {/* 页面标题和操作栏 */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -456,6 +457,6 @@ export default function WatchlistPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageLayout>
   );
 }

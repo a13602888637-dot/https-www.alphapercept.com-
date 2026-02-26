@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PageLayout } from "@/components/layout/page-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,11 +60,12 @@ export default function RealtimePricesPage() {
   const changedSymbols = realTimePrices.getChangedSymbols();
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">实时股票价格演示</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+    <PageLayout title="实时股票价格">
+      <div className="container mx-auto p-4 space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">实时股票价格演示</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
             使用Server-Sent Events (SSE)实现的实时股票价格更新系统
           </p>
         </div>
@@ -443,6 +445,7 @@ export default function RealtimePricesPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

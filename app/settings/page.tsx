@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { PageLayout } from "@/components/layout/page-layout"
 import { useUserSync } from "@/lib/hooks/useUserSync"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { User, Mail, Calendar, Moon, Sun, Monitor, Bell, TrendingUp, AlertCircle, Smartphone } from "lucide-react"
@@ -11,12 +12,13 @@ export default function SettingsPage() {
   const { user, isLoaded } = useUserSync()
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">设置</h1>
-          <p className="text-muted-foreground">管理您的账户偏好和通知设置</p>
-        </div>
+    <PageLayout title="设置">
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">设置</h1>
+            <p className="text-muted-foreground">管理您的账户偏好和通知设置</p>
+          </div>
         <div className="text-sm text-muted-foreground">
           最后更新: {new Date().toLocaleDateString('zh-CN', {
             year: 'numeric',
@@ -132,7 +134,8 @@ export default function SettingsPage() {
           </Card>
         </div>
       </div>
-    </div>
+      </div>
+    </PageLayout>
   )
 }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { PageLayout } from "@/components/layout/page-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -188,9 +189,10 @@ export default function AIAssistantPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 页面标题 */}
-      <div>
+    <PageLayout title="AI投资助手">
+      <div className="space-y-6">
+        {/* 页面标题 */}
+        <div>
         <h1 className="text-3xl font-bold tracking-tight flex items-center">
           <MessageSquare className="h-8 w-8 mr-3 text-blue-500" />
           AI智能助手
@@ -483,6 +485,7 @@ export default function AIAssistantPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </PageLayout>
   )
 }

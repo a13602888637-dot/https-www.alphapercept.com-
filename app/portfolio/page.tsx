@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { PageLayout } from "@/components/layout/page-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -476,11 +477,12 @@ export default function PortfolioPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center">
+    <PageLayout title="投资组合">
+      <div className="space-y-6">
+        {/* 页面标题 */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight flex items-center">
             <Wallet className="h-8 w-8 mr-3 text-blue-500" />
             投资组合管理
           </h1>
@@ -1096,6 +1098,7 @@ export default function PortfolioPage() {
           </Card>
         </div>
       )}
-    </div>
+      </div>
+    </PageLayout>
   )
 }

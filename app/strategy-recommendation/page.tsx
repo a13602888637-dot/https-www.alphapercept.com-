@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { PageLayout } from "@/components/layout/page-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -105,14 +106,15 @@ export default function StrategyRecommendationPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 页面标题 */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">AI策略推荐中心</h1>
-        <p className="text-muted-foreground mt-2">
-          基于五大投资流派融合的智能策略推荐系统，为您量身定制投资方案
-        </p>
-      </div>
+    <PageLayout title="AI策略推荐中心">
+      <div className="space-y-6">
+        {/* 页面标题 */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">AI策略推荐中心</h1>
+          <p className="text-muted-foreground mt-2">
+            基于五大投资流派融合的智能策略推荐系统，为您量身定制投资方案
+          </p>
+        </div>
 
       {/* 用户偏好卡片 */}
       <Card>
@@ -407,6 +409,7 @@ export default function StrategyRecommendationPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </PageLayout>
   )
 }
