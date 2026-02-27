@@ -73,8 +73,8 @@ interface WatchlistState {
   cancelTransaction: (transactionId: string) => void;
 
   // 数据操作（乐观更新）
-  addItemOptimistic: (stockCode: string, stockName: string, itemData?: Partial<WatchlistItem>) => string;
-  removeItemOptimistic: (stockCode: string) => string;
+  addItemOptimistic: (stockCode: string, stockName: string, itemData?: Partial<WatchlistItem>) => Promise<string>;
+  removeItemOptimistic: (stockCode: string) => Promise<string>;
   updateItem: (stockCode: string, updates: Partial<WatchlistItem>) => void;
   updateItemPrice: (stockCode: string, priceData: {
     currentPrice: number;
@@ -155,7 +155,7 @@ export const useWatchlistStore = create<WatchlistState>()(
               stockCode,
               stockName,
               isFavorite: true,
-              toggleStatus: 'OPTIMISTIC_UPDATING',
+              toggleStatus: 'OPTIMISTIC_UPDATING' as WatchlistToggleState,
               createdAt: new Date(),
               updatedAt: new Date(),
               lastUpdated: timestamp,
@@ -174,7 +174,7 @@ export const useWatchlistStore = create<WatchlistState>()(
             const updatedItem = {
               ...existingItem,
               isFavorite: isAdding,
-              toggleStatus: 'OPTIMISTIC_UPDATING',
+              toggleStatus: 'OPTIMISTIC_UPDATING' as WatchlistToggleState,
               lastUpdated: timestamp,
             };
 
@@ -197,15 +197,41 @@ export const useWatchlistStore = create<WatchlistState>()(
           navigator.vibrate(50); // 短暂震动50ms
         }
 
-        // 开始后台同步（模拟异步）
-        setTimeout(() => {
+        // 开始后台同步（真正的API调用）
+        setTimeout(async () => {
           get().updateTransactionState(transactionId, 'SYNCING');
 
-          // 模拟API调用
-          setTimeout(() => {
-            // 90%成功率模拟
-            const isSuccess = Math.random() > 0.1;
-            if (isSuccess) {
+          try {
+            // 真正的API调用
+            const method = targetState === 'ADD' ? 'POST' : 'DELETE';
+
+            // 对于删除操作，需要先获取项目的ID
+            let apiEndpoint = '/api/watchlist';
+            if (targetState === 'REMOVE') {
+              const item = get().items[stockCode];
+              if (item && item.id && !item.id.startsWith('temp_')) {
+                apiEndpoint = `/api/watchlist?id=${item.id}`;
+              } else {
+                // 如果是临时项目或没有ID，直接乐观删除
+                get().updateTransactionState(transactionId, 'SUCCESS');
+                return;
+              }
+            }
+
+            const requestBody = targetState === 'ADD' ? {
+              stockCode,
+              stockName,
+            } : undefined;
+
+            const response = await fetch(apiEndpoint, {
+              method,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              ...(requestBody && { body: JSON.stringify(requestBody) }),
+            });
+
+            if (response.ok) {
               get().updateTransactionState(transactionId, 'SUCCESS');
 
               // 成功后清理事务
@@ -216,9 +242,15 @@ export const useWatchlistStore = create<WatchlistState>()(
                 });
               }, 2000);
             } else {
-              get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', '同步失败，请重试');
+              const errorData = await response.json().catch(() => ({}));
+              const errorMessage = errorData.error || errorData.details || `API请求失败: ${response.status}`;
+              get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', errorMessage);
             }
-          }, 1000);
+          } catch (error) {
+            console.error('API调用失败:', error);
+            const errorMessage = error instanceof Error ? error.message : '网络错误，请检查连接';
+            get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', errorMessage);
+          }
         }, 100); // 延迟100ms以允许UI响应
 
         return transactionId;
@@ -257,7 +289,7 @@ export const useWatchlistStore = create<WatchlistState>()(
               const updatedItem = {
                 ...item,
                 isFavorite: wasFavorite,
-                toggleStatus: 'ROLLBACK_ERROR',
+                toggleStatus: 'ROLLBACK_ERROR' as WatchlistToggleState,
                 lastUpdated: Date.now(),
               };
 
@@ -276,7 +308,7 @@ export const useWatchlistStore = create<WatchlistState>()(
             if (item) {
               const updatedItem = {
                 ...item,
-                toggleStatus: 'SUCCESS',
+                toggleStatus: 'SUCCESS' as WatchlistToggleState,
                 lastUpdated: Date.now(),
               };
 
@@ -313,19 +345,52 @@ export const useWatchlistStore = create<WatchlistState>()(
           error: null,
         });
 
-        // 重新开始同步
-        setTimeout(() => {
+        // 重新开始同步（真正的API调用）
+        setTimeout(async () => {
           get().updateTransactionState(transactionId, 'SYNCING');
 
-          setTimeout(() => {
-            // 重试时提高成功率
-            const isSuccess = Math.random() > 0.05; // 95%成功率
-            if (isSuccess) {
+          try {
+            // 真正的API调用
+            const method = transaction.targetState === 'ADD' ? 'POST' : 'DELETE';
+
+            // 对于删除操作，需要先获取项目的ID
+            let apiEndpoint = '/api/watchlist';
+            if (transaction.targetState === 'REMOVE') {
+              const item = state.items[transaction.stockCode];
+              if (item && item.id && !item.id.startsWith('temp_')) {
+                apiEndpoint = `/api/watchlist?id=${item.id}`;
+              } else {
+                // 如果是临时项目或没有ID，直接乐观删除
+                get().updateTransactionState(transactionId, 'SUCCESS');
+                return;
+              }
+            }
+
+            const requestBody = transaction.targetState === 'ADD' ? {
+              stockCode: transaction.stockCode,
+              stockName: state.items[transaction.stockCode]?.stockName || 'Unknown',
+            } : undefined;
+
+            const response = await fetch(apiEndpoint, {
+              method,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              ...(requestBody && { body: JSON.stringify(requestBody) }),
+            });
+
+            if (response.ok) {
               get().updateTransactionState(transactionId, 'SUCCESS');
             } else {
-              get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', `重试失败 (${updatedTransaction.retryCount}/${state.config.maxRetries})`);
+              const errorData = await response.json().catch(() => ({}));
+              const errorMessage = errorData.error || errorData.details || `重试失败 (${updatedTransaction.retryCount}/${state.config.maxRetries})`;
+              get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', errorMessage);
             }
-          }, 1000);
+          } catch (error) {
+            console.error('重试API调用失败:', error);
+            const errorMessage = `重试失败 (${updatedTransaction.retryCount}/${state.config.maxRetries}): ${error instanceof Error ? error.message : '网络错误'}`;
+            get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', errorMessage);
+          }
         }, 100);
       },
 
@@ -342,7 +407,7 @@ export const useWatchlistStore = create<WatchlistState>()(
               const updatedItem = {
                 ...item,
                 isFavorite: wasFavorite,
-                toggleStatus: 'IDLE',
+                toggleStatus: 'IDLE' as WatchlistToggleState,
                 lastUpdated: Date.now(),
               };
 
@@ -370,11 +435,11 @@ export const useWatchlistStore = create<WatchlistState>()(
       },
 
       // 数据操作（乐观更新）
-      addItemOptimistic: (stockCode: string, stockName: string, itemData?: Partial<WatchlistItem>) => {
+      addItemOptimistic: async (stockCode: string, stockName: string, itemData?: Partial<WatchlistItem>) => {
         return get().startToggleTransaction(stockCode, stockName, 'ADD');
       },
 
-      removeItemOptimistic: (stockCode: string) => {
+      removeItemOptimistic: async (stockCode: string) => {
         const item = get().items[stockCode];
         if (!item) return '';
 

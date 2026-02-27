@@ -118,15 +118,16 @@ export function WatchlistToggle({
     setLocalIsFavorite(!isFavorite)
     setIsAnimating(true)
 
-    // 调用store方法
-    const transactionId = targetState === 'ADD'
+    // 调用store方法（现在是异步的）
+    const transactionIdPromise = targetState === 'ADD'
       ? store.addItemOptimistic(stockCode, stockName)
       : store.removeItemOptimistic(stockCode)
 
     // 通知父组件
     onToggle?.(!isFavorite, stockCode)
 
-    return transactionId
+    // 返回Promise，调用者可以await
+    return transactionIdPromise
   }, [isFavorite, stockCode, stockName, currentState, transaction, store, onToggle])
 
   // 重试失败的事务

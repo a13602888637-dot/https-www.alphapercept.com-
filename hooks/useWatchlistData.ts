@@ -32,7 +32,7 @@ export interface WatchlistData {
   // 操作方法
   refresh: () => Promise<void>;
   addItem: (stockCode: string, stockName: string) => Promise<string>;
-  removeItem: (stockCode: string) => Promise<void>;
+  removeItem: (stockCode: string) => Promise<string>;
   updateItem: (stockCode: string, updates: Partial<WatchlistItem>) => Promise<void>;
   reorderItems: (newOrder: string[]) => void;
 }
@@ -120,8 +120,8 @@ export function useWatchlistData(options: UseWatchlistDataOptions = {}): Watchli
   /**
    * 移除自选股
    */
-  const removeItem = useCallback(async (stockCode: string) => {
-    store.removeItemOptimistic(stockCode);
+  const removeItem = useCallback(async (stockCode: string): Promise<string> => {
+    return store.removeItemOptimistic(stockCode);
   }, [store]);
 
   /**
