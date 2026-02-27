@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Heart, Star, Loader2, Check, X, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useWatchlistStore } from '@/lib/store'
-import { WatchlistToggleState, getStateDescription } from '@/lib/types'
+import { WatchlistToggleState, getStateDescription } from '@/lib/types/watchlist-state-machine'
 
 export interface WatchlistToggleProps {
   stockCode: string

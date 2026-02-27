@@ -132,7 +132,8 @@ export function useLongPressPreview({
     {
       onPointerDown: ({ event }) => {
         if (!enabled) return;
-        event.preventDefault();
+        // 不要阻止默认行为，允许点击事件通过
+        // event.preventDefault();
         const { clientX, clientY } = event as PointerEvent;
         startLongPressTimer(clientX, clientY);
       },

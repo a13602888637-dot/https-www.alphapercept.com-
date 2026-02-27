@@ -14,7 +14,7 @@ import {
   getStateDescription,
   DEFAULT_TOGGLE_CONFIG,
   ToggleStateMachineConfig,
-} from '../types';
+} from '../types/watchlist-state-machine';
 
 export interface WatchlistItem {
   id: string;
@@ -548,21 +548,62 @@ export const useWatchlistStore = create<WatchlistState>()(
         set({ isLoading: true, error: null });
 
         try {
-          // 模拟API调用
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // 调用实际的watchlist API
+          const response = await fetch('/api/watchlist');
 
-          // 这里应该调用实际的watchlist API
-          // const response = await fetch('/api/watchlist');
-          // const data = await response.json();
+          if (!response.ok) {
+            throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+          }
 
-          set({
-            isLoading: false,
-            lastSynced: Date.now(),
+          const data = await response.json();
+
+          // 更新本地存储的数据
+          set((state) => {
+            const updatedItems = { ...state.items };
+            const updatedItemOrder: string[] = [];
+
+            // 处理API返回的数据
+            if (Array.isArray(data)) {
+              data.forEach((item: any) => {
+                const stockCode = item.stockCode || item.symbol;
+                if (stockCode) {
+                  const existingItem = state.items[stockCode];
+
+                  updatedItems[stockCode] = {
+                    ...existingItem,
+                    id: item.id || existingItem?.id || `server_${stockCode}_${Date.now()}`,
+                    stockCode,
+                    stockName: item.stockName || item.name || existingItem?.stockName || stockCode,
+                    isFavorite: true,
+                    toggleStatus: 'IDLE' as WatchlistToggleState,
+                    createdAt: existingItem?.createdAt || new Date(item.createdAt || Date.now()),
+                    updatedAt: new Date(item.updatedAt || Date.now()),
+                    lastUpdated: Date.now(),
+                    ...(item.buyPrice !== undefined && { buyPrice: item.buyPrice }),
+                    ...(item.stopLossPrice !== undefined && { stopLossPrice: item.stopLossPrice }),
+                    ...(item.targetPrice !== undefined && { targetPrice: item.targetPrice }),
+                    ...(item.notes !== undefined && { notes: item.notes }),
+                  };
+
+                  updatedItemOrder.push(stockCode);
+                }
+              });
+            }
+
+            return {
+              items: updatedItems,
+              itemOrder: updatedItemOrder.length > 0 ? updatedItemOrder : state.itemOrder,
+              isLoading: false,
+              lastSynced: Date.now(),
+              error: null,
+            };
           });
         } catch (error) {
+          console.error('同步失败:', error);
           set({
             isLoading: false,
-            error: error instanceof Error ? error.message : '同步失败',
+            error: error instanceof Error ? error.message : '同步失败，请检查网络连接',
+            lastSynced: Date.now(), // 即使失败也记录同步尝试时间
           });
         }
       },

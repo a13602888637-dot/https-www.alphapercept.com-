@@ -248,16 +248,22 @@ export function useWatchlistData(options: UseWatchlistDataOptions = {}): Watchli
 
   /**
    * 设置定期数据更新
+   * 注意：实际应用中应该通过WebSocket接收实时数据
+   * 这个定时器仅作为后备方案或开发环境使用
    */
   const setupPeriodicDataUpdate = useCallback(() => {
     if (!enableRealtime) {
       return () => {};
     }
 
-    // 模拟定期数据更新（实际应该通过WebSocket）
+    // 定期数据更新（开发环境使用，生产环境应使用WebSocket）
     realtimeTimerRef.current = setInterval(() => {
-      // 这里可以添加模拟数据更新逻辑
-      // 实际应用中应该通过WebSocket接收实时数据
+      // 在开发环境中，可以调用API获取最新数据
+      // 生产环境应该通过WebSocket接收实时数据
+      if (process.env.NODE_ENV === 'development') {
+        // 开发环境：定期刷新数据
+        refresh().catch(console.error);
+      }
     }, realtimeInterval);
 
     // 清理函数
@@ -267,7 +273,7 @@ export function useWatchlistData(options: UseWatchlistDataOptions = {}): Watchli
         realtimeTimerRef.current = null;
       }
     };
-  }, [enableRealtime, realtimeInterval]);
+  }, [enableRealtime, realtimeInterval, refresh]);
 
   // 初始化效果
   useEffect(() => {

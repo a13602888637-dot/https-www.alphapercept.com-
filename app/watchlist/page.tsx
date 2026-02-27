@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageLayout } from "@/components/layout/page-layout";
 import { WatchlistMainList } from "@/components/watchlist/WatchlistMainList";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import {
 import { toast } from "sonner";
 
 export default function WatchlistPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("main");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newStock, setNewStock] = useState({
@@ -72,8 +74,8 @@ export default function WatchlistPage() {
 
   // 处理项目点击
   const handleItemClick = (item: any) => {
-    toast.info(`点击了 ${item.stockName} (${item.stockCode})`);
-    // 这里可以导航到股票详情页面
+    // 导航到股票详情页面
+    router.push(`/stock/${item.stockCode}`);
   };
 
   // 导出数据

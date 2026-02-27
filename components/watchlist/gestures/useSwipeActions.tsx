@@ -182,7 +182,7 @@ export function useSwipeActions({
       axis: "x", // 只允许水平滑动
       bounds: containerRef,
       rubberband: true,
-      filterTaps: true,
+      filterTaps: false, // 允许点击事件通过
       from: () => [x.get(), 0],
     }
   );
