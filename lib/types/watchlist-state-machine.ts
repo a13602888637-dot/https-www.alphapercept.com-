@@ -68,7 +68,7 @@ export const STATE_TRANSITIONS: Record<WatchlistToggleState, WatchlistToggleStat
   OPTIMISTIC_UPDATING: ['SYNCING', 'ROLLBACK_ERROR'],
   SYNCING: ['SUCCESS', 'ROLLBACK_ERROR'],
   SUCCESS: ['IDLE'],
-  ROLLBACK_ERROR: ['IDLE', 'OPTIMISTIC_UPDATING'],
+  ROLLBACK_ERROR: ['IDLE'], // 只能回到IDLE状态，避免无限重试循环
 };
 
 /**

@@ -73,7 +73,7 @@ export default function WatchlistPage() {
   };
 
   // 处理项目点击
-  const handleItemClick = (item: any) => {
+  const handleItemClick = (item: { stockCode: string }) => {
     // 导航到股票详情页面
     router.push(`/stock/${item.stockCode}`);
   };

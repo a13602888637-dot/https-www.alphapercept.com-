@@ -124,6 +124,16 @@ export const useWatchlistStore = create<WatchlistState>()(
 
       // 状态机操作
       startToggleTransaction: async (stockCode: string, stockName: string, targetState: 'ADD' | 'REMOVE') => {
+        // 防重复点击保护：检查是否已有进行中的事务
+        const existingTransaction = Object.values(get().activeTransactions)
+          .find(t => t.stockCode === stockCode &&
+                (t.state === 'OPTIMISTIC_UPDATING' || t.state === 'SYNCING'));
+
+        if (existingTransaction) {
+          console.log(`已有进行中的事务: ${existingTransaction.id}, 状态: ${existingTransaction.state}`);
+          return existingTransaction.id; // 返回现有事务ID
+        }
+
         const transactionId = generateTransactionId(stockCode);
         const timestamp = Date.now();
 
@@ -223,15 +233,23 @@ export const useWatchlistStore = create<WatchlistState>()(
               stockName,
             } : undefined;
 
-            const response = await fetch(apiEndpoint, {
-              method,
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              ...(requestBody && { body: JSON.stringify(requestBody) }),
-            });
+            // 添加请求超时控制（10秒）
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-            if (response.ok) {
+            try {
+              const response = await fetch(apiEndpoint, {
+                method,
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                signal: controller.signal,
+                ...(requestBody && { body: JSON.stringify(requestBody) }),
+              });
+
+              clearTimeout(timeoutId);
+
+              if (response.ok) {
               get().updateTransactionState(transactionId, 'SUCCESS');
 
               // 成功后清理事务
@@ -247,8 +265,18 @@ export const useWatchlistStore = create<WatchlistState>()(
               get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', errorMessage);
             }
           } catch (error) {
+            clearTimeout(timeoutId);
             console.error('API调用失败:', error);
-            const errorMessage = error instanceof Error ? error.message : '网络错误，请检查连接';
+
+            let errorMessage = '网络错误，请检查连接';
+            if (error instanceof Error) {
+              if (error.name === 'AbortError') {
+                errorMessage = '请求超时，请检查网络连接后重试';
+              } else {
+                errorMessage = error.message;
+              }
+            }
+
             get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', errorMessage);
           }
         }, 100); // 延迟100ms以允许UI响应
@@ -371,13 +399,21 @@ export const useWatchlistStore = create<WatchlistState>()(
               stockName: state.items[transaction.stockCode]?.stockName || 'Unknown',
             } : undefined;
 
-            const response = await fetch(apiEndpoint, {
-              method,
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              ...(requestBody && { body: JSON.stringify(requestBody) }),
-            });
+            // 添加请求超时控制（10秒）
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+            try {
+              const response = await fetch(apiEndpoint, {
+                method,
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                signal: controller.signal,
+                ...(requestBody && { body: JSON.stringify(requestBody) }),
+              });
+
+              clearTimeout(timeoutId);
 
             if (response.ok) {
               get().updateTransactionState(transactionId, 'SUCCESS');
@@ -387,8 +423,18 @@ export const useWatchlistStore = create<WatchlistState>()(
               get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', errorMessage);
             }
           } catch (error) {
+            clearTimeout(timeoutId);
             console.error('重试API调用失败:', error);
-            const errorMessage = `重试失败 (${updatedTransaction.retryCount}/${state.config.maxRetries}): ${error instanceof Error ? error.message : '网络错误'}`;
+
+            let errorMessage = `重试失败 (${updatedTransaction.retryCount}/${state.config.maxRetries}): 网络错误`;
+            if (error instanceof Error) {
+              if (error.name === 'AbortError') {
+                errorMessage = `重试失败 (${updatedTransaction.retryCount}/${state.config.maxRetries}): 请求超时`;
+              } else {
+                errorMessage = `重试失败 (${updatedTransaction.retryCount}/${state.config.maxRetries}): ${error.message}`;
+              }
+            }
+
             get().updateTransactionState(transactionId, 'ROLLBACK_ERROR', errorMessage);
           }
         }, 100);

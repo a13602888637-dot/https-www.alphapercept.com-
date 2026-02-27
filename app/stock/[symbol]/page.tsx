@@ -48,6 +48,26 @@ export default function StockDetailPage({ params }: { params: { symbol: string }
   const [stockData, setStockData] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [error, setError] = useState<string | null>(null);
+
+  // 验证股票代码格式
+  useEffect(() => {
+    if (!symbol || typeof symbol !== 'string') {
+      setError("无效的股票代码");
+      toast.error("股票代码格式错误");
+      router.push("/watchlist");
+      return;
+    }
+
+    // 简单的股票代码格式验证（支持A股、港股、美股）
+    const stockCodeRegex = /^[A-Za-z0-9]{1,10}$/;
+    if (!stockCodeRegex.test(symbol)) {
+      setError(`股票代码格式无效: ${symbol}`);
+      toast.error("股票代码格式错误，请检查后重试");
+      router.push("/watchlist");
+      return;
+    }
+  }, [symbol, router]);
 
   // 模拟获取股票数据
   useEffect(() => {
@@ -117,6 +137,47 @@ export default function StockDetailPage({ params }: { params: { symbol: string }
   const formatCurrency = (num: number) => {
     return `¥${num.toFixed(2)}`;
   };
+
+  if (error) {
+    return (
+      <PageLayout title="股票详情">
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <BackNavigation />
+            <div>
+              <h1 className="text-2xl font-bold text-red-600">错误</h1>
+              <p className="text-gray-600 mt-1">{error}</p>
+            </div>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>股票代码验证失败</CardTitle>
+              <CardDescription>无法加载股票详情，请检查股票代码格式</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-gray-700">
+                  股票代码 <code className="bg-gray-100 px-2 py-1 rounded">{symbol}</code> 格式无效。
+                </p>
+                <div className="space-y-2">
+                  <p className="font-medium">支持的股票代码格式：</p>
+                  <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                    <li>A股：000001、600519</li>
+                    <li>港股：00700、00941</li>
+                    <li>美股：AAPL、TSLA、GOOGL</li>
+                    <li>其他：1-10位字母数字组合</li>
+                  </ul>
+                </div>
+                <Button onClick={() => router.push("/watchlist")} className="mt-4">
+                  返回自选股列表
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </PageLayout>
+    );
+  }
 
   if (loading) {
     return (
