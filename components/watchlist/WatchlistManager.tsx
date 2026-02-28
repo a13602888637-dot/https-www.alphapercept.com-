@@ -425,26 +425,27 @@ export function WatchlistManager() {
                       }}
                       placeholder="输入股票代码或名称搜索（如：000001 或 平安银行）"
                     />
+                    {!newStock.stockCode && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        💡 请先在上方搜索框中搜索并选择股票
+                      </p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium mb-1 block">股票代码</label>
+                      <label className="text-sm font-medium mb-1 block">股票代码 *</label>
                       <Input
                         value={newStock.stockCode}
                         onChange={(e) => setNewStock({ ...newStock, stockCode: e.target.value })}
                         placeholder="如：000001"
-                        disabled
-                        className="bg-muted"
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium mb-1 block">股票名称</label>
+                      <label className="text-sm font-medium mb-1 block">股票名称 *</label>
                       <Input
                         value={newStock.stockName}
                         onChange={(e) => setNewStock({ ...newStock, stockName: e.target.value })}
                         placeholder="如：平安银行"
-                        disabled
-                        className="bg-muted"
                       />
                     </div>
                   </div>
@@ -493,7 +494,12 @@ export function WatchlistManager() {
                   <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                     取消
                   </Button>
-                  <Button onClick={handleAddStock}>添加</Button>
+                  <Button
+                    onClick={handleAddStock}
+                    disabled={!newStock.stockCode || !newStock.stockName}
+                  >
+                    添加
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
