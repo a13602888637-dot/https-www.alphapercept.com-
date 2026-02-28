@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ interface WatchlistCardProps {
 }
 
 export function WatchlistCard({ item, onUpdate, onDelete, priceData }: WatchlistCardProps) {
+  const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -49,6 +51,13 @@ export function WatchlistCard({ item, onUpdate, onDelete, priceData }: Watchlist
     targetPrice: item.targetPrice?.toString() || "",
     notes: item.notes || "",
   });
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (isEditing || (e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    router.push(`/stocks/${item.stockCode}`);
+  };
 
   const calculateProfitLoss = () => {
     if (!item.buyPrice || !priceData?.price) return null;
@@ -107,7 +116,7 @@ export function WatchlistCard({ item, onUpdate, onDelete, priceData }: Watchlist
   const stopLossRisk = calculateStopLossRisk();
 
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={handleCardClick}>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div>

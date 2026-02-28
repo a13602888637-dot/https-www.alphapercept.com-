@@ -322,16 +322,24 @@ export function WatchlistManager() {
 
   useEffect(() => {
     fetchWatchlist();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only fetch on mount
+
+  // Separate effect for price updates
+  useEffect(() => {
+    if (watchlist.length === 0) return;
+
+    // Initial price fetch
+    fetchStockPrices(watchlist);
 
     // Set up interval to refresh prices every 30 seconds
     const intervalId = setInterval(() => {
-      if (watchlist.length > 0) {
-        fetchStockPrices(watchlist);
-      }
+      fetchStockPrices(watchlist);
     }, 30000); // 30 seconds
 
     return () => clearInterval(intervalId);
-  }, [watchlist]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchlist.length]); // Re-run when watchlist length changes
 
   if (isLoading) {
     return (
