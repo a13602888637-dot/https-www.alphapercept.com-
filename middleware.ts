@@ -9,14 +9,14 @@ export default clerkMiddleware({
     "/api/stocks/search(.*)",
     "/api/intelligence-feed(.*)",
     "/api/analyze-watchlist(.*)",
-    "/api/watchlist(.*)",
-    "/api/users/sync(.*)",
+    // "/api/watchlist(.*)",  // 移除 - 需要认证才能操作自选股
+    // "/api/users/sync(.*)",  // 移除 - 需要认证才能同步用户数据
     "/sign-in(.*)",
     "/sign-up(.*)",
     "/ai-inference-demo",
     "/market-pulse-test",
     "/ai-inference-test",
-    "/watchlist",
+    "/watchlist",  // 页面保持公开，但API需要认证
     "/test",
   ],
   ignoredRoutes: [
