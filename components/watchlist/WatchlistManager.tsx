@@ -494,10 +494,7 @@ export function WatchlistManager() {
                   <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                     取消
                   </Button>
-                  <Button
-                    onClick={handleAddStock}
-                    disabled={!newStock.stockCode || !newStock.stockName}
-                  >
+                  <Button onClick={handleAddStock}>
                     添加
                   </Button>
                 </DialogFooter>
