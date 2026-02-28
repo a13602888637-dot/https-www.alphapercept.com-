@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { createChart, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, CrosshairMode } from "lightweight-charts";
+import {
+  createChart,
+  type IChartApi,
+  type ISeriesApi,
+  type CandlestickData,
+  type LineData,
+  type HistogramData,
+  CrosshairMode
+} from "lightweight-charts";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 
@@ -136,7 +144,7 @@ export function StockChart({ stockCode, currentPrice = 0, changePercent = 0 }: S
 
     // 根据图表类型添加主系列
     if (chartType === 'candlestick') {
-      const candlestickSeries = (chart as any).addCandlestickSeries({
+      const candlestickSeries = chart.addCandlestickSeries({
         upColor: '#10b981',
         downColor: '#ef4444',
         borderUpColor: '#10b981',
@@ -157,7 +165,7 @@ export function StockChart({ stockCode, currentPrice = 0, changePercent = 0 }: S
       mainSeriesRef.current = candlestickSeries;
     } else {
       // 线形图（Robinhood风格：渐变填充）
-      const areaSeries = (chart as any).addAreaSeries({
+      const areaSeries = chart.addAreaSeries({
         topColor: changePercent >= 0 ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
         bottomColor: 'rgba(16, 185, 129, 0)',
         lineColor: changePercent >= 0 ? '#10b981' : '#ef4444',
@@ -176,14 +184,14 @@ export function StockChart({ stockCode, currentPrice = 0, changePercent = 0 }: S
     }
 
     // 添加成交量（渐变柱状图）
-    const volumeSeries = (chart as any).addHistogramSeries({
+    const volumeSeries = chart.addHistogramSeries({
       priceFormat: {
         type: 'volume',
       },
       priceScaleId: 'volume',
     });
 
-    const volumeData = klineData.map(d => ({
+    const volumeData: HistogramData[] = klineData.map(d => ({
       time: d.time,
       value: d.volume || 0,
       color: d.close >= d.open ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
