@@ -8,6 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, TrendingUp, TrendingDown, AlertTriangle, Plus, Check } from "lucide-react";
 import { toast } from "sonner";
+import { StockChart } from "@/components/charts/StockChart";
+import { TechnicalIndicators } from "@/components/charts/TechnicalIndicators";
+import { generateMockKLineByStockCode } from "@/lib/utils/mockKlineData";
+import { ChatInterface } from "@/components/ai-chat/ChatInterface";
 
 interface StockDetail {
   symbol: string;
@@ -43,12 +47,16 @@ export default function StockDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [isAddingToWatchlist, setIsAddingToWatchlist] = useState(false);
+  const [klineData, setKlineData] = useState<any[]>([]);
 
   useEffect(() => {
     if (stockCode) {
       fetchStockDetail();
       fetchAnalysis();
       checkWatchlistStatus();
+      // 生成模拟K线数据（后续替换为真实API）
+      const mockData = generateMockKLineByStockCode(stockCode);
+      setKlineData(mockData);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stockCode]);
@@ -284,6 +292,21 @@ export default function StockDetailPage() {
         </CardContent>
       </Card>
 
+      {/* K线图 - Apple + Robinhood风格 */}
+      <Card>
+        <CardContent className="pt-6">
+          <StockChart
+            stockCode={stockCode}
+            stockName={stockDetail.name}
+            currentPrice={stockDetail.currentPrice}
+            changePercent={stockDetail.changePercent}
+          />
+        </CardContent>
+      </Card>
+
+      {/* 技术指标 */}
+      <TechnicalIndicators data={klineData} stockName={stockDetail.name} />
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -294,10 +317,11 @@ export default function StockDetailPage() {
         <CardContent>
           {analysis ? (
             <Tabs defaultValue="summary" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="summary">概要</TabsTrigger>
                 <TabsTrigger value="signals">交易信号</TabsTrigger>
                 <TabsTrigger value="logic">逻辑链</TabsTrigger>
+                <TabsTrigger value="chat">💬 AI对话</TabsTrigger>
               </TabsList>
               <TabsContent value="summary" className="space-y-4">
                 <div><h3 className="font-semibold mb-2">事件摘要</h3><p className="text-sm text-muted-foreground">{analysis.eventSummary}</p></div>
@@ -317,6 +341,16 @@ export default function StockDetailPage() {
               <TabsContent value="logic" className="space-y-4">
                 <div className="p-4 bg-muted rounded-lg"><h3 className="font-semibold mb-4">完整推理逻辑链</h3><pre className="text-xs overflow-x-auto whitespace-pre-wrap">{JSON.stringify(analysis.logicChain, null, 2)}</pre></div>
                 <div className="text-sm text-muted-foreground">分析时间: {new Date(analysis.createdAt).toLocaleString()}</div>
+              </TabsContent>
+              <TabsContent value="chat">
+                <ChatInterface
+                  stockCode={stockCode}
+                  stockName={stockDetail.name}
+                  initialContext={{
+                    currentPrice: stockDetail.currentPrice,
+                    changePercent: stockDetail.changePercent,
+                  }}
+                />
               </TabsContent>
             </Tabs>
           ) : (
