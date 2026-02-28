@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Search, Filter, RefreshCw } from "lucide-react";
 import { WatchlistCard } from "./WatchlistCard";
+import { StockSearchInput } from "./StockSearchInput";
 import { toast } from "sonner";
 
 interface WatchlistItem {
@@ -167,7 +168,12 @@ export function WatchlistManager() {
       return;
     }
 
+    // 显示加载提示
+    const loadingToast = toast.loading("正在添加到自选股...");
+
     try {
+      console.log("[WatchlistManager] 开始添加股票:", newStock);
+
       const response = await fetch("/api/watchlist", {
         method: "POST",
         headers: {
@@ -183,33 +189,44 @@ export function WatchlistManager() {
         }),
       });
 
+      console.log("[WatchlistManager] API响应状态:", response.status);
+
       if (!response.ok) {
         let errorMessage = "添加股票失败";
         if (response.status === 401) {
-          errorMessage = "请先登录以添加自选股";
+          errorMessage = "❌ 请先登录以添加自选股";
+          console.error("[WatchlistManager] 认证失败: 用户未登录");
         } else if (response.status === 409) {
-          errorMessage = "该股票已在自选股中";
+          errorMessage = "⚠️ 该股票已在自选股中";
         } else if (response.status === 400) {
-          errorMessage = "股票代码和名称不能为空";
+          errorMessage = "❌ 股票代码和名称不能为空";
         } else if (response.status === 500) {
-          errorMessage = "服务器错误，请稍后重试";
+          errorMessage = "❌ 服务器错误，请稍后重试";
         }
 
         try {
           const errorData = await response.json();
+          console.error("[WatchlistManager] 错误详情:", errorData);
           if (errorData.error) {
             errorMessage = errorData.error;
           }
+          if (errorData.details) {
+            errorMessage += `\n详情: ${errorData.details}`;
+          }
         } catch (e) {
-          // 如果无法解析JSON错误信息，使用默认错误信息
+          console.error("[WatchlistManager] 无法解析错误响应:", e);
         }
 
+        toast.dismiss(loadingToast);
         throw new Error(`${errorMessage} (状态码: ${response.status})`);
       }
 
       const data = await response.json();
+      console.log("[WatchlistManager] API响应数据:", data);
+
       if (data.success) {
-        toast.success("股票已添加到自选股");
+        toast.dismiss(loadingToast);
+        toast.success(`✅ ${newStock.stockName} (${newStock.stockCode}) 已添加到自选股`);
         setIsAddDialogOpen(false);
         setNewStock({
           stockCode: "",
@@ -221,10 +238,12 @@ export function WatchlistManager() {
         });
         fetchWatchlist();
       } else {
+        toast.dismiss(loadingToast);
         throw new Error(data.error || "添加股票失败");
       }
     } catch (error) {
-      console.error("Error adding stock:", error);
+      console.error("[WatchlistManager] 添加失败:", error);
+      toast.dismiss(loadingToast);
       toast.error(error instanceof Error ? error.message : "添加股票失败");
     }
   };
@@ -390,10 +409,23 @@ export function WatchlistManager() {
                 <DialogHeader>
                   <DialogTitle>添加自选股</DialogTitle>
                   <DialogDescription>
-                    输入股票信息并设置价格提醒
+                    搜索股票代码或名称快速添加
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">搜索股票</label>
+                    <StockSearchInput
+                      onSelect={(stock) => {
+                        setNewStock({
+                          ...newStock,
+                          stockCode: stock.code,
+                          stockName: stock.name
+                        });
+                      }}
+                      placeholder="输入股票代码或名称搜索（如：000001 或 平安银行）"
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium mb-1 block">股票代码</label>
@@ -401,6 +433,8 @@ export function WatchlistManager() {
                         value={newStock.stockCode}
                         onChange={(e) => setNewStock({ ...newStock, stockCode: e.target.value })}
                         placeholder="如：000001"
+                        disabled
+                        className="bg-muted"
                       />
                     </div>
                     <div>
@@ -409,6 +443,8 @@ export function WatchlistManager() {
                         value={newStock.stockName}
                         onChange={(e) => setNewStock({ ...newStock, stockName: e.target.value })}
                         placeholder="如：平安银行"
+                        disabled
+                        className="bg-muted"
                       />
                     </div>
                   </div>

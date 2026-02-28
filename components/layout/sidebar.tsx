@@ -15,6 +15,7 @@ import {
   Star,
 } from "lucide-react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "./theme-toggle"
@@ -24,25 +25,21 @@ const navItems = [
     title: "首页",
     icon: Home,
     href: "/dashboard",
-    active: true,
   },
   {
     title: "自选股",
     icon: Star,
     href: "/watchlist",
-    badge: "新",
   },
   {
     title: "实时市场",
     icon: BarChart3,
     href: "/live-feed",
-    badge: "3",
   },
   {
     title: "策略推荐",
     icon: Brain,
     href: "/strategy-recommendation",
-    badge: "新",
   },
   {
     title: "AI助手",
@@ -53,17 +50,6 @@ const navItems = [
     title: "投资组合",
     icon: Wallet,
     href: "/portfolio",
-  },
-  {
-    title: "警报中心",
-    icon: Bell,
-    href: "/dashboard",
-    badge: "5",
-  },
-  {
-    title: "社区",
-    icon: Users,
-    href: "/dashboard",
   },
   {
     title: "设置",
@@ -90,6 +76,8 @@ const quickActions = [
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export function Sidebar({ className }: SidebarProps) {
+  const pathname = usePathname()
+
   return (
     <div className={cn("pb-12", className)}>
       <div className="space-y-4 py-4">
@@ -105,29 +93,20 @@ export function Sidebar({ className }: SidebarProps) {
           </Link>
 
           <div className="space-y-1">
-            {navItems.map((item) => (
-              <Link href={item.href} key={item.title}>
-                <Button
-                  variant={item.active ? "secondary" : "ghost"}
-                  className="w-full justify-start"
-                >
-                  <item.icon className="mr-2 h-4 w-4" />
-                  {item.title}
-                  {item.badge && (
-                    <span
-                      className={cn(
-                        "ml-auto text-xs rounded-full px-1.5 py-0.5",
-                        item.badge === "新"
-                          ? "bg-green-500/10 text-green-500"
-                          : "bg-red-500/10 text-red-500"
-                      )}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </Button>
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+              return (
+                <Link href={item.href} key={item.title}>
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
+                    className="w-full justify-start"
+                  >
+                    <item.icon className="mr-2 h-4 w-4" />
+                    {item.title}
+                  </Button>
+                </Link>
+              )
+            })}
           </div>
         </div>
 
