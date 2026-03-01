@@ -1,16 +1,17 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
+import { getUserIdFromRequest } from "../../../lib/auth-helpers";
 
 // GET: Get user's watchlist
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    let clerkUserId = null;
-    try {
-      const authResult = await auth();
-      clerkUserId = authResult.userId;
-    } catch (authError) {
-      console.warn("Clerk auth failed, returning empty watchlist:", authError);
+    console.log("[API /api/watchlist GET] Starting request processing");
+
+    const clerkUserId = await getUserIdFromRequest(req);
+
+    if (!clerkUserId) {
+      console.log("[API /api/watchlist GET] No authentication, returning empty list");
       // 对于GET请求，返回空自选股列表而不是401错误
       return NextResponse.json({
         success: true,
@@ -20,14 +21,7 @@ export async function GET() {
       });
     }
 
-    if (!clerkUserId) {
-      return NextResponse.json({
-        success: true,
-        message: "未登录，返回空自选股列表",
-        watchlist: [],
-        count: 0
-      });
-    }
+    console.log("[API /api/watchlist GET] Authenticated user:", clerkUserId);
 
     // Get or create user in database
     let user = await prisma.user.findUnique({
@@ -102,43 +96,18 @@ export async function GET() {
 // POST: Add item to watchlist
 export async function POST(req: Request) {
   try {
-    // 添加详细的调试日志
-    console.log("[API /api/watchlist POST] Request headers:", Object.fromEntries(req.headers.entries()));
+    console.log("[API /api/watchlist POST] Starting request processing");
 
-    let clerkUserId = null;
-    try {
-      const authResult = await auth();
-      console.log("[API /api/watchlist POST] Auth result:", authResult);
-      clerkUserId = authResult.userId;
-    } catch (authError) {
-      console.error("[API /api/watchlist POST] Clerk auth failed:", authError);
-      console.error("[API /api/watchlist POST] Error details:", {
-        message: authError instanceof Error ? authError.message : String(authError),
-        stack: authError instanceof Error ? authError.stack : undefined
-      });
-      // 对于POST请求，需要认证，返回401错误
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentication required",
-          details: "Clerk authentication failed. Please sign in to manage watchlist."
-        },
-        { status: 401 }
-      );
-    }
+    // 使用新的认证方法（不依赖middleware）
+    const clerkUserId = await getUserIdFromRequest(req);
 
     if (!clerkUserId) {
-      console.error("[API /api/watchlist POST] No userId returned from auth()");
+      console.error("[API /api/watchlist POST] Authentication failed - no userId");
       return NextResponse.json(
         {
           success: false,
           error: "Authentication required",
-          details: "User authentication failed. Please sign in to manage watchlist.",
-          debug: {
-            hasAuthResult: true,
-            userId: clerkUserId,
-            timestamp: new Date().toISOString()
-          }
+          details: "Please sign in to manage watchlist."
         },
         { status: 401 }
       );
@@ -253,29 +222,17 @@ export async function POST(req: Request) {
 // PUT: Update watchlist item
 export async function PUT(req: Request) {
   try {
-    let clerkUserId = null;
-    try {
-      const authResult = await auth();
-      clerkUserId = authResult.userId;
-    } catch (authError) {
-      console.warn("Clerk auth failed:", authError);
-      // 对于PUT请求，需要认证，返回401错误
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentication required",
-          details: "Clerk authentication failed. Please sign in to update watchlist items."
-        },
-        { status: 401 }
-      );
-    }
+    console.log("[API /api/watchlist PUT] Starting request processing");
+
+    const clerkUserId = await getUserIdFromRequest(req);
 
     if (!clerkUserId) {
+      console.error("[API /api/watchlist PUT] Authentication failed");
       return NextResponse.json(
         {
           success: false,
           error: "Authentication required",
-          details: "User authentication failed. Please sign in to update watchlist items."
+          details: "Please sign in to update watchlist items."
         },
         { status: 401 }
       );
@@ -385,29 +342,17 @@ export async function PUT(req: Request) {
 // DELETE: Remove item from watchlist
 export async function DELETE(req: Request) {
   try {
-    let clerkUserId = null;
-    try {
-      const authResult = await auth();
-      clerkUserId = authResult.userId;
-    } catch (authError) {
-      console.warn("Clerk auth failed:", authError);
-      // 对于DELETE请求，需要认证，返回401错误
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentication required",
-          details: "Clerk authentication failed. Please sign in to delete watchlist items."
-        },
-        { status: 401 }
-      );
-    }
+    console.log("[API /api/watchlist DELETE] Starting request processing");
+
+    const clerkUserId = await getUserIdFromRequest(req);
 
     if (!clerkUserId) {
+      console.error("[API /api/watchlist DELETE] Authentication failed");
       return NextResponse.json(
         {
           success: false,
           error: "Authentication required",
-          details: "User authentication failed. Please sign in to delete watchlist items."
+          details: "Please sign in to delete watchlist items."
         },
         { status: 401 }
       );
