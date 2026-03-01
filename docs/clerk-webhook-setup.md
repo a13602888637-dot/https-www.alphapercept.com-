@@ -169,7 +169,7 @@ ngrok http 3000
 # 生产环境 .env.production
 CLERK_WEBHOOK_SECRET=whsec_production_secret_here
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+CLERK_SECRET_KEY=sk_live_***
 ```
 
 #### 步骤 3: 测试生产端点

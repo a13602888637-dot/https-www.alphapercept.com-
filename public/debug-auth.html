@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>认证诊断工具 - Alpha-Quant-Copilot</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #0f172a;
+            color: #f8fafc;
+        }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #60a5fa;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #93c5fd;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .success {
+            color: #34d399;
+        }
+        .error {
+            color: #f87171;
+        }
+        .warning {
+            color: #fbbf24;
+        }
+        pre {
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #334155;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .icon {
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 认证诊断工具</h1>
+    <p>此页面帮助诊断 Clerk 认证问题</p>
+
+    <div class="card">
+        <h2>1. 环境信息</h2>
+        <div id="env-info"></div>
+    </div>
+
+    <div class="card">
+        <h2>2. Cookie 检查</h2>
+        <button onclick="checkCookies()">检查 Cookies</button>
+        <div id="cookie-info"></div>
+    </div>
+
+    <div class="card">
+        <h2>3. Clerk 状态</h2>
+        <button onclick="checkClerk()">检查 Clerk</button>
+        <div id="clerk-info"></div>
+    </div>
+
+    <div class="card">
+        <h2>4. API 测试</h2>
+        <button onclick="testWatchlistAPI()">测试自选股 API</button>
+        <div id="api-info"></div>
+    </div>
+
+    <div class="card">
+        <h2>5. 完整诊断</h2>
+        <button onclick="runFullDiagnosis()">运行完整诊断</button>
+        <div id="full-diagnosis"></div>
+    </div>
+
+    <script>
+        function showStatus(elementId, icon, message, type = 'info') {
+            const el = document.getElementById(elementId);
+            const className = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : '';
+            el.innerHTML += `
+                <div class="status-item">
+                    <span class="icon">${icon}</span>
+                    <span class="${className}">${message}</span>
+                </div>
+            `;
+        }
+
+        function checkEnvironment() {
+            const el = document.getElementById('env-info');
+            el.innerHTML = `
+                <pre>域名: ${window.location.hostname}
+协议: ${window.location.protocol}
+完整URL: ${window.location.href}
+浏览器: ${navigator.userAgent}</pre>
+            `;
+        }
+
+        function checkCookies() {
+            const el = document.getElementById('cookie-info');
+            el.innerHTML = '';
+
+            const cookies = document.cookie;
+            if (!cookies) {
+                showStatus('cookie-info', '❌', 'No cookies found', 'error');
+                return;
+            }
+
+            const hasSession = cookies.includes('__session');
+            const hasClerkJwt = cookies.includes('__clerk');
+
+            showStatus('cookie-info', hasSession ? '✅' : '❌',
+                `__session cookie: ${hasSession ? '存在' : '不存在'}`,
+                hasSession ? 'success' : 'error');
+
+            showStatus('cookie-info', hasClerkJwt ? '✅' : '❌',
+                `Clerk JWT: ${hasClerkJwt ? '存在' : '不存在'}`,
+                hasClerkJwt ? 'success' : 'warning');
+
+            if (navigator.cookieEnabled) {
+                showStatus('cookie-info', '✅', 'Cookies 已启用', 'success');
+            } else {
+                showStatus('cookie-info', '❌', 'Cookies 被禁用', 'error');
+            }
+
+            el.innerHTML += '<pre>' + cookies + '</pre>';
+        }
+
+        async function checkClerk() {
+            const el = document.getElementById('clerk-info');
+            el.innerHTML = '';
+
+            if (typeof window.Clerk === 'undefined') {
+                showStatus('clerk-info', '❌', 'Clerk SDK 未加载', 'error');
+                return;
+            }
+
+            showStatus('clerk-info', '✅', 'Clerk SDK 已加载', 'success');
+
+            try {
+                const user = window.Clerk.user;
+                if (user) {
+                    showStatus('clerk-info', '✅', `已登录用户: ${user.primaryEmailAddress?.emailAddress || user.id}`, 'success');
+                    el.innerHTML += `<pre>${JSON.stringify({
+                        id: user.id,
+                        email: user.primaryEmailAddress?.emailAddress,
+                        firstName: user.firstName,
+                        lastName: user.lastName
+                    }, null, 2)}</pre>`;
+                } else {
+                    showStatus('clerk-info', '⚠️', '未登录', 'warning');
+                }
+            } catch (error) {
+                showStatus('clerk-info', '❌', `错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function testWatchlistAPI() {
+            const el = document.getElementById('api-info');
+            el.innerHTML = '';
+            showStatus('api-info', '⏳', '正在测试 API...', 'info');
+
+            try {
+                const response = await fetch('/api/watchlist');
+                const data = await response.json();
+
+                if (response.status === 200) {
+                    showStatus('api-info', '✅', `API 返回 200 OK`, 'success');
+                    showStatus('api-info', 'ℹ️', `自选股数量: ${data.watchlist?.length || 0}`, 'success');
+                } else if (response.status === 401) {
+                    showStatus('api-info', '❌', `API 返回 401 Unauthorized`, 'error');
+                    showStatus('api-info', '⚠️', `错误信息: ${data.error || data.details}`, 'warning');
+                } else {
+                    showStatus('api-info', '⚠️', `API 返回 ${response.status}`, 'warning');
+                }
+
+                el.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                showStatus('api-info', '❌', `请求失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function runFullDiagnosis() {
+            const el = document.getElementById('full-diagnosis');
+            el.innerHTML = '<h3>🔍 完整诊断报告</h3>';
+
+            // 1. 环境检查
+            showStatus('full-diagnosis', '📍', `域名: ${window.location.hostname}`, 'info');
+            showStatus('full-diagnosis', '🔒', `协议: ${window.location.protocol}`, 'info');
+
+            // 2. Cookie检查
+            const hasCookies = document.cookie.length > 0;
+            const hasSession = document.cookie.includes('__session');
+            showStatus('full-diagnosis', hasCookies ? '✅' : '❌',
+                `Cookies: ${hasCookies ? '存在' : '不存在'}`,
+                hasCookies ? 'success' : 'error');
+            showStatus('full-diagnosis', hasSession ? '✅' : '❌',
+                `Session Cookie: ${hasSession ? '存在' : '不存在'}`,
+                hasSession ? 'success' : 'error');
+
+            // 3. Clerk检查
+            const clerkLoaded = typeof window.Clerk !== 'undefined';
+            showStatus('full-diagnosis', clerkLoaded ? '✅' : '❌',
+                `Clerk SDK: ${clerkLoaded ? '已加载' : '未加载'}`,
+                clerkLoaded ? 'success' : 'error');
+
+            if (clerkLoaded && window.Clerk.user) {
+                showStatus('full-diagnosis', '✅',
+                    `已登录: ${window.Clerk.user.primaryEmailAddress?.emailAddress || window.Clerk.user.id}`,
+                    'success');
+            } else if (clerkLoaded) {
+                showStatus('full-diagnosis', '⚠️', '未登录', 'warning');
+            }
+
+            // 4. API测试
+            try {
+                const response = await fetch('/api/watchlist');
+                const data = await response.json();
+
+                if (response.status === 200) {
+                    showStatus('full-diagnosis', '✅',
+                        `API认证成功 (${response.status})`,
+                        'success');
+                } else if (response.status === 401) {
+                    showStatus('full-diagnosis', '❌',
+                        `API认证失败 (${response.status})`,
+                        'error');
+                } else {
+                    showStatus('full-diagnosis', '⚠️',
+                        `API返回异常 (${response.status})`,
+                        'warning');
+                }
+            } catch (error) {
+                showStatus('full-diagnosis', '❌',
+                    `API请求失败: ${error.message}`,
+                    'error');
+            }
+
+            // 5. 最终结论
+            el.innerHTML += '<h3>📊 诊断结论</h3>';
+            const allGood = hasCookies && hasSession && clerkLoaded;
+            if (allGood) {
+                el.innerHTML += '<p class="success">✅ 所有检查通过！如果仍有问题，请清除浏览器缓存后重新登录。</p>';
+            } else {
+                el.innerHTML += '<p class="error">❌ 发现问题！请按照以下步骤操作：</p>';
+                el.innerHTML += '<ol>';
+                if (!hasCookies) {
+                    el.innerHTML += '<li>检查浏览器Cookie设置</li>';
+                }
+                if (!hasSession) {
+                    el.innerHTML += '<li>尝试重新登录</li>';
+                }
+                if (!clerkLoaded) {
+                    el.innerHTML += '<li>检查网络连接，确保Clerk SDK能加载</li>';
+                }
+                el.innerHTML += '<li>清除浏览器缓存</li>';
+                el.innerHTML += '<li>使用隐私模式测试</li>';
+                el.innerHTML += '</ol>';
+            }
+        }
+
+        // 页面加载时自动检查环境
+        window.addEventListener('DOMContentLoaded', () => {
+            checkEnvironment();
+        });
+    </script>
+</body>
+</html>

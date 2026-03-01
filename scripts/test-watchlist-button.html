@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"="width=device-width, initial-scale=1.0">
+  <title>自选股按钮测试</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .test-section {
+      margin-bottom: 30px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+    .result {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .result.success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .result.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .result.warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+    button {
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>自选股添加按钮诊断测试</h1>
+
+  <div class="test-section">
+    <h2>测试说明</h2>
+    <p>请按照以下步骤操作：</p>
+    <ol>
+      <li>访问 <a href="http://localhost:3002/watchlist" target="_blank">http://localhost:3002/watchlist</a></li>
+      <li>点击"添加股票"按钮打开对话框</li>
+      <li>保持对话框打开状态</li>
+      <li>返回本页面，点击下面的"运行诊断"按钮</li>
+    </ol>
+    <button onclick="runDiagnosis()">运行诊断</button>
+    <div id="diagnosis-result"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>模拟测试</h2>
+    <p>测试按钮在不同状态下的行为：</p>
+
+    <h3>测试1: 正常按钮（应该可以点击）</h3>
+    <button id="test-normal" onclick="alert('正常按钮点击成功!')">正常按钮</button>
+
+    <h3>测试2: disabled属性的按钮（应该无法点击）</h3>
+    <button id="test-disabled" disabled onclick="alert('这个不应该触发')">禁用按钮</button>
+
+    <h3>测试3: 有pointer-events-none的按钮（应该无法点击）</h3>
+    <button id="test-pointer-none" style="pointer-events: none" onclick="alert('这个不应该触发')">
+      pointer-events: none
+    </button>
+
+    <h3>测试4: shadcn/ui模拟按钮</h3>
+    <button
+      id="test-shadcn"
+      class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50"
+      onclick="alert('shadcn按钮点击成功!')"
+    >
+      模拟shadcn按钮（无disabled）
+    </button>
+
+    <button
+      id="test-shadcn-disabled"
+      class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50"
+      disabled
+      onclick="alert('这个不应该触发')"
+    >
+      模拟shadcn按钮（有disabled）
+    </button>
+  </div>
+
+  <div class="test-section">
+    <h2>检查当前页面</h2>
+    <button onclick="checkCurrentPage()">检查当前页面状态</button>
+    <div id="page-check-result"></div>
+  </div>
+
+  <script>
+    async function runDiagnosis() {
+      const resultDiv = document.getElementById('diagnosis-result');
+      resultDiv.innerHTML = '<p>正在诊断...</p>';
+
+      try {
+        // 尝试访问自选股页面
+        const response = await fetch('http://localhost:3002/watchlist');
+        if (!response.ok) {
+          throw new Error(`无法访问自选股页面: ${response.status}`);
+        }
+
+        let html = '<div class="result success">';
+        html += '<h4>✅ 基础检查通过</h4>';
+        html += '<ul>';
+        html += '<li>自选股页面可以访问</li>';
+        html += '<li>开发服务器正常运行</li>';
+        html += '</ul>';
+        html += '<h4>⚠️ 需要手动检查</h4>';
+        html += '<p>请在自选股页面打开开发者工具（F12），运行以下脚本：</p>';
+        html += '<pre>';
+        html += `// 复制以下代码到Console并回车
+
+// 1. 检查对话框
+const dialog = document.querySelector('[role="dialog"]');
+console.log('对话框存在:', !!dialog);
+
+// 2. 找到添加按钮
+const addButton = dialog ? Array.from(dialog.querySelectorAll('button')).find(
+  btn => btn.textContent.includes('添加') && !btn.textContent.includes('取消')
+) : null;
+
+if (addButton) {
+  console.log('找到添加按钮:', addButton);
+  console.log('disabled属性:', addButton.disabled);
+  console.log('onClick:', addButton.onclick);
+
+  // 检查计算样式
+  const styles = window.getComputedStyle(addButton);
+  console.log('pointer-events:', styles.pointerEvents);
+  console.log('cursor:', styles.cursor);
+  console.log('opacity:', styles.opacity);
+
+  // 检查覆盖层
+  const rect = addButton.getBoundingClientRect();
+  const elementAtPoint = document.elementFromPoint(
+    rect.left + rect.width / 2,
+    rect.top + rect.height / 2
+  );
+  console.log('按钮被覆盖:', elementAtPoint !== addButton);
+  if (elementAtPoint !== addButton) {
+    console.log('覆盖元素:', elementAtPoint);
+  }
+
+  // 尝试模拟点击
+  console.log('\\n尝试模拟点击...');
+  addButton.click();
+  console.log('点击已触发');
+} else {
+  console.error('未找到添加按钮');
+}
+`;
+        html += '</pre>';
+        html += '</div>';
+
+        resultDiv.innerHTML = html;
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="result error"><h4>❌ 诊断失败</h4><p>${error.message}</p></div>`;
+      }
+    }
+
+    function checkCurrentPage() {
+      const resultDiv = document.getElementById('page-check-result');
+
+      let html = '<div class="result success">';
+      html += '<h4>当前页面信息</h4>';
+      html += '<ul>';
+      html += `<li>URL: ${window.location.href}</li>`;
+      html += `<li>User Agent: ${navigator.userAgent}</li>`;
+      html += `<li>Window Size: ${window.innerWidth}x${window.innerHeight}</li>`;
+      html += '</ul>';
+
+      // 检查测试按钮
+      const buttons = {
+        'test-normal': document.getElementById('test-normal'),
+        'test-disabled': document.getElementById('test-disabled'),
+        'test-pointer-none': document.getElementById('test-pointer-none'),
+        'test-shadcn': document.getElementById('test-shadcn'),
+        'test-shadcn-disabled': document.getElementById('test-shadcn-disabled'),
+      };
+
+      html += '<h4>测试按钮状态</h4>';
+      html += '<table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%;">';
+      html += '<tr><th>按钮</th><th>disabled</th><th>pointer-events</th><th>可点击</th></tr>';
+
+      Object.entries(buttons).forEach(([id, btn]) => {
+        const styles = window.getComputedStyle(btn);
+        const clickable = !btn.disabled && styles.pointerEvents !== 'none';
+
+        html += '<tr>';
+        html += `<td>${id}</td>`;
+        html += `<td>${btn.disabled}</td>`;
+        html += `<td>${styles.pointerEvents}</td>`;
+        html += `<td style="color: ${clickable ? 'green' : 'red'}">${clickable ? '✅' : '❌'}</td>`;
+        html += '</tr>';
+      });
+
+      html += '</table>';
+      html += '</div>';
+
+      resultDiv.innerHTML = html;
+    }
+
+    // 页面加载时自动检查
+    window.addEventListener('load', checkCurrentPage);
+  </script>
+</body>
+</html>

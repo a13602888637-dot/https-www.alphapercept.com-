@@ -1,16 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Bell, User, Menu, TrendingUp, BarChart3 } from "lucide-react"
+import { Bell, Menu, TrendingUp, BarChart3 } from "lucide-react"
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { MarketPulseHeader, MarketPulseMobile } from "@/components/market-pulse/MarketPulseHeader"
 import { GlobalSearchBar } from "@/components/global-search"
 
@@ -63,38 +56,36 @@ export function Header({ onMenuClick }: HeaderProps) {
 
         {/* 右侧：用户操作 */}
         <div className="flex items-center space-x-2">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-xs flex items-center justify-center text-white">
-              5
-            </span>
-          </Button>
+          <SignedIn>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-xs flex items-center justify-center text-white">
+                5
+              </span>
+            </Button>
 
-          <Button variant="ghost" size="icon">
-            <TrendingUp className="h-5 w-5" />
-          </Button>
+            <Button variant="ghost" size="icon">
+              <TrendingUp className="h-5 w-5" />
+            </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <User className="h-5 w-5" />
+            {/* 使用Clerk的UserButton组件，内置登出功能 */}
+            <UserButton
+              afterSignOutUrl="/"
+              appearance={{
+                elements: {
+                  avatarBox: "h-9 w-9",
+                },
+              }}
+            />
+          </SignedIn>
+
+          <SignedOut>
+            <SignInButton mode="modal">
+              <Button variant="outline">
+                登录
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>我的账户</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>个人资料</DropdownMenuItem>
-              <DropdownMenuItem>投资组合</DropdownMenuItem>
-              <DropdownMenuItem>交易记录</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>设置</DropdownMenuItem>
-              <DropdownMenuItem>帮助中心</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-500">
-                退出登录
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </SignInButton>
+          </SignedOut>
         </div>
       </div>
 
