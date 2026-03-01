@@ -14,20 +14,22 @@ const nextConfig = {
     return config;
   },
 
-  // 配置API路由
-  async headers() {
-    return [
-      {
-        source: '/api/:path*',
-        headers: [
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: '*' },
-          { key: 'Access-Control-Allow-Methods', value: 'GET,POST,PUT,DELETE,OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version' },
-        ],
-      },
-    ];
-  },
+  // 配置API路由 - 移除CORS配置，因为前端和API在同一域名下
+  // CORS headers与credentials不兼容：Access-Control-Allow-Origin: * 会导致浏览器拒绝发送cookies
+  // 如果未来需要跨域访问，应该动态设置origin而不是使用通配符
+  // async headers() {
+  //   return [
+  //     {
+  //       source: '/api/:path*',
+  //       headers: [
+  //         { key: 'Access-Control-Allow-Credentials', value: 'true' },
+  //         { key: 'Access-Control-Allow-Origin', value: '*' },  // ❌ 与credentials冲突
+  //         { key: 'Access-Control-Allow-Methods', value: 'GET,POST,PUT,DELETE,OPTIONS' },
+  //         { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version' },
+  //       ],
+  //     },
+  //   ];
+  // },
 
   // 配置环境变量
   env: {
