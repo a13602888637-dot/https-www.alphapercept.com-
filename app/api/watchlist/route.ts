@@ -102,12 +102,20 @@ export async function GET() {
 // POST: Add item to watchlist
 export async function POST(req: Request) {
   try {
+    // 添加详细的调试日志
+    console.log("[API /api/watchlist POST] Request headers:", Object.fromEntries(req.headers.entries()));
+
     let clerkUserId = null;
     try {
       const authResult = await auth();
+      console.log("[API /api/watchlist POST] Auth result:", authResult);
       clerkUserId = authResult.userId;
     } catch (authError) {
-      console.warn("Clerk auth failed:", authError);
+      console.error("[API /api/watchlist POST] Clerk auth failed:", authError);
+      console.error("[API /api/watchlist POST] Error details:", {
+        message: authError instanceof Error ? authError.message : String(authError),
+        stack: authError instanceof Error ? authError.stack : undefined
+      });
       // 对于POST请求，需要认证，返回401错误
       return NextResponse.json(
         {
@@ -120,15 +128,23 @@ export async function POST(req: Request) {
     }
 
     if (!clerkUserId) {
+      console.error("[API /api/watchlist POST] No userId returned from auth()");
       return NextResponse.json(
         {
           success: false,
           error: "Authentication required",
-          details: "User authentication failed. Please sign in to manage watchlist."
+          details: "User authentication failed. Please sign in to manage watchlist.",
+          debug: {
+            hasAuthResult: true,
+            userId: clerkUserId,
+            timestamp: new Date().toISOString()
+          }
         },
         { status: 401 }
       );
     }
+
+    console.log("[API /api/watchlist POST] Authenticated user:", clerkUserId);
 
     // Get or create user in database
     let user = await prisma.user.findUnique({
