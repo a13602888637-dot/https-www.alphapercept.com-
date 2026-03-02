@@ -30,3 +30,9 @@ async def root():
         "docs": "/docs",
         "health": "/health"
     }
+
+# 导入路由
+from app.routers import search
+
+# 注册路由
+app.include_router(search.router)
