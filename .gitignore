@@ -123,3 +123,6 @@ pipeline_test_report.md
 .claude/
 _bmad/
 .vercel
+
+# Git worktrees (isolated workspaces)
+.worktrees/
