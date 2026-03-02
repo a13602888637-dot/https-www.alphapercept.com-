@@ -2,43 +2,37 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { NextRequest } from "next/server";
 
 /**
- * 从请求中获取Clerk userId（不依赖middleware）
+ * 从请求中获取Clerk userId（使用Bearer Token标准鉴权）
  *
- * 这个函数直接从cookie中提取和验证session token，
- * 避免了依赖middleware context的问题（在Vercel上可能失效）
+ * 前端通过Authorization头显式传递Bearer Token
+ * 后端从Authorization头提取token并解析userId
  */
 export async function getUserIdFromRequest(req: Request | NextRequest): Promise<string | null> {
   try {
-    // 1. 从cookie中获取session token
-    const cookieHeader = req.headers.get('cookie');
-    if (!cookieHeader) {
-      console.log('[auth-helpers] No cookie header found');
+    // 1. 从Authorization头获取Bearer Token
+    const authHeader = req.headers.get('Authorization');
+    console.log('[auth-helpers] Authorization Header:', authHeader ? 'Exists' : 'Missing');
+
+    if (!authHeader) {
+      console.log('[auth-helpers] No Authorization header found');
       return null;
     }
 
-    // 2. 提取__session cookie
-    const sessionMatch = cookieHeader.match(/__session=([^;]+)/);
-    if (!sessionMatch) {
-      console.log('[auth-helpers] No __session cookie found');
+    // 2. 提取Bearer Token
+    if (!authHeader.startsWith('Bearer ')) {
+      console.log('[auth-helpers] Invalid Authorization header format (must start with "Bearer ")');
       return null;
     }
 
-    const sessionToken = sessionMatch[1];
-    console.log('[auth-helpers] Found session token:', sessionToken.substring(0, 50) + '...');
+    const token = authHeader.substring(7); // 移除 "Bearer " 前缀
+    console.log('[auth-helpers] Found bearer token:', token.substring(0, 50) + '...');
 
-    // 3. 使用clerkClient验证session token
-    const client = await clerkClient();
-
-    // 验证JWT token
-    const { data: sessions } = await client.sessions.getSessionList();
-    console.log('[auth-helpers] Active sessions count:', sessions.length);
-
-    // 从JWT token中解析userId
+    // 3. 从JWT token中解析userId
     // JWT格式: header.payload.signature
     // payload中包含sub (subject) = userId
-    const parts = sessionToken.split('.');
+    const parts = token.split('.');
     if (parts.length !== 3) {
-      console.log('[auth-helpers] Invalid JWT format');
+      console.log('[auth-helpers] Invalid JWT format (expected 3 parts)');
       return null;
     }
 

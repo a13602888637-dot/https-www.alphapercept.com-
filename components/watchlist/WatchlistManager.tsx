@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ interface StockPriceMap {
 }
 
 export function WatchlistManager() {
+  const { getToken } = useAuth();
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -57,7 +59,13 @@ export function WatchlistManager() {
   const fetchWatchlist = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/watchlist");
+      const token = await getToken();
+      const response = await fetch("/api/watchlist", {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) {
         let errorMessage = "加载自选股失败";
@@ -174,10 +182,12 @@ export function WatchlistManager() {
     try {
       console.log("[WatchlistManager] 开始添加股票:", newStock);
 
+      const token = await getToken();
       const response = await fetch("/api/watchlist", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           stockCode: newStock.stockCode,
@@ -251,10 +261,12 @@ export function WatchlistManager() {
   // Update watchlist item
   const handleUpdateItem = async (id: string, data: Partial<WatchlistItem>) => {
     try {
+      const token = await getToken();
       const response = await fetch("/api/watchlist", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ id, ...data }),
       });
@@ -276,8 +288,13 @@ export function WatchlistManager() {
   // Delete watchlist item
   const handleDeleteItem = async (id: string) => {
     try {
+      const token = await getToken();
       const response = await fetch(`/api/watchlist?id=${id}`, {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) throw new Error("Failed to delete item");

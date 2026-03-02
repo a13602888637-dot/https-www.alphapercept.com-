@@ -6,6 +6,7 @@ import { getUserIdFromRequest } from "../../../lib/auth-helpers";
 // GET: Get user's watchlist
 export async function GET(req: Request) {
   try {
+    console.log('[Auth Debug] Authorization Header:', req.headers.get('Authorization') ? 'Exists' : 'Missing');
     console.log("[API /api/watchlist GET] Starting request processing");
 
     const clerkUserId = await getUserIdFromRequest(req);
@@ -96,6 +97,7 @@ export async function GET(req: Request) {
 // POST: Add item to watchlist
 export async function POST(req: Request) {
   try {
+    console.log('[Auth Debug] Authorization Header:', req.headers.get('Authorization') ? 'Exists' : 'Missing');
     console.log("[API /api/watchlist POST] Starting request processing");
 
     // 使用新的认证方法（不依赖middleware）
@@ -222,6 +224,7 @@ export async function POST(req: Request) {
 // PUT: Update watchlist item
 export async function PUT(req: Request) {
   try {
+    console.log('[Auth Debug] Authorization Header:', req.headers.get('Authorization') ? 'Exists' : 'Missing');
     console.log("[API /api/watchlist PUT] Starting request processing");
 
     const clerkUserId = await getUserIdFromRequest(req);
@@ -342,6 +345,7 @@ export async function PUT(req: Request) {
 // DELETE: Remove item from watchlist
 export async function DELETE(req: Request) {
   try {
+    console.log('[Auth Debug] Authorization Header:', req.headers.get('Authorization') ? 'Exists' : 'Missing');
     console.log("[API /api/watchlist DELETE] Starting request processing");
 
     const clerkUserId = await getUserIdFromRequest(req);
