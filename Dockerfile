@@ -11,7 +11,7 @@ COPY python-data-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY python-data-service/app ./app
+COPY python-data-service/app .
 
 # Expose port (Railway will override this with $PORT)
 EXPOSE 8000
