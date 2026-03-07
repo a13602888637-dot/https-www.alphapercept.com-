@@ -7,6 +7,106 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
+// 股票名称映射（fallback时使用真实名称）
+const STOCK_NAME_MAP: Record<string, string> = {
+  "000001": "平安银行", "000002": "万科A", "000063": "中兴通讯", "000333": "美的集团",
+  "000338": "潍柴动力", "000538": "云南白药", "000568": "泸州老窖", "000625": "长安汽车",
+  "000651": "格力电器", "000725": "京东方A", "000776": "广发证券", "000858": "五粮液",
+  "000895": "双汇发展", "000977": "浪潮信息", "002142": "宁波银行", "002230": "科大讯飞",
+  "002304": "洋河股份", "002352": "顺丰控股", "002415": "海康威视", "002475": "立讯精密",
+  "002594": "比亚迪", "002714": "牧原股份", "300015": "爱尔眼科", "300059": "东方财富",
+  "300122": "智飞生物", "300750": "宁德时代", "300760": "迈瑞医疗",
+  "600000": "浦发银行", "600009": "上海机场", "600016": "民生银行",
+  "600026": "中远海能", "600028": "中国石化", "600030": "中信证券", "600031": "三一重工",
+  "600036": "招商银行", "600048": "保利发展", "600050": "中国联通", "600104": "上汽集团",
+  "600276": "恒瑞医药", "600309": "万华化学", "600436": "片仔癀", "600519": "贵州茅台",
+  "600585": "海螺水泥", "600690": "海尔智家", "600809": "山西汾酒", "600887": "伊利股份",
+  "600900": "长江电力", "601006": "大秦铁路", "601012": "隆基绿能", "601088": "中国神华",
+  "601166": "兴业银行", "601211": "国泰君安", "601288": "农业银行", "601318": "中国平安",
+  "601328": "交通银行", "601398": "工商银行", "601601": "中国太保", "601628": "中国人寿",
+  "601668": "中国建筑", "601688": "华泰证券", "601766": "中国中车", "601800": "中国交建",
+  "601857": "中国石油", "601888": "中国中免", "601899": "紫金矿业", "601919": "中远海控",
+  "601939": "建设银行", "601985": "中国核电", "601988": "中国银行",
+  "603259": "药明康德", "603288": "海天味业", "688981": "中芯国际",
+  // 指数
+  "000300": "沪深300", "000905": "中证500", "399001": "深证成指", "399006": "创业板指",
+};
+
+/**
+ * 尝试用腾讯财经API获取实时行情（对境外IP限制较松）
+ */
+async function fetchFromTencent(symbols: string[]): Promise<MarketData[]> {
+  // 构造腾讯API的股票代码（sh/sz前缀）
+  // 注意：指数检查必须在通用前缀检查之前
+  const tencentSymbols = symbols.map(s => {
+    // 指数优先判断
+    if (s === '000300' || s === '000905') return `sh${s}`;
+    if (s.startsWith('399')) return `sz${s}`;
+    // 普通股票
+    if (s.startsWith('6') || s.startsWith('9')) return `sh${s}`;
+    if (s.startsWith('0') || s.startsWith('3')) return `sz${s}`;
+    return `sh${s}`;
+  });
+
+  const url = `https://qt.gtimg.cn/q=${tencentSymbols.join(',')}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Referer': 'https://finance.qq.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error(`Tencent API error: ${response.status}`);
+
+    const text = await response.text();
+    const results: MarketData[] = [];
+
+    // 解析腾讯API响应: v_sh600519="1~贵州茅台~600519~1800.00~1790.00~...";
+    const lines = text.split(';').filter(l => l.trim());
+    for (const line of lines) {
+      try {
+        const match = line.match(/v_\w+="(.+)"/);
+        if (!match) continue;
+        const parts = match[1].split('~');
+        if (parts.length < 40) continue;
+
+        const symbol = parts[2]; // 股票代码
+        const name = parts[1];   // 股票名称
+        const currentPrice = parseFloat(parts[3]);
+        const prevClose = parseFloat(parts[4]);
+        const change = parseFloat((currentPrice - prevClose).toFixed(2));
+        const changePercent = prevClose > 0 ? parseFloat(((change / prevClose) * 100).toFixed(2)) : 0;
+
+        if (currentPrice > 0) {
+          results.push({
+            symbol,
+            name,
+            currentPrice,
+            highPrice: parseFloat(parts[33]) || currentPrice,
+            lowPrice: parseFloat(parts[34]) || currentPrice,
+            lastUpdateTime: new Date().toISOString(),
+            change,
+            changePercent,
+            volume: parseInt(parts[6]) || 0,
+            turnover: parseFloat(parts[37]) || 0,
+          });
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return results;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // GET: Get real-time stock prices for multiple symbols
 export async function GET(req: Request) {
   try {
@@ -29,43 +129,85 @@ export async function GET(req: Request) {
       );
     }
 
-    // 设置超时（5秒）
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Stock prices request timeout after 5 seconds')), 5000);
-    });
-
-    let marketData;
+    let marketData: MarketData[] = [];
     let isFallback = false;
+    let source = 'unknown';
 
+    // 策略1: 尝试 Sina API（原有逻辑）
     try {
-      // 尝试获取数据，但最多等待5秒
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('timeout')), 4000);
+      });
       marketData = await Promise.race([
-        fetchMultipleStocks(symbolList, 1), // 减少重试次数
+        fetchMultipleStocks(symbolList, 1),
         timeoutPromise,
       ]);
-    } catch (timeoutError) {
-      console.warn('Stock prices fetch timeout, using simulated data');
+      source = 'sina';
+    } catch {
+      // 策略2: 尝试腾讯API
+      try {
+        marketData = await fetchFromTencent(symbolList);
+        if (marketData.length > 0) {
+          source = 'tencent';
+        }
+      } catch (tencentError) {
+        console.warn('Tencent API also failed:', tencentError);
+      }
+    }
+
+    // 策略3: 数据库历史数据降级
+    if (marketData.length === 0) {
+      try {
+        const dbResults = await Promise.all(
+          symbolList.map(async (symbol) => {
+            const record = await prisma.stockPriceHistory.findFirst({
+              where: { stockCode: symbol },
+              orderBy: { timestamp: 'desc' },
+            });
+            if (record) {
+              return {
+                symbol,
+                name: STOCK_NAME_MAP[symbol] || symbol,
+                currentPrice: Number(record.price),
+                highPrice: Number(record.highPrice || record.price),
+                lowPrice: Number(record.lowPrice || record.price),
+                lastUpdateTime: record.timestamp.toISOString(),
+                change: Number(record.change || 0),
+                changePercent: Number(record.changePercent || 0),
+                volume: record.volume || 0,
+                turnover: record.turnover || 0,
+              };
+            }
+            return null;
+          })
+        );
+        const validResults = dbResults.filter((r): r is MarketData => r !== null);
+        if (validResults.length > 0) {
+          marketData = validResults;
+          source = 'database';
+          isFallback = true;
+        }
+      } catch (dbError) {
+        console.warn('Database fallback failed:', dbError);
+      }
+    }
+
+    // 策略4: 最后降级 — 使用名称映射但标明无数据
+    if (marketData.length === 0) {
       isFallback = true;
-
-      // 生成模拟数据
-      marketData = symbolList.map(symbol => {
-        const basePrice = 10 + Math.random() * 100;
-        const change = (Math.random() - 0.5) * 5;
-        const changePercent = (change / basePrice) * 100;
-
-        return {
-          symbol,
-          name: symbol,
-          currentPrice: parseFloat(basePrice.toFixed(2)),
-          highPrice: parseFloat((basePrice + Math.random() * 5).toFixed(2)),
-          lowPrice: parseFloat((basePrice - Math.random() * 3).toFixed(2)),
-          lastUpdateTime: new Date().toISOString(),
-          change: parseFloat(change.toFixed(2)),
-          changePercent: parseFloat(changePercent.toFixed(2)),
-          volume: Math.floor(Math.random() * 1000000),
-          turnover: Math.floor(Math.random() * 10000000),
-        };
-      });
+      source = 'unavailable';
+      marketData = symbolList.map(symbol => ({
+        symbol,
+        name: STOCK_NAME_MAP[symbol] || symbol,
+        currentPrice: 0,
+        highPrice: 0,
+        lowPrice: 0,
+        lastUpdateTime: new Date().toISOString(),
+        change: 0,
+        changePercent: 0,
+        volume: 0,
+        turnover: 0,
+      }));
     }
 
     // 只有真实数据才存储到数据库

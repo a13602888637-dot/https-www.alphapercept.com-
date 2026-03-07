@@ -109,59 +109,125 @@ export default function AIAssistantPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("chat")
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // 滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return
+
+    const userInput = inputValue
+    setInputValue("")
+    setIsLoading(true)
 
     // 添加用户消息
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
-      content: inputValue,
+      content: userInput,
       sender: "user",
       timestamp: new Date(),
     }
     setMessages(prev => [...prev, userMessage])
-    setInputValue("")
-    setIsLoading(true)
 
-    // 模拟AI回复延迟
-    setTimeout(() => {
-      const aiResponses = [
-        {
-          content: "根据我的分析，当前市场存在几个需要关注的风险点：1）部分热门板块估值偏高，存在回调风险；2）政策变化可能影响相关行业；3）国际局势不确定性增加。建议保持谨慎，重点关注价值防守策略。",
-          type: "warning" as const,
-        },
-        {
-          content: "对于稳健型投资者，我推荐价值防守策略。该策略筛选财务健康、估值合理的优质公司，远离市场泡沫。具体建议：关注ROE > 12%、毛利率 > 25%、负债率 < 60%的公司，如贵州茅台、中国平安等。",
-          type: "recommendation" as const,
-        },
-        {
-          content: "贵州茅台(600519)作为高端白酒龙头，具有强大的品牌护城河和定价权。当前估值处于历史中高位，但考虑到其稳定的盈利增长和稀缺性，长期投资价值依然存在。建议在合理估值区间分批建仓。",
-          type: "analysis" as const,
-        },
-        {
-          content: "基于技术分析和市场情绪，预计明天大盘可能呈现震荡上行态势。关键支撑位在3000点附近，阻力位在3050点。建议关注成交量变化和北向资金流向。",
-          type: "analysis" as const,
-        },
-      ]
+    // 准备AI消息占位
+    const aiMessageId = (Date.now() + 1).toString()
+    setMessages(prev => [...prev, {
+      id: aiMessageId,
+      content: "",
+      sender: "assistant",
+      timestamp: new Date(),
+      type: "analysis",
+    }])
 
-      const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)]
+    try {
+      // 构建历史消息（不包含当前空的AI占位）
+      const historyMessages = messages
+        .filter(m => m.id !== "1") // 排除欢迎消息
+        .map(m => ({
+          role: m.sender === "user" ? "user" : "assistant",
+          content: m.content,
+        }))
 
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: randomResponse.content,
-        sender: "assistant",
-        timestamp: new Date(),
-        type: randomResponse.type,
+      // 添加当前用户消息
+      historyMessages.push({ role: "user", content: userInput })
+
+      // 取最近10条消息避免过长
+      const recentMessages = historyMessages.slice(-10)
+
+      abortControllerRef.current = new AbortController()
+
+      const response = await fetch("/api/ai/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: recentMessages }),
+        signal: abortControllerRef.current.signal,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `API错误: ${response.status}`)
       }
-      setMessages(prev => [...prev, aiMessage])
+
+      // 读取SSE流
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("无法读取响应流")
+
+      const decoder = new TextDecoder()
+      let fullContent = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split("\n").filter(l => l.trim())
+
+        for (const line of lines) {
+          if (line.startsWith("event: done")) break
+          if (line.startsWith("event: error")) {
+            const errorLine = lines[lines.indexOf(line) + 1]
+            if (errorLine?.startsWith("data: ")) {
+              const errorData = JSON.parse(errorLine.slice(6))
+              throw new Error(errorData.error || "AI响应错误")
+            }
+          }
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              if (data.delta) {
+                fullContent += data.delta
+                // 实时更新AI消息内容
+                setMessages(prev => prev.map(m =>
+                  m.id === aiMessageId ? { ...m, content: fullContent } : m
+                ))
+              }
+            } catch {
+              // 忽略JSON解析错误
+            }
+          }
+        }
+      }
+
+      // 如果没有获取到内容，显示错误
+      if (!fullContent) {
+        setMessages(prev => prev.map(m =>
+          m.id === aiMessageId ? { ...m, content: "抱歉，未能获取AI回复。请稍后重试。" } : m
+        ))
+      }
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return
+
+      const errorMsg = error instanceof Error ? error.message : "未知错误"
+      setMessages(prev => prev.map(m =>
+        m.id === aiMessageId ? { ...m, content: `抱歉，AI响应出错：${errorMsg}` } : m
+      ))
+    } finally {
       setIsLoading(false)
-    }, 1500)
+      abortControllerRef.current = null
+    }
   }
 
   const handlePresetQuestion = (question: string) => {

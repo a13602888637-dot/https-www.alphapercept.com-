@@ -10,6 +10,25 @@ import { buildSystemPrompt } from '@/lib/ai/prompts';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function buildGeneralSystemPrompt(): string {
+  return `你是Alpha-Quant-Copilot AI量化投资助手，精通A股市场技术分析、基本面分析和市场情绪分析。
+
+你的核心能力：
+1. 宏观对冲分析：捕捉经济周期与市场预期的错配
+2. 价值投资评估：安全边际优先，识别价值陷阱与泡沫
+3. 情绪感知：感知市场情绪周期，把握资金流向
+4. 技术指标解读：MA60/MD60、MACD、RSI、KDJ等指标分析
+5. 事件驱动分析：突发事件的产业链推演和预期差计算
+
+回答规则：
+- 使用简洁清晰的中文
+- 提供具体的数据和分析依据
+- 明确指出风险点
+- 给出可操作的建议
+- 严格遵守MA60破位止损纪律
+- 所有建议仅供参考，投资需谨慎`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -22,15 +41,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!stockCode || !stockName) {
-      return new Response(
-        JSON.stringify({ error: 'stockCode and stockName are required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
     // 构建完整的消息列表，包含系统提示词
-    const systemPrompt = buildSystemPrompt(stockCode, stockName, context);
+    const systemPrompt = stockCode && stockName
+      ? buildSystemPrompt(stockCode, stockName, context)
+      : buildGeneralSystemPrompt();
     const fullMessages: DeepSeekMessage[] = [
       { role: 'system', content: systemPrompt },
       ...messages.map((msg: any) => ({
