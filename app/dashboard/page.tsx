@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
@@ -16,94 +16,42 @@ import { Button } from "@/components/ui/button"
 import { TrendingUp, Brain, Activity, Shield, Zap, Star, LogIn, User } from "lucide-react"
 import { useUserSync } from "@/lib/hooks/useUserSync"
 
-// 模拟数据 - 在实际应用中应该从API获取
-interface IntelligenceFeed {
-  id: string;
-  stockCode: string;
-  stockName: string;
-  eventSummary: string;
-  industryTrend: string;
-  trapProbability: number;
-  actionSignal: "BUY" | "SELL" | "HOLD";
-  targetPrice: number;
-  stopLoss: number;
-  createdAt: Date;
+interface FeedStats {
+  highRiskCount: number;
+  buySignals: number;
+  totalFeeds: number;
 }
-
-const mockIntelligenceFeeds: IntelligenceFeed[] = [
-  {
-    id: "1",
-    stockCode: "000001",
-    stockName: "平安银行",
-    eventSummary: "银行板块整体估值修复，政策面支持金融科技发展，但需关注房地产风险传导",
-    industryTrend: "金融科技转型加速，数字化转型成为行业共识",
-    trapProbability: 85,
-    actionSignal: "BUY" as const,
-    targetPrice: 12.5,
-    stopLoss: 10.2,
-    createdAt: new Date("2026-02-23T09:30:00")
-  },
-  {
-    id: "2",
-    stockCode: "600519",
-    stockName: "贵州茅台",
-    eventSummary: "高端白酒消费复苏，春节销售超预期，但估值已处历史高位",
-    industryTrend: "消费升级趋势延续，高端品牌溢价能力增强",
-    trapProbability: 65,
-    actionSignal: "HOLD" as const,
-    targetPrice: 1800,
-    stopLoss: 1500,
-    createdAt: new Date("2026-02-23T10:15:00")
-  },
-  {
-    id: "3",
-    stockCode: "300750",
-    stockName: "宁德时代",
-    eventSummary: "新能源汽车销量持续增长，但行业竞争加剧，价格战风险上升",
-    industryTrend: "动力电池技术迭代加速，固态电池商业化进程加快",
-    trapProbability: 92,
-    actionSignal: "SELL" as const,
-    targetPrice: 180,
-    stopLoss: 220,
-    createdAt: new Date("2026-02-23T11:45:00")
-  },
-  {
-    id: "4",
-    stockCode: "002415",
-    stockName: "海康威视",
-    eventSummary: "AI+安防应用场景拓展，海外市场恢复增长",
-    industryTrend: "人工智能与安防深度融合，智慧城市需求旺盛",
-    trapProbability: 45,
-    actionSignal: "BUY" as const,
-    targetPrice: 38.5,
-    stopLoss: 32.0,
-    createdAt: new Date("2026-02-23T13:20:00")
-  },
-  {
-    id: "5",
-    stockCode: "601318",
-    stockName: "中国平安",
-    eventSummary: "保险业务结构优化，但投资端受市场波动影响较大",
-    industryTrend: "保险科技应用深化，健康险需求快速增长",
-    trapProbability: 78,
-    actionSignal: "HOLD" as const,
-    targetPrice: 48.0,
-    stopLoss: 42.5,
-    createdAt: new Date("2026-02-23T14:30:00")
-  }
-]
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("intelligence")
+  const [stats, setStats] = useState<FeedStats>({ highRiskCount: 0, buySignals: 0, totalFeeds: 0 })
 
   // Sync user data
   const { user } = useUserSync()
 
-  // 计算统计数据（使用模拟数据用于展示）
-  const highRiskCount = mockIntelligenceFeeds.filter(feed => feed.trapProbability > 80).length
-  const buySignals = mockIntelligenceFeeds.filter(feed => feed.actionSignal === "BUY").length
-  const totalFeeds = mockIntelligenceFeeds.length
+  // 从API获取统计数据
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await fetch("/api/intelligence-feed?limit=50")
+      if (!response.ok) return
+      const data = await response.json()
+      if (data.success && data.feed) {
+        const feeds = data.feed
+        setStats({
+          highRiskCount: feeds.filter((f: any) => f.trapProbability > 80).length,
+          buySignals: feeds.filter((f: any) => f.actionSignal === "BUY").length,
+          totalFeeds: feeds.length,
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching feed stats:", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats])
 
   return (
     <div className="min-h-screen bg-background">
@@ -167,15 +115,15 @@ export default function Home() {
                       </SignInButton>
                     </SignedOut>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-green-500">{buySignals}</div>
+                      <div className="text-2xl font-bold text-green-500">{stats.buySignals}</div>
                       <div className="text-sm text-muted-foreground">买入信号</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold">{totalFeeds}</div>
+                      <div className="text-2xl font-bold">{stats.totalFeeds}</div>
                       <div className="text-sm text-muted-foreground">今日情报</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-red-500">{highRiskCount}</div>
+                      <div className="text-2xl font-bold text-red-500">{stats.highRiskCount}</div>
                       <div className="text-sm text-muted-foreground">高风险警报</div>
                     </div>
                   </div>
@@ -227,30 +175,11 @@ export default function Home() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="space-y-4">
-                          {mockIntelligenceFeeds
-                            .filter((feed: IntelligenceFeed) => feed.trapProbability > 60)
-                            .map((feed: IntelligenceFeed) => (
-                              <div key={feed.id} className="p-4 border rounded-lg">
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium">{feed.stockName} ({feed.stockCode})</span>
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                      feed.trapProbability > 80
-                                        ? "bg-red-100 text-red-800"
-                                        : "bg-orange-100 text-orange-800"
-                                    }`}>
-                                      陷阱概率: {feed.trapProbability}%
-                                    </span>
-                                  </div>
-                                  <span className="text-sm text-muted-foreground">
-                                    {new Date(feed.createdAt).toLocaleTimeString()}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-muted-foreground">{feed.eventSummary}</p>
-                              </div>
-                            ))}
-                        </div>
+                        <IntelligenceFeedListWithAPI
+                          filter="high_risk"
+                          autoRefresh={true}
+                          refreshInterval={120000}
+                        />
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -356,7 +285,7 @@ export default function Home() {
                 <CardContent className="pt-6">
                   <div className="text-center">
                     <Shield className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                    <div className="text-3xl font-bold">{highRiskCount}</div>
+                    <div className="text-3xl font-bold">{stats.highRiskCount}</div>
                     <div className="text-sm text-muted-foreground">风险预警</div>
                   </div>
                 </CardContent>

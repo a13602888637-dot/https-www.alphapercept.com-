@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createChart, ColorType, IChartApi, LineData, HistogramData } from "lightweight-charts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Loader2 } from "lucide-react";
 
 interface KLineData {
   time: string;
@@ -16,7 +16,7 @@ interface KLineData {
 }
 
 interface TechnicalIndicatorsProps {
-  data: KLineData[];
+  stockCode: string;
   stockName: string;
 }
 
@@ -144,10 +144,32 @@ const calculateKDJ = (data: KLineData[], period: number = 9): { k: LineData[], d
   return { k, d, j };
 };
 
-export function TechnicalIndicators({ data, stockName }: TechnicalIndicatorsProps) {
+export function TechnicalIndicators({ stockCode, stockName }: TechnicalIndicatorsProps) {
   const macdChartRef = useRef<HTMLDivElement>(null);
   const rsiChartRef = useRef<HTMLDivElement>(null);
   const kdjChartRef = useRef<HTMLDivElement>(null);
+  const [data, setData] = useState<KLineData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!stockCode) return;
+    const fetchKlineData = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`/api/kline?code=${stockCode}&timeframe=daily&limit=200`);
+        if (!response.ok) throw new Error("Failed to fetch kline data");
+        const result = await response.json();
+        if (result.success && result.data) {
+          setData(result.data);
+        }
+      } catch (error) {
+        console.error("Error fetching kline data for indicators:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchKlineData();
+  }, [stockCode]);
 
   useEffect(() => {
     if (!macdChartRef.current || data.length === 0) return;
@@ -308,6 +330,24 @@ export function TechnicalIndicators({ data, stockName }: TechnicalIndicatorsProp
       kdjChart.remove();
     };
   }, [data]);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            技术指标分析
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (data.length === 0) {
     return (

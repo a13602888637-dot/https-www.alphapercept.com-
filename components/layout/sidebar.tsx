@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   Brain,
+  Globe,
   Home,
   MessageSquare,
   Settings,
@@ -25,6 +26,11 @@ const navItems = [
     title: "首页",
     icon: Home,
     href: "/dashboard",
+  },
+  {
+    title: "态势感知",
+    icon: Globe,
+    href: "/dashboard/macro",
   },
   {
     title: "自选股",

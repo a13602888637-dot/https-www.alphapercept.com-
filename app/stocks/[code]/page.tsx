@@ -10,7 +10,6 @@ import { ArrowLeft, TrendingUp, TrendingDown, AlertTriangle, Plus, Check } from 
 import { toast } from "sonner";
 import { StockChart } from "@/components/charts/StockChart";
 import { TechnicalIndicators } from "@/components/charts/TechnicalIndicators";
-import { generateMockKLineByStockCode } from "@/lib/utils/mockKlineData";
 import { ChatInterface } from "@/components/ai-chat/ChatInterface";
 
 interface StockDetail {
@@ -47,16 +46,12 @@ export default function StockDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [isAddingToWatchlist, setIsAddingToWatchlist] = useState(false);
-  const [klineData, setKlineData] = useState<any[]>([]);
 
   useEffect(() => {
     if (stockCode) {
       fetchStockDetail();
       fetchAnalysis();
       checkWatchlistStatus();
-      // 生成模拟K线数据（后续替换为真实API）
-      const mockData = generateMockKLineByStockCode(stockCode);
-      setKlineData(mockData);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stockCode]);
@@ -305,7 +300,7 @@ export default function StockDetailPage() {
       </Card>
 
       {/* 技术指标 */}
-      <TechnicalIndicators data={klineData} stockName={stockDetail.name} />
+      <TechnicalIndicators stockCode={stockCode} stockName={stockDetail.name} />
 
       <Card>
         <CardHeader>

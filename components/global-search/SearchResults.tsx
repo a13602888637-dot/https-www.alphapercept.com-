@@ -61,6 +61,19 @@ export function SearchResults({
     );
   }
 
+  // Group results by market category
+  const aStockResults = results.filter((r) => r.market === "SH" || r.market === "SZ");
+  const usStockResults = results.filter((r) => r.market === "US");
+  const otherResults = results.filter(
+    (r) => r.market !== "SH" && r.market !== "SZ" && r.market !== "US"
+  );
+
+  const groups = [
+    { label: "A股", results: aStockResults },
+    { label: "美股", results: usStockResults },
+    { label: "其他", results: otherResults },
+  ].filter((g) => g.results.length > 0);
+
   // 显示结果
   return (
     <div className={cn("p-2 space-y-1", className)}>
@@ -71,14 +84,23 @@ export function SearchResults({
         </div>
       )}
 
-      {/* 结果列表 */}
+      {/* 分组结果列表 */}
       <div className="max-h-96 overflow-y-auto">
-        {results.map((result) => (
-          <SearchResultItem
-            key={`${result.code}-${result.market}`}
-            result={result}
-            onAddToWatchlist={onAddToWatchlist}
-          />
+        {groups.map((group) => (
+          <div key={group.label}>
+            {groups.length > 1 && (
+              <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 sticky top-0">
+                {group.label} ({group.results.length})
+              </div>
+            )}
+            {group.results.map((result) => (
+              <SearchResultItem
+                key={`${result.code}-${result.market}`}
+                result={result}
+                onAddToWatchlist={onAddToWatchlist}
+              />
+            ))}
+          </div>
         ))}
       </div>
     </div>

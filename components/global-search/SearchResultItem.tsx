@@ -58,6 +58,8 @@ export function SearchResultItem({
         return "上证";
       case "SZ":
         return "深证";
+      case "US":
+        return "美股";
       default:
         return market;
     }
@@ -70,6 +72,8 @@ export function SearchResultItem({
         return "text-red-600 bg-red-50 border-red-200";
       case "SZ":
         return "text-green-600 bg-green-50 border-green-200";
+      case "US":
+        return "text-blue-600 bg-blue-50 border-blue-200";
       default:
         return "text-gray-600 bg-gray-50 border-gray-200";
     }
@@ -114,7 +118,7 @@ export function SearchResultItem({
         {result.currentPrice !== undefined && (
           <div className="text-right">
             <div className="font-medium text-sm">
-              ¥{result.currentPrice.toFixed(2)}
+              {result.market === "US" ? "$" : "¥"}{result.currentPrice.toFixed(2)}
             </div>
             {result.changePercent !== undefined && (
               <div

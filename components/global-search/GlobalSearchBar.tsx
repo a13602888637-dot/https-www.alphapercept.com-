@@ -80,9 +80,9 @@ export function GlobalSearchBar({ className }: GlobalSearchBarProps) {
       setError(undefined);
 
       try {
-        // 1. 调用搜索API
+        // 1. 调用统一检索API（支持A股+美股）
         const searchResponse = await fetch(
-          `/api/stocks/search?q=${encodeURIComponent(trimmedQuery)}`
+          `/api/unified-search?q=${encodeURIComponent(trimmedQuery)}&limit=15`
         );
 
         if (!searchResponse.ok) {
@@ -95,16 +95,24 @@ export function GlobalSearchBar({ className }: GlobalSearchBarProps) {
           throw new Error(searchData.error || "搜索失败");
         }
 
-        const stockList = searchData.data || [];
+        const groups = searchData.data || [];
 
-        if (stockList.length === 0) {
+        // Flatten grouped results into a single list
+        const allAssets: any[] = [];
+        for (const group of groups) {
+          for (const asset of group.results || []) {
+            allAssets.push({ ...asset, marketLabel: group.label });
+          }
+        }
+
+        if (allAssets.length === 0) {
           setResults([]);
           setLoading(false);
           return;
         }
 
         // 2. 获取价格数据
-        const symbols = stockList.map((s: any) => s.code).join(",");
+        const symbols = allAssets.map((s: any) => s.symbol).join(",");
         const pricesResponse = await fetch(
           `/api/stock-prices?symbols=${symbols}`
         );
@@ -124,19 +132,25 @@ export function GlobalSearchBar({ className }: GlobalSearchBarProps) {
         );
 
         // 4. 合并数据
-        const enrichedResults: SearchResult[] = stockList.map((stock: any) => {
-          const priceInfo = pricesData[stock.code];
+        const enrichedResults: SearchResult[] = allAssets.map((asset: any) => {
+          const priceInfo = pricesData[asset.symbol];
+          // Map market type to display label
+          const marketDisplay = asset.market === "cn_stock" || asset.market === "cn_index"
+            ? (asset.exchange === "SSE" ? "SH" : "SZ")
+            : asset.market === "us_stock" || asset.market === "us_index" || asset.market === "us_etf"
+            ? "US"
+            : asset.market?.toUpperCase() || "OTHER";
           return {
-            code: stock.code,
-            name: stock.name,
-            market: stock.market,
+            code: asset.symbol,
+            name: asset.name,
+            market: marketDisplay,
             currentPrice: priceInfo?.price,
             change: priceInfo?.change,
             changePercent: priceInfo?.changePercent,
             volume: priceInfo?.volume,
             turnover: priceInfo?.turnover,
-            industry: stock.industry,
-            isInWatchlist: watchlistCodes.has(stock.code),
+            industry: asset.metadata?.industry,
+            isInWatchlist: watchlistCodes.has(asset.symbol),
           };
         });
 

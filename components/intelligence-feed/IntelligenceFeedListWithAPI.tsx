@@ -28,12 +28,14 @@ interface IntelligenceFeedListWithAPIProps {
   initialFeeds?: IntelligenceFeedItem[]
   autoRefresh?: boolean
   refreshInterval?: number
+  filter?: "all" | "high_risk" | "buy_signals"
 }
 
 export function IntelligenceFeedListWithAPI({
   initialFeeds = [],
   autoRefresh = false,
-  refreshInterval = 30000 // 30 seconds
+  refreshInterval = 30000, // 30 seconds
+  filter = "all"
 }: IntelligenceFeedListWithAPIProps) {
   const [feeds, setFeeds] = useState<IntelligenceFeedItem[]>(initialFeeds)
   const [isLoading, setIsLoading] = useState(false)
@@ -41,9 +43,16 @@ export function IntelligenceFeedListWithAPI({
   const [signalFilter, setSignalFilter] = useState<string>("ALL")
   const [riskFilter, setRiskFilter] = useState<string>("ALL")
 
+  // 根据filter预过滤feeds
+  const filteredByMode = filter === "high_risk"
+    ? feeds.filter(feed => feed.trapProbability > 60)
+    : filter === "buy_signals"
+    ? feeds.filter(feed => feed.actionSignal === "BUY")
+    : feeds
+
   // 分离高风险警告和普通情报
-  const highRiskFeeds = feeds.filter(feed => feed.trapProbability > 80)
-  const normalFeeds = feeds.filter(feed => feed.trapProbability <= 80)
+  const highRiskFeeds = filteredByMode.filter(feed => feed.trapProbability > 80)
+  const normalFeeds = filteredByMode.filter(feed => feed.trapProbability <= 80)
 
   // 应用筛选
   const filteredHighRiskFeeds = highRiskFeeds.filter(feed => {
