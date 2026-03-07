@@ -83,17 +83,43 @@ async function fetchFromTencent(symbols: string[]): Promise<MarketData[]> {
         const changePercent = prevClose > 0 ? parseFloat(((change / prevClose) * 100).toFixed(2)) : 0;
 
         if (currentPrice > 0) {
+          const highPrice = parseFloat(parts[33]) || currentPrice;
+          const lowPrice = parseFloat(parts[34]) || currentPrice;
+          const openPrice = parseFloat(parts[5]) || prevClose;
+
+          // 委比计算：(委买量总和 - 委卖量总和) / (委买量总和 + 委卖量总和) × 100
+          const buyVol = [10, 11, 12, 13, 14].reduce((sum, i) => sum + (parseInt(parts[i]) || 0), 0);
+          const sellVol = [20, 21, 22, 23, 24].reduce((sum, i) => sum + (parseInt(parts[i]) || 0), 0);
+          const totalOrderVol = buyVol + sellVol;
+          const bidRatio = totalOrderVol > 0
+            ? parseFloat(((buyVol - sellVol) / totalOrderVol * 100).toFixed(2))
+            : 0;
+
           results.push({
             symbol,
             name,
             currentPrice,
-            highPrice: parseFloat(parts[33]) || currentPrice,
-            lowPrice: parseFloat(parts[34]) || currentPrice,
+            highPrice,
+            lowPrice,
+            openPrice,
+            prevClose,
             lastUpdateTime: new Date().toISOString(),
             change,
             changePercent,
             volume: parseInt(parts[6]) || 0,
             turnover: parseFloat(parts[37]) || 0,
+            turnoverRate: parseFloat(parts[38]) || 0,
+            peRatio: parseFloat(parts[39]) || 0,
+            amplitude: parseFloat(parts[43]) || (prevClose > 0 ? parseFloat(((highPrice - lowPrice) / prevClose * 100).toFixed(2)) : 0),
+            circulatingMarketCap: parseFloat(parts[44]) || 0,
+            marketCap: parseFloat(parts[45]) || 0,
+            pbRatio: parseFloat(parts[46]) || 0,
+            volumeRatio: parseFloat(parts[49]) || 0,
+            limitUp: parseFloat(parts[47]) || 0,
+            limitDown: parseFloat(parts[48]) || 0,
+            outerVolume: parseInt(parts[7]) || 0,
+            innerVolume: parseInt(parts[8]) || 0,
+            bidRatio,
           });
         }
       } catch {
@@ -223,10 +249,25 @@ export async function GET(req: Request) {
         changePercent: data.changePercent,
         high: data.highPrice,
         low: data.lowPrice,
+        open: data.openPrice,
+        prevClose: data.prevClose,
         volume: data.volume,
         turnover: data.turnover,
         lastUpdate: data.lastUpdateTime,
-        name: data.name
+        name: data.name,
+        // 扩展指标
+        turnoverRate: data.turnoverRate,
+        volumeRatio: data.volumeRatio,
+        amplitude: data.amplitude,
+        bidRatio: data.bidRatio,
+        peRatio: data.peRatio,
+        pbRatio: data.pbRatio,
+        marketCap: data.marketCap,
+        circulatingMarketCap: data.circulatingMarketCap,
+        limitUp: data.limitUp,
+        limitDown: data.limitDown,
+        outerVolume: data.outerVolume,
+        innerVolume: data.innerVolume,
       };
       return acc;
     }, {} as Record<string, any>);

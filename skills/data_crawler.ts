@@ -26,9 +26,21 @@ export interface MarketData {
   volume?: number;
   turnover?: number;
   peRatio?: number;
+  pbRatio?: number;
   marketCap?: number;
+  circulatingMarketCap?: number;
   ma20?: number;   // 20-day moving average
   ma60?: number;   // 60-day moving average
+  openPrice?: number;       // 开盘价
+  prevClose?: number;       // 昨收
+  turnoverRate?: number;    // 换手率 %
+  volumeRatio?: number;     // 量比
+  amplitude?: number;       // 振幅 %
+  limitUp?: number;         // 涨停价
+  limitDown?: number;       // 跌停价
+  outerVolume?: number;     // 外盘
+  innerVolume?: number;     // 内盘
+  bidRatio?: number;        // 委比 %
 }
 
 // Sina finance API configuration

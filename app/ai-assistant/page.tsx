@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -110,10 +112,14 @@ export default function AIAssistantPage() {
   const [activeTab, setActiveTab] = useState("chat")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const streamContentRef = useRef("")
+  const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 滚动到底部
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    })
   }, [messages])
 
   const handleSendMessage = async () => {
@@ -171,12 +177,29 @@ export default function AIAssistantPage() {
         throw new Error(errorData.error || `API错误: ${response.status}`)
       }
 
-      // 读取SSE流
+      // 读取SSE流（节流更新避免UI卡顿）
       const reader = response.body?.getReader()
       if (!reader) throw new Error("无法读取响应流")
 
       const decoder = new TextDecoder()
-      let fullContent = ""
+      streamContentRef.current = ""
+
+      const flushUpdate = () => {
+        const content = streamContentRef.current
+        setMessages(prev => prev.map(m =>
+          m.id === aiMessageId ? { ...m, content } : m
+        ))
+      }
+
+      // 每100ms批量更新一次UI，避免每个token都触发re-render
+      const scheduleUpdate = () => {
+        if (!updateTimerRef.current) {
+          updateTimerRef.current = setTimeout(() => {
+            flushUpdate()
+            updateTimerRef.current = null
+          }, 100)
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read()
@@ -198,11 +221,8 @@ export default function AIAssistantPage() {
             try {
               const data = JSON.parse(line.slice(6))
               if (data.delta) {
-                fullContent += data.delta
-                // 实时更新AI消息内容
-                setMessages(prev => prev.map(m =>
-                  m.id === aiMessageId ? { ...m, content: fullContent } : m
-                ))
+                streamContentRef.current += data.delta
+                scheduleUpdate()
               }
             } catch {
               // 忽略JSON解析错误
@@ -211,8 +231,15 @@ export default function AIAssistantPage() {
         }
       }
 
+      // 清理定时器并做最终更新
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current)
+        updateTimerRef.current = null
+      }
+      flushUpdate()
+
       // 如果没有获取到内容，显示错误
-      if (!fullContent) {
+      if (!streamContentRef.current) {
         setMessages(prev => prev.map(m =>
           m.id === aiMessageId ? { ...m, content: "抱歉，未能获取AI回复。请稍后重试。" } : m
         ))
@@ -382,7 +409,7 @@ export default function AIAssistantPage() {
 
                 <TabsContent value="chat" className="h-[calc(100%-60px)]">
                   {/* 聊天消息区域 */}
-                  <div className="h-[400px] overflow-y-auto pr-2 mb-4">
+                  <div className="h-[500px] overflow-y-auto pr-2 mb-4 scroll-smooth">
                     <div className="space-y-4">
                       {messages.map((message) => (
                         <div
@@ -413,7 +440,13 @@ export default function AIAssistantPage() {
                                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
-                            <div className="whitespace-pre-wrap">{message.content}</div>
+                            {message.sender === "assistant" ? (
+                              <div className="prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                              </div>
+                            ) : (
+                              <div className="whitespace-pre-wrap">{message.content}</div>
+                            )}
                             {message.type && message.sender === "assistant" && (
                               <div className="mt-2">
                                 <Badge

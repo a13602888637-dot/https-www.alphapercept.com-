@@ -20,9 +20,24 @@ interface StockDetail {
   changePercent: number;
   high: number;
   low: number;
+  open: number;
+  prevClose: number;
   volume: number;
   turnover: number;
   lastUpdate: string;
+  // 扩展指标
+  turnoverRate?: number;    // 换手率
+  volumeRatio?: number;     // 量比
+  amplitude?: number;       // 振幅
+  bidRatio?: number;        // 委比
+  peRatio?: number;         // 市盈率
+  pbRatio?: number;         // 市净率
+  marketCap?: number;       // 总市值
+  circulatingMarketCap?: number; // 流通市值
+  limitUp?: number;         // 涨停价
+  limitDown?: number;       // 跌停价
+  outerVolume?: number;     // 外盘
+  innerVolume?: number;     // 内盘
 }
 
 interface IntelligenceAnalysis {
@@ -75,9 +90,23 @@ export default function StockDetailPage() {
           changePercent: priceData.changePercent || 0,
           high: priceData.high || priceData.price,
           low: priceData.low || priceData.price,
+          open: priceData.open || 0,
+          prevClose: priceData.prevClose || 0,
           volume: priceData.volume || 0,
           turnover: priceData.turnover || 0,
-          lastUpdate: priceData.lastUpdate || new Date().toISOString()
+          lastUpdate: priceData.lastUpdate || new Date().toISOString(),
+          turnoverRate: priceData.turnoverRate,
+          volumeRatio: priceData.volumeRatio,
+          amplitude: priceData.amplitude,
+          bidRatio: priceData.bidRatio,
+          peRatio: priceData.peRatio,
+          pbRatio: priceData.pbRatio,
+          marketCap: priceData.marketCap,
+          circulatingMarketCap: priceData.circulatingMarketCap,
+          limitUp: priceData.limitUp,
+          limitDown: priceData.limitDown,
+          outerVolume: priceData.outerVolume,
+          innerVolume: priceData.innerVolume,
         });
       } else {
         throw new Error("Stock data not available");
@@ -235,7 +264,8 @@ export default function StockDetailPage() {
     );
   }
 
-  const priceChangeColor = stockDetail.change >= 0 ? "text-green-600" : "text-red-600";
+  // A股惯例：红涨绿跌
+  const priceChangeColor = stockDetail.change >= 0 ? "text-red-600" : "text-green-600";
   const priceChangeIcon = stockDetail.change >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />;
 
   return (
@@ -277,13 +307,73 @@ export default function StockDetailPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* 基础行情 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><div className="text-sm text-muted-foreground">最高</div><div className="text-lg font-semibold">¥{stockDetail.high.toFixed(2)}</div></div>
-            <div><div className="text-sm text-muted-foreground">最低</div><div className="text-lg font-semibold">¥{stockDetail.low.toFixed(2)}</div></div>
+            <div><div className="text-sm text-muted-foreground">最高</div><div className="text-lg font-semibold text-red-600">¥{stockDetail.high.toFixed(2)}</div></div>
+            <div><div className="text-sm text-muted-foreground">最低</div><div className="text-lg font-semibold text-green-600">¥{stockDetail.low.toFixed(2)}</div></div>
+            <div><div className="text-sm text-muted-foreground">开盘</div><div className="text-lg font-semibold">¥{stockDetail.open ? stockDetail.open.toFixed(2) : '--'}</div></div>
+            <div><div className="text-sm text-muted-foreground">昨收</div><div className="text-lg font-semibold">¥{stockDetail.prevClose ? stockDetail.prevClose.toFixed(2) : '--'}</div></div>
+          </div>
+          {/* 成交数据 */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
             <div><div className="text-sm text-muted-foreground">成交量</div><div className="text-lg font-semibold">{(stockDetail.volume / 10000).toFixed(2)}万手</div></div>
             <div><div className="text-sm text-muted-foreground">成交额</div><div className="text-lg font-semibold">¥{(stockDetail.turnover / 100000000).toFixed(2)}亿</div></div>
+            <div><div className="text-sm text-muted-foreground">涨停</div><div className="text-lg font-semibold text-red-600">{stockDetail.limitUp ? `¥${stockDetail.limitUp.toFixed(2)}` : '--'}</div></div>
+            <div><div className="text-sm text-muted-foreground">跌停</div><div className="text-lg font-semibold text-green-600">{stockDetail.limitDown ? `¥${stockDetail.limitDown.toFixed(2)}` : '--'}</div></div>
           </div>
-          <div className="mt-4 text-sm text-muted-foreground">更新时间: {new Date(stockDetail.lastUpdate).toLocaleString()}</div>
+          {/* 关键技术指标 */}
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mt-3 pt-3 border-t">
+            <div>
+              <div className="text-xs text-muted-foreground">量比</div>
+              <div className={`text-base font-bold ${(stockDetail.volumeRatio || 0) > 2 ? 'text-red-600' : (stockDetail.volumeRatio || 0) < 0.5 ? 'text-green-600' : ''}`}>
+                {stockDetail.volumeRatio ? stockDetail.volumeRatio.toFixed(2) : '--'}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">委比</div>
+              <div className={`text-base font-bold ${(stockDetail.bidRatio || 0) > 0 ? 'text-red-600' : (stockDetail.bidRatio || 0) < 0 ? 'text-green-600' : ''}`}>
+                {stockDetail.bidRatio !== undefined ? `${stockDetail.bidRatio.toFixed(2)}%` : '--'}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">换手率</div>
+              <div className={`text-base font-bold ${(stockDetail.turnoverRate || 0) > 10 ? 'text-red-600' : ''}`}>
+                {stockDetail.turnoverRate ? `${stockDetail.turnoverRate.toFixed(2)}%` : '--'}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">振幅</div>
+              <div className="text-base font-bold">{stockDetail.amplitude ? `${stockDetail.amplitude.toFixed(2)}%` : '--'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">市盈率</div>
+              <div className="text-base font-bold">{stockDetail.peRatio ? stockDetail.peRatio.toFixed(2) : '--'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">市净率</div>
+              <div className="text-base font-bold">{stockDetail.pbRatio ? stockDetail.pbRatio.toFixed(2) : '--'}</div>
+            </div>
+          </div>
+          {/* 外盘/内盘 + 市值 */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 pt-3 border-t">
+            <div>
+              <div className="text-xs text-muted-foreground">外盘</div>
+              <div className="text-base font-semibold text-red-600">{stockDetail.outerVolume ? (stockDetail.outerVolume / 10000).toFixed(0) + '万' : '--'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">内盘</div>
+              <div className="text-base font-semibold text-green-600">{stockDetail.innerVolume ? (stockDetail.innerVolume / 10000).toFixed(0) + '万' : '--'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">流通市值</div>
+              <div className="text-base font-semibold">{stockDetail.circulatingMarketCap ? (stockDetail.circulatingMarketCap / 100000000).toFixed(2) + '亿' : '--'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">总市值</div>
+              <div className="text-base font-semibold">{stockDetail.marketCap ? (stockDetail.marketCap / 100000000).toFixed(2) + '亿' : '--'}</div>
+            </div>
+          </div>
+          <div className="mt-3 text-sm text-muted-foreground">更新时间: {new Date(stockDetail.lastUpdate).toLocaleString()}</div>
         </CardContent>
       </Card>
 
