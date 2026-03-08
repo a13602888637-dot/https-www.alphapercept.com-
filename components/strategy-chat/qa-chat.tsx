@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
@@ -17,12 +17,9 @@ import {
   BookOpen,
   BarChart3,
   TrendingUp,
-  // Shield, // 未使用
-  // Zap, // 未使用
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-// import { Input } from "@/components/ui/input" // 未使用
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -54,66 +51,6 @@ const QUICK_QUESTIONS = [
   "技术指标解读",
 ]
 
-// AI模拟响应
-const generateAIResponse = (question: string): string => {
-  const responses = [
-    `基于您的问题"${question}"，我分析了当前市场情况：
-
-## 市场分析
-- **大盘趋势**: 上证指数在3200点附近震荡，短期支撑位3150，阻力位3250
-- **资金流向**: 北向资金净流入15.2亿元，主要流入新能源和芯片板块
-- **市场情绪**: 投资者情绪偏谨慎，成交量略有萎缩
-
-## 投资建议
-1. **价值投资**: 关注低估值蓝筹股，如银行、保险板块
-2. **成长投资**: 新能源、人工智能等科技板块仍有成长空间
-3. **风险控制**: 建议仓位控制在60-70%，关注MA60支撑
-
-## 重点关注
-- 000001.SZ 平安银行：估值修复机会
-- 300750.SZ 宁德时代：新能源龙头
-- 600519.SH 贵州茅台：消费升级受益`,
-
-    `关于"${question}"，我的分析如下：
-
-## 技术分析
-- **MA60指标**: 当前有3只股票出现MA60破位，需要警惕风险
-- **MACD指标**: 多数股票MACD金叉，短期有反弹机会
-- **RSI指标**: 部分热门股RSI超买，注意回调风险
-
-## 策略建议
-1. **短线交易**: 关注突破关键阻力位的个股
-2. **中线布局**: 选择基本面良好、技术面突破的标的
-3. **长线投资**: 聚焦行业龙头和成长确定性高的公司
-
-## 风险提示
-- 市场波动可能加大，注意仓位管理
-- 关注政策面变化对相关行业的影响
-- 设置止损位，控制单笔交易风险`,
-
-    `针对"${question}"，我结合五大投资流派给出建议：
-
-## 桥水原则（宏观对冲）
-- 经济周期: 复苏中期，建议股票60%/债券30%/商品10%
-- 风险平价: 确保各资产风险贡献均衡
-
-## 巴菲特原则（价值投资）
-- 安全边际: 寻找内在价值被低估的标的
-- 护城河: 关注品牌、成本、网络效应强的公司
-
-## 索罗斯原则（反身性）
-- 市场偏见: 识别过度乐观或悲观的情绪
-- 趋势跟踪: 使用ADX指标判断趋势强度
-
-## 具体操作
-- 买入信号: 安全边际 > 30%，技术面突破
-- 卖出信号: 安全边际 < -20%，MA60破位
-- 持仓纪律: 严格遵守MA60止损规则`
-  ]
-
-  return responses[Math.floor(Math.random() * responses.length)]
-}
-
 export function QAChat({ className, initialMessages }: QAChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(
     initialMessages || [
@@ -129,11 +66,20 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const streamContentRef = useRef("")
+  const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // 滚动到底部
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    })
+  }, [])
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    scrollToBottom()
+  }, [messages, scrollToBottom])
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
@@ -145,42 +91,115 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
       timestamp: new Date(),
     }
 
-    // 添加用户消息
+    const currentInput = input
     setMessages((prev) => [...prev, userMessage])
     setInput("")
     setIsLoading(true)
+    streamContentRef.current = ""
 
-    // 模拟AI思考
-    const thinkingMessage: ChatMessage = {
-      id: `thinking-${Date.now()}`,
-      role: "assistant",
-      content: "",
-      timestamp: new Date(),
-      isThinking: true,
-    }
+    // 添加思考中占位消息
+    const aiMessageId = `ai-${Date.now()}`
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: aiMessageId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+        isThinking: true,
+      },
+    ])
 
-    setMessages((prev) => [...prev, thinkingMessage])
+    try {
+      // 构建历史消息（最近10条）
+      const historyMessages = messages
+        .filter((m) => !m.isThinking && m.id !== "welcome")
+        .slice(-10)
+        .map((m) => ({ role: m.role, content: m.content }))
+      historyMessages.push({ role: "user", content: currentInput })
 
-    // 模拟AI响应延迟
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(input)
-
-      // 移除思考消息，添加AI响应
-      setMessages((prev) => {
-        const filtered = prev.filter(msg => !msg.isThinking)
-        return [
-          ...filtered,
-          {
-            id: `ai-${Date.now()}`,
-            role: "assistant",
-            content: aiResponse,
-            timestamp: new Date(),
-          },
-        ]
+      abortControllerRef.current = new AbortController()
+      const response = await fetch("/api/ai/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: historyMessages }),
+        signal: abortControllerRef.current.signal,
       })
 
+      if (!response.ok) {
+        throw new Error(`API错误: ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("无法读取响应流")
+
+      const decoder = new TextDecoder()
+
+      // 节流更新函数（100ms批量更新，防止UI卡顿）
+      const flushUpdate = () => {
+        const content = streamContentRef.current
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMessageId
+              ? { ...msg, content, isThinking: false }
+              : msg
+          )
+        )
+        scrollToBottom()
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split("\n")
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue
+          const data = line.slice(6).trim()
+          if (data === "[DONE]") break
+
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.delta) {
+              streamContentRef.current += parsed.delta
+              // 节流：100ms最多更新一次
+              if (!updateTimerRef.current) {
+                updateTimerRef.current = setTimeout(() => {
+                  flushUpdate()
+                  updateTimerRef.current = null
+                }, 100)
+              }
+            } else if (parsed.error) {
+              streamContentRef.current += `\n\n**错误**: ${parsed.error}`
+            }
+          } catch {
+            continue
+          }
+        }
+      }
+
+      // 最终刷新
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current)
+        updateTimerRef.current = null
+      }
+      flushUpdate()
+    } catch (error) {
+      if ((error as Error).name === "AbortError") return
+      const errorMsg = error instanceof Error ? error.message : "未知错误"
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === aiMessageId
+            ? { ...msg, content: `抱歉，AI服务暂时不可用: ${errorMsg}`, isThinking: false }
+            : msg
+        )
+      )
+    } finally {
       setIsLoading(false)
-    }, 1500)
+      abortControllerRef.current = null
+    }
   }
 
   const handleQuickQuestion = (question: string) => {
