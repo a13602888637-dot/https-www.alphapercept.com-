@@ -16,6 +16,12 @@
       "dest": "/$1"
     }
   ],
+  "crons": [
+    {
+      "path": "/api/intelligence-feed/generate",
+      "schedule": "0 1,3,5,7 * * 1-5"
+    }
+  ],
   "env": {
     "NODE_ENV": "production"
   }

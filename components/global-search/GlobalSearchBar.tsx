@@ -80,10 +80,11 @@ export function GlobalSearchBar({ className }: GlobalSearchBarProps) {
       setError(undefined);
 
       try {
-        // 1. 调用统一检索API（支持A股+美股）
-        const searchResponse = await fetch(
-          `/api/unified-search?q=${encodeURIComponent(trimmedQuery)}&limit=15`
-        );
+        // 1. 并行调用股票搜索和情报搜索
+        const [searchResponse, intelResponse] = await Promise.all([
+          fetch(`/api/unified-search?q=${encodeURIComponent(trimmedQuery)}&limit=15`),
+          fetch(`/api/intelligence-feed?limit=10`).catch(() => null),
+        ]);
 
         if (!searchResponse.ok) {
           throw new Error(`搜索请求失败: ${searchResponse.status}`);
@@ -105,23 +106,19 @@ export function GlobalSearchBar({ className }: GlobalSearchBarProps) {
           }
         }
 
-        if (allAssets.length === 0) {
-          setResults([]);
-          setLoading(false);
-          return;
-        }
-
-        // 2. 获取价格数据
-        const symbols = allAssets.map((s: any) => s.symbol).join(",");
-        const pricesResponse = await fetch(
-          `/api/stock-prices?symbols=${symbols}`
-        );
-
+        // 2. 获取价格数据 (only if we have stock results)
         let pricesData: any = {};
-        if (pricesResponse.ok) {
-          const pricesJson = await pricesResponse.json();
-          if (pricesJson.success) {
-            pricesData = pricesJson.prices || {};
+        if (allAssets.length > 0) {
+          const symbols = allAssets.map((s: any) => s.symbol).join(",");
+          const pricesResponse = await fetch(
+            `/api/stock-prices?symbols=${symbols}`
+          );
+
+          if (pricesResponse.ok) {
+            const pricesJson = await pricesResponse.json();
+            if (pricesJson.success) {
+              pricesData = pricesJson.prices || {};
+            }
           }
         }
 
@@ -131,16 +128,16 @@ export function GlobalSearchBar({ className }: GlobalSearchBarProps) {
           watchlistItems.map((item) => item.stockCode)
         );
 
-        // 4. 合并数据
-        const enrichedResults: SearchResult[] = allAssets.map((asset: any) => {
+        // 4. 合并股票结果
+        const stockResults: SearchResult[] = allAssets.map((asset: any) => {
           const priceInfo = pricesData[asset.symbol];
-          // Map market type to display label
           const marketDisplay = asset.market === "cn_stock" || asset.market === "cn_index"
             ? (asset.exchange === "SSE" ? "SH" : "SZ")
             : asset.market === "us_stock" || asset.market === "us_index" || asset.market === "us_etf"
             ? "US"
             : asset.market?.toUpperCase() || "OTHER";
           return {
+            type: 'stock' as const,
             code: asset.symbol,
             name: asset.name,
             market: marketDisplay,
@@ -154,8 +151,40 @@ export function GlobalSearchBar({ className }: GlobalSearchBarProps) {
           };
         });
 
-        setResults(enrichedResults);
-        addToHistory(trimmedQuery);
+        // 5. 过滤情报结果（匹配搜索词）
+        let intelResults: SearchResult[] = [];
+        if (intelResponse && intelResponse.ok) {
+          const intelData = await intelResponse.json();
+          if (intelData.success && intelData.feed) {
+            const lowerQuery = trimmedQuery.toLowerCase();
+            intelResults = intelData.feed
+              .filter((item: any) =>
+                item.stockCode?.toLowerCase().includes(lowerQuery) ||
+                item.stockName?.toLowerCase().includes(lowerQuery) ||
+                item.eventSummary?.toLowerCase().includes(lowerQuery) ||
+                item.industryTrend?.toLowerCase().includes(lowerQuery)
+              )
+              .slice(0, 5)
+              .map((item: any) => ({
+                type: 'intelligence' as const,
+                code: item.stockCode,
+                name: item.stockName,
+                market: 'INTEL',
+                eventSummary: item.eventSummary,
+                actionSignal: item.actionSignal,
+                trapProbability: item.trapProbability,
+                intelligenceId: item.id,
+                createdAt: item.createdAt,
+              }));
+          }
+        }
+
+        // 6. Combine results: stocks first, then intelligence
+        const allResults = [...stockResults, ...intelResults];
+        setResults(allResults);
+        if (allResults.length > 0) {
+          addToHistory(trimmedQuery);
+        }
       } catch (err) {
         console.error("Search error:", err);
         setError(

@@ -6,7 +6,7 @@ import { WarningCard } from "./WarningCard"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Search, Filter, AlertTriangle, RefreshCw } from "lucide-react"
+import { Search, Filter, AlertTriangle, RefreshCw, Zap } from "lucide-react"
 import { toast } from "sonner"
 
 interface IntelligenceFeedItem {
@@ -118,8 +118,31 @@ export function IntelligenceFeedListWithAPI({
     }
   }
 
+  const [isGenerating, setIsGenerating] = useState(false)
+
   const handleRefresh = () => {
     fetchIntelligenceFeed()
+  }
+
+  const handleGenerate = async () => {
+    setIsGenerating(true)
+    try {
+      const response = await fetch("/api/intelligence-feed/generate", { method: "POST" })
+      if (!response.ok) throw new Error("Failed to generate intelligence")
+      const data = await response.json()
+      if (data.success) {
+        toast.success(`已生成 ${data.generated} 条情报`)
+        // Refresh the feed to show new data
+        await fetchIntelligenceFeed()
+      } else {
+        toast.error(data.error || "情报生成失败")
+      }
+    } catch (error) {
+      console.error("Error generating intelligence:", error)
+      toast.error("情报生成失败，请稍后重试")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const handleViewDetails = (feedId: string) => {
@@ -186,6 +209,20 @@ export function IntelligenceFeedListWithAPI({
                 <SelectItem value="LOW">低风险</SelectItem>
               </SelectContent>
             </Select>
+
+            <Button
+              variant="outline"
+              onClick={handleGenerate}
+              disabled={isGenerating || isLoading}
+              className="flex items-center gap-2"
+            >
+              {isGenerating ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4" />
+              )}
+              {isGenerating ? "生成中..." : "AI生成"}
+            </Button>
 
             <Button
               variant="outline"
@@ -258,6 +295,25 @@ export function IntelligenceFeedListWithAPI({
               <div className="flex flex-col items-center gap-2">
                 <RefreshCw className="h-8 w-8 animate-spin" />
                 <p>加载情报数据中...</p>
+              </div>
+            ) : feeds.length === 0 ? (
+              <div className="flex flex-col items-center gap-3">
+                <Zap className="h-10 w-10 text-muted-foreground/50" />
+                <p className="font-medium">暂无情报数据</p>
+                <p className="text-sm">点击上方"AI生成"按钮，系统将分析市场异动并生成智能情报</p>
+                <Button
+                  variant="outline"
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className="mt-2"
+                >
+                  {isGenerating ? (
+                    <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Zap className="h-4 w-4 mr-2" />
+                  )}
+                  {isGenerating ? "生成中..." : "立即生成情报"}
+                </Button>
               </div>
             ) : (
               <div>

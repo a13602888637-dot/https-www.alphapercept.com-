@@ -321,10 +321,16 @@ function parseSinaResponse(responseText: string, symbol: string): MarketData {
     }
 
     // Parse fields with validation
+    // Sina API field mapping:
+    // [0]=名称, [1]=今开, [2]=昨收, [3]=当前价, [4]=最高, [5]=最低
+    // [6]=竞买价, [7]=竞卖价, [8]=成交量(股), [9]=成交额(元)
+    // [30]=日期, [31]=时间
     const name = fields[0] || symbol;
-    const currentPrice = safeParseFloat(fields[2], 0);
-    const highPrice = safeParseFloat(fields[3], currentPrice);
-    const lowPrice = safeParseFloat(fields[4], currentPrice);
+    const currentPrice = safeParseFloat(fields[3], 0);
+    const highPrice = safeParseFloat(fields[4], currentPrice);
+    const lowPrice = safeParseFloat(fields[5], currentPrice);
+    const openPrice = safeParseFloat(fields[1], currentPrice);
+    const previousClose = safeParseFloat(fields[2], currentPrice);
 
     // Handle date and time fields (may be missing in some responses)
     let date = fields[30] || '';
@@ -338,14 +344,13 @@ function parseSinaResponse(responseText: string, symbol: string): MarketData {
       Logger.warn(`Missing date/time in Sina response for ${symbol}, using current time`);
     }
 
-    // Calculate change if previous close is available
-    const previousClose = safeParseFloat(fields[1], currentPrice);
+    // Calculate change from previous close
     const change = currentPrice - previousClose;
     const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
 
     // Parse volume and turnover if available
-    const volume = fields[7] ? safeParseFloat(fields[7]) : undefined;
-    const turnover = fields[8] ? safeParseFloat(fields[8]) : undefined;
+    const volume = fields[8] ? safeParseFloat(fields[8]) : undefined;
+    const turnover = fields[9] ? safeParseFloat(fields[9]) : undefined;
 
     // Validate parsed data
     if (isNaN(currentPrice) || currentPrice <= 0) {
@@ -363,11 +368,16 @@ function parseSinaResponse(responseText: string, symbol: string): MarketData {
       changePercent: parseFloat(changePercent.toFixed(2)),
       volume,
       turnover,
+      openPrice,
+      prevClose: previousClose,
     };
 
     Logger.debug(`Successfully parsed Sina data for ${symbol}:`, {
       name: marketData.name,
       price: marketData.currentPrice,
+      change: marketData.change,
+      changePercent: marketData.changePercent,
+      prevClose: previousClose,
       time: marketData.lastUpdateTime
     });
 

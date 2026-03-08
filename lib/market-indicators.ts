@@ -95,12 +95,20 @@ function convertToIndicator(
     };
   }
 
+  // If changePercent is 0 but we have prevClose, calculate manually
+  let changePercent = marketData.changePercent || 0;
+  let change = marketData.change || 0;
+  if (changePercent === 0 && marketData.prevClose && marketData.prevClose > 0 && marketData.currentPrice !== marketData.prevClose) {
+    change = marketData.currentPrice - marketData.prevClose;
+    changePercent = (change / marketData.prevClose) * 100;
+  }
+
   return {
     label,
     value: formatValue(marketData.currentPrice),
-    change: formatChange(marketData.change || 0, marketData.changePercent || 0),
+    change: formatChange(change, changePercent),
     rawValue: marketData.currentPrice,
-    rawChange: marketData.changePercent || 0,
+    rawChange: changePercent,
   };
 }
 

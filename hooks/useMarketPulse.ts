@@ -12,7 +12,7 @@ interface UseMarketPulseReturn {
   refresh: () => Promise<void>
 }
 
-export function useMarketPulse(refreshInterval: number = 30000): UseMarketPulseReturn {
+export function useMarketPulse(refreshInterval: number = 60000): UseMarketPulseReturn {
   const [indicators, setIndicators] = useState<MarketIndicator[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -36,14 +36,15 @@ export function useMarketPulse(refreshInterval: number = 30000): UseMarketPulseR
       console.error('Failed to fetch market indicators:', err)
       setError('数据获取失败，请稍后重试')
 
-      // 使用模拟数据作为回退
-      const mockIndicators: MarketIndicator[] = [
-        { label: '上证指数', value: '3,245.67', change: '+1.23%' },
-        { label: '深证成指', value: '10,523.89', change: '+0.89%' },
-        { label: '创业板指', value: '2,156.34', change: '+2.15%' },
-        { label: '北向资金', value: '+15.2亿', change: '+' },
-      ]
-      setIndicators(mockIndicators)
+      // Show error state instead of mock data
+      if (indicators.length === 0) {
+        setIndicators([
+          { label: '上证指数', value: '--', change: '--' },
+          { label: '深证成指', value: '--', change: '--' },
+          { label: '创业板指', value: '--', change: '--' },
+          { label: '北向资金', value: '--', change: '--' },
+        ])
+      }
     } finally {
       setIsLoading(false)
     }
@@ -59,7 +60,7 @@ export function useMarketPulse(refreshInterval: number = 30000): UseMarketPulseR
     let intervalId: NodeJS.Timeout | null = null
 
     if (marketStatus === 'open') {
-      // 交易时段：每30秒刷新一次
+      // 交易时段：每60秒刷新一次
       intervalId = setInterval(() => {
         fetchIndicators()
       }, refreshInterval)
