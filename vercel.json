@@ -19,7 +19,7 @@
   "crons": [
     {
       "path": "/api/intelligence-feed/generate",
-      "schedule": "0 1,3,5,7 * * 1-5"
+      "schedule": "0 7 * * *"
     }
   ],
   "env": {
