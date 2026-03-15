@@ -592,7 +592,7 @@ export function TradingCommandCenter() {
 
         {/* OSINT Link */}
         <Link
-          href="/live-feed"
+          href="/osint"
           className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium px-3 py-1.5 rounded-md transition-colors flex-shrink-0"
         >
           <Radar className="h-3.5 w-3.5 text-cyan-400" />
