@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ type AlertType = "stop-loss-alert" | "target-alert" | "volatility-alert";
 // ---------------------------------------------------------------------------
 
 export function TradingCommandCenter() {
+  const router = useRouter();
   const { getToken } = useAuth();
 
   // Data state
@@ -692,7 +694,8 @@ export function TradingCommandCenter() {
                 return (
                   <div
                     key={item.id}
-                    className={`bg-[#111827] border rounded-lg p-3 transition-all hover:bg-[#1a2332] ${
+                    onClick={() => router.push(`/dashboard/stock/${item.stockCode}`)}
+                    className={`bg-[#111827] border rounded-lg p-3 transition-all hover:bg-[#1a2332] cursor-pointer ${
                       hasAlert
                         ? alertRingClass
                         : "border-gray-800 hover:border-gray-700"
