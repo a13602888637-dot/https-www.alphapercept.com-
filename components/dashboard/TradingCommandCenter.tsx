@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { StockSearchInput } from "@/components/watchlist/StockSearchInput";
 import { QAChat } from "@/components/strategy-chat/qa-chat";
+import { AICandidatesPanel } from "@/components/dashboard/AICandidatesPanel";
 import { toast } from "sonner";
 import {
   Plus,
@@ -765,20 +766,9 @@ export function TradingCommandCenter() {
         {/* AI SIDEBAR (~25%)                                            */}
         {/* ----------------------------------------------------------- */}
         <aside className="hidden lg:flex flex-col w-80 xl:w-96 border-l border-gray-800 overflow-hidden">
-          {/* AI Candidates placeholder */}
-          <div className="flex-shrink-0 p-3 border-b border-gray-800">
-            <div className="bg-[#111827] rounded-lg p-4 border border-gray-800">
-              <div className="flex items-center gap-2 mb-2">
-                <Brain className="h-4 w-4 text-purple-400" />
-                <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">
-                  AI Candidates
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 leading-relaxed">
-                Phase 3: AI Scanner will populate daily candidates here with
-                confidence scores and entry signals.
-              </p>
-            </div>
+          {/* AI Candidates */}
+          <div className="flex-shrink-0 border-b border-gray-800 overflow-y-auto max-h-[45%]">
+            <AICandidatesPanel />
           </div>
 
           {/* QA Chat */}

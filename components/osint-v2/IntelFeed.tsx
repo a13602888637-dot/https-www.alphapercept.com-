@@ -221,16 +221,16 @@ export function IntelFeed({ entities, conflicts, errors }: IntelFeedProps) {
           allItems.map((item) => (
             <div
               key={item.id}
-              className={`border-l-2 rounded-r px-2.5 py-2 ${SEVERITY_COLORS[item.severity] || ""}`}
+              className={`border-l rounded-r px-2.5 py-2 transition-colors duration-200 ${SEVERITY_COLORS[item.severity] || ""}`}
             >
               <div className="flex items-center gap-1.5 mb-0.5">
                 <div className={`w-1.5 h-1.5 rounded-full ${SEVERITY_DOT[item.severity]}`} />
-                <span className="text-[9px] font-mono text-[#5a6580]">{item.icon}</span>
-                <span className="text-[9px] text-[#3a4560]">
+                <span className="text-[9px] font-mono text-[#5a6580] bg-[#0f1520] px-1 rounded">{item.icon}</span>
+                <span className="text-[9px] font-mono text-[#3a4560]">
                   {new Date(item.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>
-              <div className="text-[11px] text-[#c8cdd5] leading-snug">{item.headline}</div>
+              <div className="text-[11px] text-[#c8cdd5] leading-snug font-medium">{item.headline}</div>
               {item.body && (
                 <div className="text-[10px] text-[#5a6580] mt-0.5 leading-relaxed line-clamp-2">
                   {item.body}

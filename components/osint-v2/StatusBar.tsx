@@ -17,7 +17,7 @@ export function StatusBar({ health, errors, lastUpdate }: StatusBarProps) {
   const now = Date.now();
 
   return (
-    <div className="h-5 bg-[#0d1220] border-t border-[#1a2035] flex items-center px-3 gap-4 text-[9px] font-mono">
+    <div className="h-5 bg-[#060a12] border-t border-[#1a2035]/30 flex items-center px-3 gap-4 text-[9px] font-mono">
       {/* Adapter status dots */}
       {Object.entries(ADAPTER_LABELS).map(([key, label]) => {
         const isUp = health[key] ?? false;

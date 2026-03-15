@@ -41,28 +41,55 @@ export default function GeoMapInner({ aviation, maritime, conflicts, financials 
         />
 
         {/* Layer: Financial Centers */}
-        {financialMarkers.map((e) => (
-          <CircleMarker
-            key={e.id}
-            center={[e.coordinates!.lat, e.coordinates!.lng]}
-            radius={5}
-            pathOptions={{
-              color: (e.deltaPercent ?? 0) >= 0 ? LAYER_COLORS.financial_up : LAYER_COLORS.financial_down,
-              fillColor: (e.deltaPercent ?? 0) >= 0 ? LAYER_COLORS.financial_up : LAYER_COLORS.financial_down,
-              fillOpacity: 0.7,
-              weight: 1,
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -6]} className="dark-tooltip">
-              <span className="text-[10px] font-mono">
-                {e.label} {e.value?.toLocaleString()} {(e.deltaPercent ?? 0) >= 0 ? "+" : ""}{e.deltaPercent?.toFixed(2)}%
-              </span>
-            </Tooltip>
-          </CircleMarker>
-        ))}
+        {financialMarkers.map((e) => {
+          const finColor = (e.deltaPercent ?? 0) >= 0 ? LAYER_COLORS.financial_up : LAYER_COLORS.financial_down;
+          return [
+            <CircleMarker
+              key={`glow-${e.id}`}
+              center={[e.coordinates!.lat, e.coordinates!.lng]}
+              radius={5 * 3}
+              pathOptions={{
+                color: finColor,
+                fillColor: finColor,
+                fillOpacity: 0.12,
+                weight: 0,
+                stroke: false,
+              }}
+            />,
+            <CircleMarker
+              key={e.id}
+              center={[e.coordinates!.lat, e.coordinates!.lng]}
+              radius={5}
+              pathOptions={{
+                color: finColor,
+                fillColor: finColor,
+                fillOpacity: 0.7,
+                weight: 1,
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -6]} className="dark-tooltip">
+                <span className="text-[10px] font-mono">
+                  {e.label} {e.value?.toLocaleString()} {(e.deltaPercent ?? 0) >= 0 ? "+" : ""}{e.deltaPercent?.toFixed(2)}%
+                </span>
+              </Tooltip>
+            </CircleMarker>,
+          ];
+        })}
 
         {/* Layer: Aviation */}
-        {aviation.map((e) => (
+        {aviation.map((e) => [
+          <CircleMarker
+            key={`glow-${e.id}`}
+            center={[e.coordinates!.lat, e.coordinates!.lng]}
+            radius={2.5 * 3}
+            pathOptions={{
+              color: "#38bdf8",
+              fillColor: "#38bdf8",
+              fillOpacity: 0.12,
+              weight: 0,
+              stroke: false,
+            }}
+          />,
           <CircleMarker
             key={e.id}
             center={[e.coordinates!.lat, e.coordinates!.lng]}
@@ -81,11 +108,23 @@ export default function GeoMapInner({ aviation, maritime, conflicts, financials 
                 <div>Alt: {e.coordinates?.alt?.toFixed(0)}m | Spd: {(e as AviationEntity).metadata.velocity?.toFixed(0)}m/s</div>
               </div>
             </Popup>
-          </CircleMarker>
-        ))}
+          </CircleMarker>,
+        ])}
 
         {/* Layer: Maritime */}
-        {maritime.map((e) => (
+        {maritime.map((e) => [
+          <CircleMarker
+            key={`glow-${e.id}`}
+            center={[e.coordinates!.lat, e.coordinates!.lng]}
+            radius={3 * 3}
+            pathOptions={{
+              color: "#818cf8",
+              fillColor: "#818cf8",
+              fillOpacity: 0.12,
+              weight: 0,
+              stroke: false,
+            }}
+          />,
           <CircleMarker
             key={e.id}
             center={[e.coordinates!.lat, e.coordinates!.lng]}
@@ -105,8 +144,8 @@ export default function GeoMapInner({ aviation, maritime, conflicts, financials 
                 <div>Dest: {(e as MaritimeEntity).metadata.destination ?? "N/A"}</div>
               </div>
             </Popup>
-          </CircleMarker>
-        ))}
+          </CircleMarker>,
+        ])}
 
         {/* Layer: Geo-Conflicts */}
         {conflicts.map((e) => {
@@ -114,7 +153,19 @@ export default function GeoMapInner({ aviation, maritime, conflicts, financials 
           const fatalities = (e as GeoConflictEntity).metadata.fatalities;
           const radius = Math.max(3, Math.min(10, 3 + fatalities * 0.3));
 
-          return (
+          return [
+            <CircleMarker
+              key={`glow-${e.id}`}
+              center={[e.coordinates.lat, e.coordinates.lng]}
+              radius={radius * 3.5}
+              pathOptions={{
+                color: "#f97316",
+                fillColor: "#f97316",
+                fillOpacity: 0.12,
+                weight: 0,
+                stroke: false,
+              }}
+            />,
             <CircleMarker
               key={e.id}
               center={[e.coordinates.lat, e.coordinates.lng]}
@@ -134,8 +185,8 @@ export default function GeoMapInner({ aviation, maritime, conflicts, financials 
                   <div className="max-w-[200px] truncate">{(e as GeoConflictEntity).metadata.notes}</div>
                 </div>
               </Popup>
-            </CircleMarker>
-          );
+            </CircleMarker>,
+          ];
         })}
       </MapContainer>
 

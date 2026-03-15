@@ -47,7 +47,7 @@ export function FinancePanel({ financials, isLoading }: FinancePanelProps) {
 
         return (
           <div key={groupKey}>
-            <div className="text-[9px] tracking-[0.2em] text-[#3a4560] font-semibold mb-1 px-1">
+            <div className="text-[8px] tracking-[0.3em] uppercase text-[#3a4560] font-semibold mb-1 px-1">
               {GROUP_LABELS[groupKey]}
             </div>
             <div className="space-y-px">
@@ -58,7 +58,7 @@ export function FinancePanel({ financials, isLoading }: FinancePanelProps) {
                 return (
                   <div
                     key={e.id}
-                    className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-[#111827] transition-colors group"
+                    className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-[#0f1520] transition-colors duration-150 group"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-[11px] text-[#8892a8] truncate group-hover:text-white transition-colors">
