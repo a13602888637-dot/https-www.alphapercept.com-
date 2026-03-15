@@ -88,4 +88,24 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     @apply bg-muted-foreground/50;
   }
+
+  /* OSINT v2 ticker animation */
+  .animate-ticker {
+    animation: ticker-scroll 30s linear infinite;
+  }
+
+  .animate-ticker:hover {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Leaflet dark tooltips for OSINT map */
+.dark-tooltip .leaflet-tooltip-content {
+  color: #c8cdd5;
+  background: #0a0e17;
 }
