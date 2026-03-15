@@ -1,270 +1,451 @@
-# Alpha-Quant-Copilot 最高决策基准
+# Alpha-Quant-Copilot 开发指南
 
-## 核心心智架构：三流融合决策引擎
-
-### 1. 宏观对冲（找预期差）
-**核心理念**：捕捉宏观周期与市场预期的错配，寻找最大预期差
-
-**量化规则**：
-- **经济周期定位**：PMI、利率曲线、通胀数据交叉验证
-- **政策预期差**：市场预期 vs 实际政策力度的差异分析
-- **流动性拐点**：M2、社融、外资流向的领先指标监测
-- **风险平价调整**：根据宏观风险变化动态调整资产配置
-
-### 2. 价值防守（拒绝泡沫）
-**核心理念**：安全边际优先，识别并远离价值陷阱与市场泡沫
-
-**量化规则**：
-- **财务健康度筛选**：
-  - ROE > 12%，毛利率 > 25%，负债率 < 60%
-  - 自由现金流连续3年为正
-  - 股息率 > 1.5%（可选）
-- **估值安全边际**：
-  ```
-  合理估值区间 = 历史PE/PB百分位（20%-80%）
-  泡沫预警：PE > 历史90%分位且PB > 历史85%分位
-  价值机会：PE < 历史30%分位且PB < 历史25%分位
-  ```
-- **护城河验证**：市占率、成本优势、用户粘性、品牌溢价
-
-### 3. 中国一线游资（情绪感知与接力）
-**核心理念**：感知市场情绪周期，把握资金流向，参与情绪接力
-
-**量化规则**：
-- **情绪周期定位**：
-  - 冰点期：涨停 < 25，连板高度 ≤ 3，跌停 > 25
-  - 启动期：涨停30-60，出现4连板，跌停 < 15
-  - 发酵期：涨停60-100，出现6连板，板块效应强化
-  - 高潮期：涨停 > 100，出现8+连板，全面爆发
-  - 退潮期：涨停减少，高位股跳水，亏钱效应扩散
-- **资金流向监控**：
-  - 龙虎榜：机构/游资买卖力度、席位联动
-  - 大宗交易：折溢价率、接盘方性质
-  - 主力资金：大单净流入持续性
-- **题材热度评估**：
-  ```
-  题材得分 = 0.3×涨停数量 + 0.25×连板高度 + 0.2×资金净流入 + 0.15×媒体热度 + 0.1×机构覆盖
-  高热度：得分 > 70，持续跟踪
-  低热度：得分 < 30，放弃关注
-  ```
-
-## 模块A：事件驱动（预期差捕获器）
-
-### 突发新闻处理流程
-1. **事件分类**：
-   - 政策类（国务院/部委/地方）
-   - 行业类（技术突破/供需变化）
-   - 公司类（业绩/重组/股权变动）
-   - 宏观类（数据发布/央行操作）
-
-2. **产业链推演**：
-   ```
-   上游影响：原材料供应、技术壁垒
-   中游影响：生产制造、成本传导
-   下游影响：需求变化、替代效应
-   横向影响：竞争对手、替代品
-   ```
-
-3. **预期差计算**：
-   ```
-   市场预期 = 事件前5日平均涨跌幅 + 分析师预期调整
-   实际影响 = 事件强度 × 影响范围 × 持续时间
-   预期差 = 实际影响 - 市场预期
-
-   高预期差：|预期差| > 5%，重点参与
-   低预期差：|预期差| ≤ 2%，放弃操作
-   ```
-
-4. **排雷机制**：
-   - 已兑现标的：事件公布后涨幅 > 15%且成交量放大3倍以上
-   - 利好出尽：事件落地后股价冲高回落，留下长上影线
-   - 潜伏盘过多：事件前10日累计涨幅 > 20%，换手率 > 150%
-
-## 模块B：反人性破解器（行为金融防御系统）
-
-### 1. 诱多模型识别
-**模式特征**：
-- 利好公告/消息刺激
-- 次日高开 > 3%，开盘30分钟换手率 > 5%
-- 冲高回落，收盘形成长上影线或阴线
-- 当日成交量创近期新高（> 20日均量2倍）
-
-**风险等级**：
-- 高风险：符合全部特征，强制清仓
-- 中风险：符合3项特征，减仓50%
-- 低风险：符合2项特征，保持观望
-
-**应对策略**：
-- 识别后立即执行，不抱侥幸心理
-- 清仓后3日内不再参与该标的
-
-### 2. 洗盘模型识别
-**模式特征**：
-- 标的处于上升趋势（MA20 > MA60 > MA120）
-- 突发利空消息或大盘暴跌拖累
-- 当日缩量调整（成交量 < 20日均量70%）
-- 股价回调至关键支撑位（MA20/MA60）
-
-**机会等级**：
-- 高机会：符合全部特征，MA60附近分批低吸
-- 中机会：符合3项特征，小仓位试探
-- 低机会：符合2项特征，保持观望
-
-**应对策略**：
-- 首次买入：MA60附近，仓位10-20%
-- 加仓条件：继续缩量调整，仓位追加至30-40%
-- 止损设置：跌破MA60下方3%，立即止损
-
-### 3. 龙头衰竭识别
-**模式特征**：
-- 连板个股（≥ 5连板）
-- 尾盘频繁炸板（最后30分钟开板次数 ≥ 2）
-- 近期出现天量（成交量 > 前期高点1.5倍）
-- 分时图出现尖顶形态
-
-**衰竭信号**：
-- 强衰竭：符合全部特征，严格止盈
-- 中衰竭：符合3项特征，减仓50%
-- 弱衰竭：符合2项特征，保持警惕
-
-**应对策略**：
-- 止盈位置：次日开盘或冲高时
-- 止盈后跟踪：3日内不参与反弹
-- 二次确认：若调整后再次突破前高，可小仓位回补
-
-## 硬性交易纪律（不可违反）
-
-### MA60（60日移动平均线）破位止损规则
-**绝对纪律**：任何持仓必须严格遵守MA60风控
-
-**具体规则**：
-1. **多头持仓**：
-   - 初始止损：入场价下方-8%
-   - 动态止损：价格突破MA60向上后，止损上移至MA60下方-3%
-   - 持仓纪律：每日收盘价必须高于MA60，否则次日开盘立即止损
-   - 执行时效：触及止损后30分钟内完成平仓
-
-2. **MA60有效性验证**：
-   - 均线方向：60日MA必须保持向上
-   - 量价配合：突破时成交量 > 20日均量1.5倍
-   - 时间过滤：连续3日站稳才确认有效突破
-
-### MD60（60日动量方向）趋势跟踪规则
-**核心理念**：顺势而为，动量优先
-
-**具体规则**：
-1. **动量计算**：
-   ```
-   MD60 = (当前价格 - 60日前价格) / 60日前价格 × 100%
-   趋势分类：
-   - 强势上涨：MD60 > 15%，且最近20日持续为正
-   - 温和上涨：5% < MD60 ≤ 15%
-   - 震荡整理：-5% ≤ MD60 ≤ 5%
-   - 温和下跌：-15% ≤ MD60 < -5%
-   - 强势下跌：MD60 < -15%，且最近20日持续为负
-   ```
-
-2. **仓位管理**：
-   - 强势趋势（|MD60| > 15%）：仓位上限80%，回调至10日均线加仓
-   - 温和趋势（5% < |MD60| ≤ 15%）：仓位上限50%，回调至20日均线加仓
-   - 震荡整理（|MD60| ≤ 5%）：仓位上限30%，高抛低吸策略
-
-3. **趋势衰竭预警**：
-   - 价格创新高但MD60未创新高
-   - 上涨时成交量 < 20日均量
-   - 趋势运行超过60个交易日
-
-## 动态进化区
-
-### 每日策略迭代
-*此处为程序自动写入复盘结论预留占位，每日收盘后由分析引擎自动更新*
-
----
-**文档版本**：2.0
-**更新时间**：2026-02-23
-**更新机制**：每日收盘后自动迭代
-**纪律执行**：MA60/MD60规则为硬性约束，任何决策不得违反
-**系统定位**：本文件为Alpha-Quant-Copilot最高决策基准，所有交易行为必须以此为准
+AI-powered quantitative trading assistant with real-time market data, built with Next.js 15, React 19, Prisma ORM, and Supabase PostgreSQL.
 
 ---
 
-# 《Vibe Coding 协作协议》
+## Quick Start
 
-## 1. Git 安全基线协议
-
-### 1.1 跨文件重构前强制提交
-- **绝对要求**：在进行任何跨文件重构、架构调整或大规模代码修改前，必须执行 `git commit -m "chore: 重构前基线"`
-- **提交内容**：包含当前所有稳定状态的代码，确保可回滚
-- **验证步骤**：提交后立即执行 `git status` 确认工作区干净
-
-### 1.2 连续修复失败回滚机制
-- **触发条件**：连续3次修复尝试失败（编译错误、测试失败、功能异常）
-- **回滚操作**：立即执行 `git reset --hard HEAD~1` 回退到上一个稳定状态
-- **分析要求**：回滚后必须分析失败原因，创建修复计划文档
-
-### 1.3 分支保护规则
-- **主分支保护**：`main` 分支仅接受通过测试的合并请求
-- **功能分支**：每个新功能必须在独立分支开发
-- **合并前检查**：必须通过 `git diff main...HEAD` 审查所有变更
-
-## 2. 开发流程纪律
-
-### 2.1 代码修改三阶段验证
-1. **本地验证**：修改后立即运行 `npm run dev` 或等效启动命令
-2. **功能测试**：验证修改不影响现有核心功能
-3. **提交前检查**：执行 `git diff --cached` 审查即将提交的变更
-
-### 2.2 错误处理优先级
-1. **编译错误**：最高优先级，必须立即修复
-2. **运行时错误**：中等优先级，24小时内修复
-3. **功能异常**：根据影响范围确定优先级
-4. **性能问题**：低优先级，安排到后续迭代
-
-### 2.3 文档同步要求
-- **API变更**：修改API必须同步更新API文档
-- **配置变更**：修改环境配置必须更新部署文档
-- **架构变更**：重大架构调整必须更新架构图
-
-## 3. 紧急情况处理协议
-
-### 3.1 生产环境故障
-- **立即回滚**：执行 `git reset --hard <稳定版本哈希>`
-- **问题分析**：创建故障分析报告
-- **修复验证**：在测试环境充分验证后再部署
-
-### 3.2 数据丢失风险
-- **立即停止**：停止所有数据修改操作
-- **备份恢复**：从最近备份恢复数据
-- **根因分析**：分析数据丢失原因并修复
-
-### 3.3 安全漏洞
-- **立即隔离**：隔离受影响组件
-- **漏洞修复**：最高优先级修复
-- **安全审计**：完成全面安全审计
-
-## 4. 协作沟通规范
-
-### 4.1 提交消息格式
-```
-<类型>: <简短描述>
-
-<详细描述（可选）>
-
-- 修复了什么问题
-- 实现了什么功能
-- 需要注意什么
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+### 1. Clone & Install
+```bash
+git clone https://github.com/your-org/alpha-quant-copilot.git
+cd stock-analysis
+npm install
 ```
 
-### 4.2 变更通知要求
-- **重大变更**：必须提前通知所有协作者
-- **API变更**：必须提供迁移指南
-- **配置变更**：必须更新环境配置说明
+### 2. Environment Setup
+Copy `.env.example` to `.env.local` and fill in credentials:
+
+```bash
+cp .env.example .env.local
+```
+
+**Required environment variables:**
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Clerk authentication
+- `CLERK_SECRET_KEY` - Clerk API secret
+- `CLERK_WEBHOOK_SECRET` - Webhook signature validation
+- `DATABASE_URL` - Supabase pooled connection
+- `DIRECT_URL` - Supabase direct connection (for migrations)
+- `DEEPSEEK_API_KEY` - AI analysis engine (optional for dev)
+- `NEXT_PUBLIC_API_BASE_URL` - Backend API base URL
+
+### 3. Database Setup
+```bash
+# Apply Prisma migrations
+npx prisma migrate dev
+
+# Generate Prisma client
+npx prisma generate
+
+# View database (optional)
+npx prisma studio
+```
+
+### 4. Start Development
+```bash
+npm run dev
+```
+Server starts at `http://localhost:3000`
 
 ---
 
-**协议版本**：1.0
-**生效时间**：2026-02-23
-**执行纪律**：本协议为硬性约束，所有开发活动必须遵守
-**更新机制**：每季度审查更新一次
+## Project Structure
+
+```
+stock-analysis/
+├── app/                          # Next.js App Router
+│   ├── (auth)/                   # Authentication pages (sign-in, sign-up)
+│   ├── api/                      # 20+ API routes
+│   │   ├── market-data/          # Stock price & indicator data
+│   │   ├── intelligence-feed/    # AI-generated insights
+│   │   ├── strategy-recommendation/  # Trading signals
+│   │   ├── portfolio/            # Portfolio management
+│   │   ├── unified-search/       # Global A-stock/US stock search
+│   │   └── ... (20+ total routes)
+│   ├── dashboard/                # Main dashboard
+│   │   └── macro/                # Macro market overview
+│   ├── portfolio/                # Portfolio management page
+│   ├── stocks/[code]/            # Individual stock details
+│   ├── live-feed/                # Intelligence feed
+│   ├── strategy-recommendation/  # Strategy recommendations
+│   ├── layout.tsx                # Root layout (Clerk providers)
+│   └── page.tsx                  # Home (redirects to /dashboard)
+│
+├── components/                   # React components
+│   ├── layout/                   # Navigation, sidebar, headers
+│   ├── charts/                   # Charts (technical indicators, K-lines)
+│   ├── intelligence-feed/        # Feed items, filtering
+│   ├── portfolio/                # Portfolio UI
+│   ├── macro/                    # Macro indicators
+│   ├── global-search/            # Unified search results
+│   ├── strategy-chat/            # Strategy recommendation UI
+│   └── ui/                       # shadcn/ui primitives
+│
+├── lib/                          # Utility functions
+│   ├── api/                      # API client helpers
+│   ├── data/                     # Data fetching, caching
+│   ├── search-proxy/             # Search service abstraction
+│   └── prisma.ts                 # Prisma client singleton
+│
+├── prisma/                       # Database schema & migrations
+│   ├── schema.prisma             # Data models
+│   └── migrations/               # Migration history
+│
+├── public/                       # Static assets
+├── skills/                       # Custom utilities & agents
+├── scripts/                      # Build, test, deployment scripts
+├── tsconfig.json                 # TypeScript config
+└── tailwind.config.ts            # Tailwind CSS config
+```
+
+---
+
+## Key Technologies
+
+| Layer | Technology | Version | Purpose |
+|-------|-----------|---------|---------|
+| **Frontend** | Next.js | 15.2.3 | App Router, SSR, API routes |
+| | React | 19.0.0 | UI components |
+| | TypeScript | 5.0 | Type safety |
+| | Tailwind CSS | 3.4 | Styling |
+| | Radix UI | Latest | Accessible components |
+| **Backend** | Next.js API Routes | 15.2.3 | HTTP endpoints |
+| | Node.js | 20.19.0+ | Runtime |
+| **Database** | Supabase PostgreSQL | 15+ | Data storage |
+| | Prisma | 7.4.1 | ORM & migrations |
+| **Auth** | Clerk | 6.38.1 | User authentication |
+| **AI** | DeepSeek API | Latest | Market analysis |
+| **Deployment** | Vercel | Latest | CI/CD & hosting |
+
+---
+
+## Common Commands
+
+### Development
+```bash
+npm run dev              # Start dev server (port 3000)
+npm run build            # Build for production
+npm run next:lint        # ESLint check
+```
+
+### Database
+```bash
+npx prisma migrate dev   # Create & apply new migration
+npx prisma studio       # Open database GUI
+npx prisma generate     # Regenerate Prisma client
+```
+
+### Verification & Testing
+```bash
+npm run verify                # Quick milestone verification
+npm run verify:uat-quick      # Quick UAT test
+npm run verify:uat-full       # Full UAT test
+npm run test:smart-selector   # Test data source selection
+```
+
+### AI & Data
+```bash
+npm run dev:deepseek         # Run DeepSeek agent
+npm run search:test          # Test search proxy
+npm run search:status        # Check search service status
+```
+
+### Deployment
+```bash
+vercel link              # Link to Vercel project
+vercel deploy            # Deploy to staging
+npm run build            # Pre-flight check
+```
+
+---
+
+## API Routes Overview
+
+### Market Data
+- `GET /api/market-data` - Current stock data
+- `GET /api/stock-prices` - Price history
+- `GET /api/stock-price-history` - Detailed OHLC data
+- `GET /api/stocks/search` - Stock search by code/name
+- `GET /api/stocks/hot` - Trending stocks
+
+### Intelligence Feed
+- `GET /api/intelligence-feed` - Market insights
+- `POST /api/intelligence-feed/generate` - Generate AI analysis
+
+### Strategy & Recommendations
+- `GET /api/strategy-recommendation` - Trading signals
+- `POST /api/analyze-watchlist` - Analyze portfolio
+
+### Portfolio
+- `GET /api/portfolio` - User portfolio
+- `POST /api/portfolio` - Create/update portfolio
+- `GET /api/portfolio/:id` - Portfolio details
+
+### Global Search
+- `GET /api/unified-search` - A-stock + US stock search
+
+### AI & Chat
+- `POST /api/ai/stream` - Streaming AI responses
+
+### Utilities
+- `GET /api/users/sync` - Sync user data with Clerk
+- `GET /api/debug-auth` - Authentication debugging
+
+---
+
+## Prisma Data Models
+
+Core entities in `prisma/schema.prisma`:
+
+| Model | Purpose | Key Fields |
+|-------|---------|-----------|
+| **User** | User profile | clerkUserId, email, settings |
+| **Watchlist** | User's stock picks | stockCode, buyPrice, stopLoss, targetPrice |
+| **IntelligenceFeed** | AI insights | stockCode, actionSignal, trapProbability |
+| **Portfolio** | Investment portfolio | userId, totalValue, cash |
+| **BacktestResult** | Strategy backtests | strategyId, returns, sharpeRatio |
+| **StockPriceHistory** | Price data cache | stockCode, price, timestamp |
+
+**Important**: All user-specific data requires `userId` filter in API routes for privacy.
+
+---
+
+## Code Patterns & Conventions
+
+### Client vs Server Components
+- Use `"use client"` for interactive components (state, events)
+- Keep server components for data fetching, reducing JS bundle
+- Example: `components/portfolio/AddPositionDialog.tsx` uses `"use client"` for form interactivity
+
+### API Route Structure
+```typescript
+// app/api/example/route.ts
+import { auth } from "@clerk/nextjs/server";
+
+export async function GET(request: Request) {
+  try {
+    const { userId } = await auth();
+    if (!userId) return new Response("Unauthorized", { status: 401 });
+
+    // Fetch data
+    const data = await prisma.watchlist.findMany({ where: { userId } });
+
+    return Response.json({ data });
+  } catch (error) {
+    console.error("API error:", error);
+    return new Response("Internal Server Error", { status: 500 });
+  }
+}
+```
+
+### Database Queries
+```typescript
+// Always filter by userId for user-specific data
+const watchlist = await prisma.watchlist.findMany({
+  where: { userId: currentUserId },
+  orderBy: { createdAt: 'desc' },
+});
+
+// Use Prisma migrations for schema changes
+// DO NOT modify schema.prisma without running: npx prisma migrate dev
+```
+
+### Error Handling
+- Catch errors at API boundary
+- Log to console for debugging
+- Return appropriate HTTP status codes
+- Never expose sensitive error details to frontend
+
+---
+
+## Environment & Configuration
+
+### Local Development (.env.local)
+```bash
+# Clerk (get from https://dashboard.clerk.com)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Supabase (get from https://supabase.com)
+DATABASE_URL=postgresql://user:pass@db.supabase.co:5432/postgres
+DIRECT_URL=postgresql://user:pass@db.supabase.co:5432/postgres
+
+# DeepSeek (optional, get from https://platform.deepseek.com)
+DEEPSEEK_API_KEY=sk_...
+```
+
+### Production (Vercel)
+Use `vercel env` to manage secrets:
+```bash
+vercel env add CLERK_SECRET_KEY
+vercel env add DATABASE_URL
+vercel env add DEEPSEEK_API_KEY
+```
+
+Never commit `.env.local` - it's in `.gitignore`.
+
+### MCP & Claude Code Configuration
+
+**Team-shared (committed to git):**
+- `.mcp.json` - MCP server declarations (Supabase, etc.) - enables Claude to query databases
+
+**Personal/local only (in .gitignore):**
+- `.claude/settings.local.json` - Hook rules, personal permissions, tool allowlists
+- Never include Supabase tokens, API keys, or credentials in settings.local.json
+- Hook blocks `.env*` edits: use `vercel env` instead
+
+---
+
+## Git Workflow & Discipline
+
+### Before Major Changes
+```bash
+# Create baseline commit
+git commit -m "chore: rebase baseline"
+git status  # Ensure clean working directory
+```
+
+### Branch Strategy
+- Feature branches for new functionality
+- Review all changes with `git diff main...HEAD`
+- Merge only through tested pull requests
+
+### Commit Message Format
+```
+<type>: <short description>
+
+<details (optional)>
+
+- What changed
+- Why it changed
+- Any breaking changes
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+### Configuration Files Safety
+- **Never commit**: `.env*`, Supabase tokens, Clerk secrets
+- **Always commit**: `.mcp.json` (team needs MCP servers)
+- **Never commit**: `.claude/settings.local.json` (personal hooks/rules)
+- **If credential exposed**: Immediately rotate keys in Supabase/Clerk dashboard
+
+### Rollback on Failure
+If 3+ consecutive fix attempts fail:
+```bash
+git reset --hard HEAD~1
+# Analyze failure, create improvement plan
+```
+
+---
+
+## Development Gotchas
+
+### ⚠️ Prisma Migrations
+- **NEVER** edit `.env` files directly - use `vercel env`
+- **Always** run `npx prisma migrate dev` after schema changes
+- Direct URL required for migrations, pooled URL for queries
+
+### ⚠️ Authentication
+- All API routes must check `auth()` and verify `userId`
+- Clerk webhook must be configured for user sync
+- Test auth in staging before production deploy
+
+### ⚠️ Real-time Data
+- API calls are cached - use `revalidatePath()` for refresh
+- SSE streaming for live market data
+- WebSocket support for real-time collaboration (if added)
+
+### ⚠️ Component Rendering
+- Check for `"use client"` in interactive components
+- Server components must not use hooks
+- Hydration mismatch errors = missing `"use client"`
+
+### ⚠️ Sensitive Files
+- `.env*` files block edits (security hook)
+- Use `vercel env` for production secrets
+- Never commit Clerk/Supabase credentials
+
+### ⚠️ Claude Code Configuration
+- `.claude/` directory is gitignored (personal tool config)
+- `.mcp.json` is committed (team shares MCP server list)
+- Hook for `.env*` interception prevents accidental credential edits
+- Settings.local.json is for personal permissions/hooks, never share it
+- If credentials are exposed: rotate in Supabase/Clerk immediately, then update local config
+
+---
+
+## Deployment
+
+### To Vercel
+```bash
+# Link project (first time)
+vercel link
+
+# Deploy
+npm run build      # Pre-check
+vercel deploy      # Or: git push (auto-deploys)
+
+# Environment variables
+vercel env add KEY_NAME production
+vercel env list
+```
+
+### Pre-deployment Checklist
+- [ ] All tests pass (`npm run verify:uat-full`)
+- [ ] `.env.local` has all required keys (never commit)
+- [ ] `npm run build` succeeds
+- [ ] No console errors in production build
+- [ ] Database migrations applied
+- [ ] Clerk production keys configured
+
+---
+
+## Useful Resources
+
+- **Clerk**: https://dashboard.clerk.com
+- **Supabase**: https://app.supabase.com
+- **Prisma**: https://www.prisma.io/docs
+- **Next.js**: https://nextjs.org/docs
+- **DeepSeek**: https://platform.deepseek.com
+
+---
+
+## Trading Strategy
+
+For trading logic & decision rules, see `TRADING_STRATEGY.md`.
+
+---
+
+## Vibe Coding Collaboration Protocol
+
+See protocol details below for git discipline and development workflow.
+
+### 1. Git Safety
+- Commit baseline before major refactors
+- Roll back on 3+ consecutive failures
+- Always review with `git diff` before pushing
+
+### 2. Development Process
+1. Modify code locally
+2. Test with `npm run dev`
+3. Review changes with `git diff --cached`
+4. Commit with proper message format
+5. Verify build with `npm run build`
+
+### 3. Error Priority
+1. **Compilation errors** - immediate fix
+2. **Runtime errors** - fix within 24h
+3. **Functionality bugs** - per scope
+4. **Performance** - next iteration
+
+### 4. Documentation Sync
+- API changes → update API docs
+- Config changes → update this file
+- Architecture changes → update README
+
+---
+
+**Project Version**: 0.1.0
+**Last Updated**: 2026-03-15
+**Node.js Required**: 20.19.0+
+**Maintained By**: Alpha-Quant-Copilot Team
