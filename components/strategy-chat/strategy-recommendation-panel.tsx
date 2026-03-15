@@ -28,106 +28,62 @@ import {
 import { StrategyRecommendationCard, StrategyRecommendation } from "./strategy-recommendation"
 import { cn } from "@/lib/utils"
 
-// 生成模拟策略数据
-const generateMockStrategies = (count: number): StrategyRecommendation[] => {
-  const investmentStyles: StrategyRecommendation["investmentStyle"][] = [
-    "value", "growth", "momentum", "macro", "quant", "technical"
-  ]
-  const riskLevels: StrategyRecommendation["riskLevel"][] = ["low", "medium", "high"]
-  const timeHorizons: StrategyRecommendation["timeHorizon"][] = ["short", "medium", "long"]
-  const aiModels: StrategyRecommendation["aiModel"][] = ["deepseek", "claude", "gpt", "gemini"]
-
-  const titles = [
-    "价值回归策略 - 低估值蓝筹股",
-    "成长加速策略 - 科技龙头股",
-    "动量突破策略 - 强势股追涨",
-    "宏观对冲策略 - 经济周期轮动",
-    "量化套利策略 - 统计套利机会",
-    "技术分析策略 - 趋势跟踪交易",
-    "行业轮动策略 - 政策驱动板块",
-    "事件驱动策略 - 财报季机会",
-  ]
-
-  const tags = [
-    "低估值", "高成长", "政策利好", "技术突破", "资金流入",
-    "业绩超预期", "行业龙头", "国产替代", "消费升级", "数字化转型"
-  ]
-
-  return Array.from({ length: count }, (_, i) => {
-    const style = investmentStyles[i % investmentStyles.length]
-    const risk = riskLevels[Math.floor(Math.random() * riskLevels.length)]
-    const timeHorizon = timeHorizons[Math.floor(Math.random() * timeHorizons.length)]
-    const aiModel = aiModels[Math.floor(Math.random() * aiModels.length)]
-
-    return {
-      id: `strategy-${Date.now()}-${i}`,
-      title: titles[i % titles.length],
-      description: getStrategyDescription(style, risk, timeHorizon),
-      investmentStyle: style,
-      riskLevel: risk,
-      expectedReturn: 5 + Math.random() * 20, // 5-25%
-      confidence: 60 + Math.random() * 35, // 60-95%
-      timeHorizon,
-      aiModel,
-      reasoning: [
-        "宏观经济指标显示复苏迹象",
-        "行业政策面持续利好",
-        "技术面出现突破信号",
-        "资金流向显示机构增持",
-        "估值处于历史低位区间",
-      ],
-      keyMetrics: [
-        { label: "市盈率", value: "15.2", change: -2.1 },
-        { label: "市净率", value: "1.8", change: 0.5 },
-        { label: "股息率", value: "2.5%", change: 0.3 },
-        { label: "ROE", value: "18.5%", change: 1.2 },
-        { label: "营收增长", value: "25.3%", change: 3.4 },
-        { label: "净利润增长", value: "32.1%", change: 4.2 },
-      ],
-      recommendedStocks: [
-        {
-          symbol: "000001.SZ",
-          name: "平安银行",
-          weight: 25,
-          rationale: "估值修复，业绩稳健",
-        },
-        {
-          symbol: "300750.SZ",
-          name: "宁德时代",
-          weight: 20,
-          rationale: "新能源龙头，技术领先",
-        },
-        {
-          symbol: "600519.SH",
-          name: "贵州茅台",
-          weight: 15,
-          rationale: "消费升级，品牌护城河",
-        },
-      ],
-      timestamp: new Date(Date.now() - Math.random() * 86400000), // 过去24小时内
-      tags: tags.slice(i % 5, (i % 5) + 3),
-    }
-  })
+// Map API risk levels to component risk levels
+const mapRiskLevel = (level: string): StrategyRecommendation["riskLevel"] => {
+  if (level === "低") return "low"
+  if (level === "高") return "high"
+  return "medium"
 }
 
-const getStrategyDescription = (
-  style: StrategyRecommendation["investmentStyle"],
-  risk: StrategyRecommendation["riskLevel"],
-  horizon: StrategyRecommendation["timeHorizon"]
-): string => {
-  const styleText = style === "value" ? "价值投资" :
-                   style === "growth" ? "成长投资" :
-                   style === "momentum" ? "动量交易" :
-                   style === "macro" ? "宏观对冲" :
-                   style === "quant" ? "量化策略" : "技术分析"
+// Map API strategy names to investment styles
+const mapInvestmentStyle = (name: string): StrategyRecommendation["investmentStyle"] => {
+  if (name.includes("价值") || name.includes("防守")) return "value"
+  if (name.includes("成长")) return "growth"
+  if (name.includes("情绪") || name.includes("动量")) return "momentum"
+  if (name.includes("宏观") || name.includes("对冲")) return "macro"
+  if (name.includes("量化")) return "quant"
+  return "technical"
+}
 
-  const riskText = risk === "low" ? "低风险" :
-                  risk === "medium" ? "中风险" : "高风险"
+// Map time horizon text to enum
+const mapTimeHorizon = (text: string): StrategyRecommendation["timeHorizon"] => {
+  if (text.includes("1-3") || text.includes("短")) return "short"
+  if (text.includes("12") || text.includes("24") || text.includes("长")) return "long"
+  return "medium"
+}
 
-  const horizonText = horizon === "short" ? "短期" :
-                     horizon === "medium" ? "中期" : "长期"
+// Convert API strategies to StrategyRecommendation format
+const convertApiStrategy = (apiStrategy: any, index: number): StrategyRecommendation => {
+  const style = mapInvestmentStyle(apiStrategy.name)
+  const risk = mapRiskLevel(apiStrategy.riskLevel)
+  const timeHorizon = mapTimeHorizon(apiStrategy.timeHorizon || "")
+  const tags: string[] = apiStrategy.keyFactors?.slice(0, 3) || []
 
-  return `${styleText}策略，${riskText}等级，适合${horizonText}投资者。基于多因子模型和AI分析生成。`
+  return {
+    id: apiStrategy.id || `strategy-${index}`,
+    title: apiStrategy.name,
+    description: apiStrategy.description,
+    investmentStyle: style,
+    riskLevel: risk,
+    expectedReturn: parseFloat(apiStrategy.expectedReturn?.replace(/[^0-9.-]/g, '') || '15'),
+    confidence: apiStrategy.confidence || 80,
+    timeHorizon,
+    aiModel: "deepseek",
+    reasoning: apiStrategy.keyFactors || [],
+    keyMetrics: [
+      { label: "置信度", value: `${apiStrategy.confidence}%` },
+      { label: "预期收益", value: apiStrategy.expectedReturn },
+      { label: "投资期限", value: apiStrategy.timeHorizon },
+    ],
+    recommendedStocks: (apiStrategy.recommendedStocks || []).map((code: string, i: number) => ({
+      symbol: code,
+      name: code,
+      weight: Math.round(100 / Math.max((apiStrategy.recommendedStocks || []).length, 1)),
+      rationale: "AI推荐",
+    })),
+    timestamp: new Date(apiStrategy.lastUpdated || Date.now()),
+    tags,
+  }
 }
 
 interface StrategyRecommendationPanelProps {
@@ -144,12 +100,28 @@ export function StrategyRecommendationPanel({ className }: StrategyRecommendatio
   const [isLoading, setIsLoading] = useState(false)
   const [_selectedStrategy, _setSelectedStrategy] = useState<StrategyRecommendation | null>(null)
 
+  // 从API加载策略数据
+  const loadStrategies = React.useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/strategy-recommendation')
+      const data = await response.json()
+      if (data.success && data.strategies) {
+        const converted = data.strategies.map(convertApiStrategy)
+        setStrategies(converted)
+        setFilteredStrategies(converted)
+      }
+    } catch (error) {
+      console.error('加载策略失败:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
   // 初始化数据
   useEffect(() => {
-    const mockStrategies = generateMockStrategies(8)
-    setStrategies(mockStrategies)
-    setFilteredStrategies(mockStrategies)
-  }, [])
+    loadStrategies()
+  }, [loadStrategies])
 
   // 过滤策略
   useEffect(() => {
@@ -192,16 +164,7 @@ export function StrategyRecommendationPanel({ className }: StrategyRecommendatio
   }, [strategies, searchQuery, selectedStyle, selectedRisk, selectedModel])
 
   const handleRefresh = () => {
-    setIsLoading(true)
-    // 模拟API调用延迟
-    setTimeout(() => {
-      const newStrategies = generateMockStrategies(2)
-      setStrategies((prev) => [
-        ...newStrategies,
-        ...prev.slice(0, 6), // 保持最多8条记录
-      ])
-      setIsLoading(false)
-    }, 1000)
+    loadStrategies()
   }
 
   const handleSelectStrategy = (strategy: StrategyRecommendation) => {

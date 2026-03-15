@@ -10,6 +10,7 @@ import { StockSearch } from "@/components/portfolio/stock-search"
 import { SearchResults, StockResult } from "@/components/portfolio/search-results"
 import { SignInButton, useAuth } from "@clerk/nextjs"
 import { useToast } from "@/hooks/use-toast"
+import { AddPositionDialog } from "@/components/portfolio/AddPositionDialog"
 import {
   Wallet,
   TrendingUp,
@@ -27,7 +28,8 @@ import {
   Loader2,
   AlertCircle,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Trash2
 } from "lucide-react"
 
 // 自选股接口定义
@@ -43,12 +45,12 @@ interface WatchlistItem {
   updatedAt: Date
 }
 
-// 模拟投资组合数据
+// 投资组合数据
 interface PortfolioItem {
   id: string
   stockCode: string
   stockName: string
-  industry: string
+  industry: string | null
   quantity: number
   avgCost: number
   currentPrice: number
@@ -56,9 +58,18 @@ interface PortfolioItem {
   profitLoss: number
   profitLossPercent: number
   weight: number
-  targetWeight: number
-  status: "持有" | "加仓" | "减仓" | "观望"
-  lastUpdated: string
+  change: number
+  changePercent: number
+  status: string
+  notes: string | null
+}
+
+interface PortfolioSummary {
+  totalMarketValue: number
+  totalCost: number
+  totalProfitLoss: number
+  totalProfitLossPercent: number
+  positionCount: number
 }
 
 // AI分析结果接口
@@ -106,25 +117,52 @@ export default function PortfolioPage() {
   const [aiError, setAiError] = useState<string | null>(null)
   const [showAnalysis, setShowAnalysis] = useState(false)
 
-  // 模拟投资组合
-  const [portfolio] = useState<PortfolioItem[]>([
-    {
-      id: "1",
-      stockCode: "600519",
-      stockName: "贵州茅台",
-      industry: "白酒",
-      quantity: 100,
-      avgCost: 1600,
-      currentPrice: 1750,
-      marketValue: 175000,
-      profitLoss: 15000,
-      profitLossPercent: 9.38,
-      weight: 35,
-      targetWeight: 30,
-      status: "持有",
-      lastUpdated: "2026-02-23",
-    },
-  ])
+  // 真实投资组合
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([])
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary>({
+    totalMarketValue: 0, totalCost: 0, totalProfitLoss: 0, totalProfitLossPercent: 0, positionCount: 0,
+  })
+  const [portfolioLoading, setPortfolioLoading] = useState(false)
+
+  // 加载投资组合
+  const loadPortfolio = useCallback(async () => {
+    setPortfolioLoading(true)
+    try {
+      const response = await fetch('/api/portfolio')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setPortfolio(data.portfolio)
+          setPortfolioSummary(data.summary)
+        }
+      }
+    } catch (error) {
+      console.error('加载投资组合失败:', error)
+    } finally {
+      setPortfolioLoading(false)
+    }
+  }, [])
+
+  // 删除持仓
+  const handleDeletePosition = async (id: string, stockName: string) => {
+    if (!window.confirm(`确定要删除 ${stockName} 的持仓吗？`)) return
+    try {
+      const response = await fetch(`/api/portfolio?id=${id}`, { method: 'DELETE' })
+      if (response.ok) {
+        toast({ title: "删除成功", description: `已删除 ${stockName}` })
+        loadPortfolio()
+      }
+    } catch {
+      toast({ title: "删除失败", variant: "destructive" })
+    }
+  }
+
+  // 初始加载投资组合
+  useEffect(() => {
+    if (!showWatchlist && isSignedIn) {
+      loadPortfolio()
+    }
+  }, [showWatchlist, isSignedIn, loadPortfolio])
 
   // 加载自选股数据
   const loadWatchlist = useCallback(async () => {
@@ -947,7 +985,7 @@ export default function PortfolioPage() {
                     <span className="text-sm text-muted-foreground">总市值</span>
                   </div>
                   <div className="text-3xl font-bold">
-                    {showValues ? `¥${portfolio.reduce((sum, item) => sum + item.marketValue, 0).toLocaleString()}` : "******"}
+                    {showValues ? `¥${portfolioSummary.totalMarketValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "******"}
                   </div>
                 </div>
               </CardContent>
@@ -959,9 +997,14 @@ export default function PortfolioPage() {
                     <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
                     <span className="text-sm text-muted-foreground">总盈亏</span>
                   </div>
-                  <div className="text-3xl font-bold text-green-500">
-                    {showValues ? `¥${portfolio.reduce((sum, item) => sum + item.profitLoss, 0).toLocaleString()}` : "******"}
+                  <div className={`text-3xl font-bold ${portfolioSummary.totalProfitLoss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {showValues ? `${portfolioSummary.totalProfitLoss >= 0 ? '+' : ''}¥${portfolioSummary.totalProfitLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "******"}
                   </div>
+                  {showValues && (
+                    <div className={`text-sm mt-1 ${portfolioSummary.totalProfitLossPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {portfolioSummary.totalProfitLossPercent >= 0 ? '+' : ''}{portfolioSummary.totalProfitLossPercent.toFixed(2)}%
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -972,7 +1015,7 @@ export default function PortfolioPage() {
                     <BarChart3 className="h-5 w-5 text-purple-500 mr-2" />
                     <span className="text-sm text-muted-foreground">持仓数量</span>
                   </div>
-                  <div className="text-3xl font-bold">{portfolio.length}</div>
+                  <div className="text-3xl font-bold">{portfolioSummary.positionCount}</div>
                   <div className="text-sm text-muted-foreground mt-1">只股票</div>
                 </div>
               </CardContent>
@@ -982,10 +1025,11 @@ export default function PortfolioPage() {
                 <div className="text-center">
                   <div className="flex items-center justify-center mb-2">
                     <Calendar className="h-5 w-5 text-yellow-500 mr-2" />
-                    <span className="text-sm text-muted-foreground">最后更新</span>
+                    <span className="text-sm text-muted-foreground">总成本</span>
                   </div>
-                  <div className="text-3xl font-bold">今日</div>
-                  <div className="text-sm text-muted-foreground mt-1">15:30</div>
+                  <div className="text-3xl font-bold">
+                    {showValues ? `¥${portfolioSummary.totalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "******"}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1009,10 +1053,7 @@ export default function PortfolioPage() {
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    添加持仓
-                  </Button>
+                  <AddPositionDialog onSuccess={loadPortfolio} />
                 </div>
               </div>
             </CardHeader>
@@ -1025,71 +1066,103 @@ export default function PortfolioPage() {
                 </TabsList>
 
                 <TabsContent value="overview">
-                  <div className="space-y-4">
-                    {portfolio.map((item) => (
-                      <Card key={item.id} className="hover:shadow-md transition-shadow">
-                        <CardContent className="pt-6">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h3 className="font-semibold">{item.stockName}</h3>
-                                    <div className="text-sm text-muted-foreground">
-                                      {item.stockCode} · {item.industry}
+                  {portfolioLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                    </div>
+                  ) : portfolio.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Wallet className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-muted-foreground mb-4">暂无持仓</p>
+                      <p className="text-sm text-gray-400">点击右上角"添加持仓"按钮开始管理您的投资组合</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {portfolio
+                        .filter(item => {
+                          if (activeTab === "gainers") return item.profitLoss > 0
+                          if (activeTab === "losers") return item.profitLoss < 0
+                          return true
+                        })
+                        .filter(item => {
+                          if (!searchTerm) return true
+                          return item.stockName.includes(searchTerm) || item.stockCode.includes(searchTerm)
+                        })
+                        .map((item) => (
+                        <Card key={item.id} className="hover:shadow-md transition-shadow">
+                          <CardContent className="pt-6">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-3">
+                                    <div>
+                                      <h3 className="font-semibold">{item.stockName}</h3>
+                                      <div className="text-sm text-muted-foreground">
+                                        {item.stockCode}{item.industry ? ` · ${item.industry}` : ''}
+                                      </div>
                                     </div>
+                                    <Badge className={
+                                      item.status === "HOLD" ? "bg-blue-100 text-blue-800" :
+                                      item.status === "ADD" ? "bg-green-100 text-green-800" :
+                                      item.status === "REDUCE" ? "bg-yellow-100 text-yellow-800" :
+                                      "bg-gray-100 text-gray-800"
+                                    }>
+                                      {item.status === "HOLD" ? "持有" : item.status === "ADD" ? "加仓" : item.status === "REDUCE" ? "减仓" : item.status}
+                                    </Badge>
                                   </div>
-                                  <Badge className={
-                                    item.status === "持有" ? "bg-blue-100 text-blue-800" :
-                                    item.status === "加仓" ? "bg-green-100 text-green-800" :
-                                    item.status === "减仓" ? "bg-yellow-100 text-yellow-800" :
-                                    "bg-gray-100 text-gray-800"
-                                  }>
-                                    {item.status}
-                                  </Badge>
+                                  <div className="flex items-center gap-3">
+                                    <div className="text-right">
+                                      <div className={`text-lg font-bold ${item.profitLoss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                        {showValues ? `¥${item.marketValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "******"}
+                                      </div>
+                                      <div className={`text-sm ${item.profitLossPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                        {item.profitLossPercent >= 0 ? '+' : ''}{item.profitLossPercent.toFixed(2)}%
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-red-500 hover:text-red-700"
+                                      onClick={() => handleDeletePosition(item.id, item.stockName)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div className="text-right">
-                                  <div className="text-lg font-bold text-green-500">
-                                    {showValues ? `¥${item.marketValue.toLocaleString()}` : "******"}
-                                  </div>
-                                  <div className="text-sm text-green-500">
-                                    +{item.profitLossPercent.toFixed(2)}%
-                                  </div>
-                                </div>
-                              </div>
 
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                <div>
-                                  <div className="text-muted-foreground">持仓数量</div>
-                                  <div className="font-medium">{item.quantity.toLocaleString()} 股</div>
-                                </div>
-                                <div>
-                                  <div className="text-muted-foreground">成本价</div>
-                                  <div className="font-medium">¥{item.avgCost.toFixed(2)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-muted-foreground">现价</div>
-                                  <div className="font-medium">¥{item.currentPrice.toFixed(2)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-muted-foreground">持仓权重</div>
-                                  <div className="flex items-center">
-                                    <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden mr-2">
-                                      <div
-                                        className="h-full bg-blue-500 rounded-full"
-                                        style={{ width: `${item.weight}%` }}
-                                      />
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div>
+                                    <div className="text-muted-foreground">持仓数量</div>
+                                    <div className="font-medium">{item.quantity.toLocaleString()} 股</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">成本价</div>
+                                    <div className="font-medium">¥{item.avgCost.toFixed(2)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">现价</div>
+                                    <div className="font-medium">¥{item.currentPrice.toFixed(2)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">持仓权重</div>
+                                    <div className="flex items-center">
+                                      <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden mr-2">
+                                        <div
+                                          className="h-full bg-blue-500 rounded-full"
+                                          style={{ width: `${item.weight}%` }}
+                                        />
+                                      </div>
+                                      <span className="font-medium">{item.weight.toFixed(1)}%</span>
                                     </div>
-                                    <span className="font-medium">{item.weight.toFixed(1)}%</span>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             </CardContent>
