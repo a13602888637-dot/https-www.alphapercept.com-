@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import iconv from "iconv-lite";
 
 export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
-export const revalidate = 0;
 
 interface StockResult {
   code: string;
@@ -10,9 +9,17 @@ interface StockResult {
   market: string;
 }
 
-// In-memory cache with 5-minute TTL
+// In-memory cache, 5-min TTL
 const cache = new Map<string, { data: StockResult[]; ts: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
+
+// Sina type → market label; only keep stock types
+const SINA_TYPE_MAP: Record<string, string> = {
+  "11": "A股",   // A-share (SH/SZ)
+  "12": "B股",
+  "31": "港股",
+  "41": "美股",
+};
 
 function getAShareMarket(code: string): string {
   if (code.startsWith("688")) return "科创板";
@@ -26,31 +33,48 @@ async function searchSina(query: string): Promise<StockResult[]> {
   try {
     const url = `https://suggest3.sinajs.cn/suggest/type=&key=${encodeURIComponent(query)}`;
     const res = await fetch(url, {
-      headers: { Referer: "https://finance.sina.com.cn" },
+      headers: {
+        Referer: "https://finance.sina.com.cn/",
+        "User-Agent": "Mozilla/5.0 (compatible; StockAnalysis/1.0)",
+      },
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return [];
-    const text = await res.text();
-    // Format: var suggestvalue="11,600026,sh600026,中远海能,zyhln;..."
+
+    // Sina returns GBK-encoded text — decode properly
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const text = iconv.decode(buffer, "gbk");
+
+    // Format: var suggestvalue="name,type,code,fullCode,displayName,...;..."
     const match = text.match(/"(.*)"/);
-    if (!match || !match[1]) return [];
+    if (!match?.[1]) return [];
+
     return match[1]
       .split(";")
       .filter(Boolean)
       .map((item) => {
         const parts = item.split(",");
-        if (parts.length < 4) return null;
-        const [, code, , name] = parts;
+        if (parts.length < 5) return null;
+        const type = parts[1]; // "11"=A股, "31"=港股, "41"=美股
+        const code = parts[2]; // pure code: "600026"
+        const name = parts[4]; // display name: "中远海能"
         if (!code || !name) return null;
-        return { code, name, market: getAShareMarket(code) };
+        // Only keep stocks (filter out funds, bonds, etc.)
+        const marketLabel = SINA_TYPE_MAP[type];
+        if (!marketLabel) return null;
+        const market = type === "11" ? getAShareMarket(code) : marketLabel;
+        return { code, name, market };
       })
-      .filter((r): r is StockResult => r !== null);
-  } catch {
+      .filter((r): r is StockResult => r !== null)
+      .slice(0, 15);
+  } catch (e) {
+    console.warn("Sina search error:", e);
     return [];
   }
 }
 
-const FINNHUB_KEY = process.env.FINNHUB_API_KEY || "d6r5cbpr01qgdhqd7k50d6r5cbpr01qgdhqd7k5g";
+const FINNHUB_KEY =
+  process.env.FINNHUB_API_KEY || "d6r5cbpr01qgdhqd7k50d6r5cbpr01qgdhqd7k5g";
 
 async function searchFinnhub(query: string): Promise<StockResult[]> {
   try {
@@ -58,15 +82,20 @@ async function searchFinnhub(query: string): Promise<StockResult[]> {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return [];
     const json = await res.json();
-    if (!json.result || !Array.isArray(json.result)) return [];
+    if (!Array.isArray(json.result)) return [];
     return json.result
-      .filter((r: { type?: string }) => r.type === "Common Stock" || r.type === "ETP")
+      .filter(
+        (r: { type?: string }) =>
+          r.type === "Common Stock" || r.type === "ETP"
+      )
       .slice(0, 10)
-      .map((r: { symbol: string; description: string; type: string }) => ({
-        code: r.symbol,
-        name: r.description,
-        market: r.type === "ETP" ? "US-ETF" : "US",
-      }));
+      .map(
+        (r: { displaySymbol: string; description: string; type: string }) => ({
+          code: r.displaySymbol || r.displaySymbol,
+          name: r.description,
+          market: r.type === "ETP" ? "US-ETF" : "US",
+        })
+      );
   } catch {
     return [];
   }
@@ -75,17 +104,28 @@ async function searchFinnhub(query: string): Promise<StockResult[]> {
 export async function GET(request: NextRequest) {
   const query = (request.nextUrl.searchParams.get("q") || "").trim();
   if (!query) {
-    return NextResponse.json({ success: false, data: [], count: 0, query, source: "none" });
-  }
-
-  // Check cache
-  const cached = cache.get(query);
-  if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return NextResponse.json({
-      success: true, data: cached.data, count: cached.data.length, query, source: "cache",
+      success: false,
+      data: [],
+      count: 0,
+      query,
+      source: "none",
     });
   }
 
+  // Cache check
+  const cached = cache.get(query);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return NextResponse.json({
+      success: true,
+      data: cached.data,
+      count: cached.data.length,
+      query,
+      source: "cache",
+    });
+  }
+
+  // Pure digits → A-share only (Sina). Letters → both sources.
   const isPureDigits = /^\d+$/.test(query);
   let results: StockResult[];
   let source: string;
@@ -110,10 +150,9 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
-  // Update cache
   cache.set(query, { data: results, ts: Date.now() });
 
-  // Evict old entries periodically
+  // Evict stale cache
   if (cache.size > 500) {
     const now = Date.now();
     for (const [key, val] of cache) {
@@ -122,6 +161,10 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    success: true, data: results, count: results.length, query, source,
+    success: true,
+    data: results,
+    count: results.length,
+    query,
+    source,
   });
 }

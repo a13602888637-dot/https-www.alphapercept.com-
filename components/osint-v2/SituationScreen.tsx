@@ -25,7 +25,7 @@ export function SituationScreen() {
   const stream = useDataStream();
 
   return (
-    <div className="h-dvh w-screen overflow-hidden bg-[#060a12] text-[#c8cdd5] flex flex-col">
+    <div className="h-full w-full overflow-hidden bg-[#060a12] text-[#c8cdd5] flex flex-col">
       {/* Top ticker bar */}
       <TickerBar financials={stream.financials} />
 

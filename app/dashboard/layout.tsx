@@ -1,7 +1,14 @@
+import { TopNavBar } from "@/components/layout/TopNavBar";
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <div className="h-dvh flex flex-col overflow-hidden">
+      <TopNavBar />
+      <div className="flex-1 min-h-0">{children}</div>
+    </div>
+  );
 }

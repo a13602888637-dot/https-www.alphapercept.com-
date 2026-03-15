@@ -384,7 +384,7 @@ export function TradingCommandCenter() {
   // Render
   // -------------------------------------------------------------------
   return (
-    <div className="h-dvh overflow-hidden bg-[#0a0e17] text-gray-100 flex flex-col">
+    <div className="h-full overflow-hidden bg-[#0a0e17] text-gray-100 flex flex-col">
       {/* ============================================================= */}
       {/* COMMAND BAR                                                    */}
       {/* ============================================================= */}
