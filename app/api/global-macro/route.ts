@@ -1,48 +1,41 @@
 import { NextResponse } from "next/server";
-import * as iconv from "iconv-lite";
 
 export const dynamic = 'force-dynamic';
 
 // ─── Symbol Configuration ────────────────────────────────────
 
-const GLOBAL_SYMBOLS: Record<string, {
+interface SymbolConfig {
   name: string;
   category: string;
   region: string;
-  finnhubSymbol?: string; // ETF proxy or US stock (free tier)
-  sinaSymbol?: string;
-}> = {
-  // US Indices — use ETF proxies on Finnhub (free tier supports stocks/ETFs)
-  "^DJI":      { name: "道琼斯", category: "index", region: "us", finnhubSymbol: "DIA", sinaSymbol: "int_dji" },
-  "^IXIC":     { name: "纳斯达克", category: "index", region: "us", finnhubSymbol: "QQQ", sinaSymbol: "int_nasdaq" },
-  "^GSPC":     { name: "标普500", category: "index", region: "us", finnhubSymbol: "SPY", sinaSymbol: "int_sp500" },
-  // HK / JP / EU — Sina only
-  "^HSI":      { name: "恒生指数", category: "index", region: "hk", sinaSymbol: "int_hangseng" },
-  "^N225":     { name: "日经225", category: "index", region: "jp", sinaSymbol: "int_nikkei" },
-  "^FTSE":     { name: "富时100", category: "index", region: "uk", sinaSymbol: "int_ftse" },
-  "^DAX":      { name: "德国DAX", category: "index", region: "eu", sinaSymbol: "int_dax" },
-  // Commodities — Sina futures
-  "GC=F":      { name: "黄金", category: "commodity", region: "global", sinaSymbol: "hf_GC" },
-  "CL=F":      { name: "原油WTI", category: "commodity", region: "global", sinaSymbol: "hf_CL" },
-  "SI=F":      { name: "白银", category: "commodity", region: "global", sinaSymbol: "hf_SI" },
-  "HG=F":      { name: "铜", category: "commodity", region: "global", sinaSymbol: "hf_HG" },
-  // FX — Sina forex
-  "USDCNY=X":  { name: "美元/人民币", category: "fx", region: "global", sinaSymbol: "fx_susdcny" },
-  "USDJPY=X":  { name: "美元/日元", category: "fx", region: "global", sinaSymbol: "fx_susdjpy" },
-  // Rates — Sina
-  "^VIX":      { name: "VIX恐慌", category: "rate", region: "us", sinaSymbol: "int_vix" },
-  "^TNX":      { name: "美10Y国债", category: "rate", region: "us", sinaSymbol: "gb_ustn10" },
+  finnhubSymbol?: string;   // Finnhub ETF proxy
+  finnhubScale?: number;    // multiply ETF price to get index level
+  yahooSymbol?: string;     // Yahoo Finance for non-US indices
+}
+
+const GLOBAL_SYMBOLS: Record<string, SymbolConfig> = {
+  // US Indices: ETF proxies × scale factor ≈ index level
+  "^DJI":     { name: "道琼斯", category: "index", region: "us", finnhubSymbol: "DIA", finnhubScale: 100 },
+  "^IXIC":    { name: "纳斯达克", category: "index", region: "us", finnhubSymbol: "QQQ", finnhubScale: 40 },
+  "^GSPC":    { name: "标普500", category: "index", region: "us", finnhubSymbol: "SPY", finnhubScale: 10 },
+  // Non-US Indices: Yahoo Finance (works from Vercel US servers)
+  "^HSI":     { name: "恒生指数", category: "index", region: "hk", yahooSymbol: "^HSI" },
+  "^N225":    { name: "日经225", category: "index", region: "jp", yahooSymbol: "^N225" },
+  "^FTSE":    { name: "富时100", category: "index", region: "uk", yahooSymbol: "^FTSE" },
+  "^DAX":     { name: "德国DAX", category: "index", region: "eu", yahooSymbol: "^GDAXI" },
+  // Commodities: Finnhub ETF proxies
+  "GC=F":     { name: "黄金", category: "commodity", region: "global", finnhubSymbol: "GLD", finnhubScale: 10 },
+  "CL=F":     { name: "原油WTI", category: "commodity", region: "global", yahooSymbol: "CL=F" },
+  "SI=F":     { name: "白银", category: "commodity", region: "global", finnhubSymbol: "SLV", finnhubScale: 18 },
+  "HG=F":     { name: "铜", category: "commodity", region: "global", yahooSymbol: "HG=F" },
+  // FX: Yahoo Finance
+  "USDCNY=X": { name: "美元/人民币", category: "fx", region: "global", yahooSymbol: "USDCNY=X" },
+  "USDJPY=X": { name: "美元/日元", category: "fx", region: "global", yahooSymbol: "USDJPY=X" },
+  // Rates: Yahoo Finance
+  "^VIX":     { name: "VIX恐慌", category: "rate", region: "us", yahooSymbol: "^VIX" },
+  "^TNX":     { name: "美10Y国债", category: "rate", region: "us", yahooSymbol: "^TNX" },
 };
 
-// Commodity scaling factors (Sina hf_ quotes are in cents or different units)
-const COMMODITY_SCALE: Record<string, number> = {
-  "hf_GC": 0.1,  // gold in 0.1 USD/oz → USD/oz
-  "hf_CL": 0.1,  // crude in 0.1 USD/bbl → USD/bbl
-  "hf_SI": 0.01, // silver in cents → USD
-  "hf_HG": 0.01, // copper in cents → USD
-};
-
-// Last-resort static data (only when ALL real sources fail)
 const STATIC_FALLBACK: Record<string, { price: number; change: number; changePercent: number }> = {
   "^DJI":     { price: 46247.29, change: 299.97, changePercent: 0.65 },
   "^IXIC":    { price: 22484.07, change: 99.37, changePercent: 0.44 },
@@ -55,135 +48,89 @@ const STATIC_FALLBACK: Record<string, { price: number; change: number; changePer
   "CL=F":     { price: 68.50, change: -0.80, changePercent: -1.16 },
   "SI=F":     { price: 33.50, change: 0.20, changePercent: 0.60 },
   "HG=F":     { price: 4.20, change: 0.03, changePercent: 0.72 },
-  "^VIX":     { price: 16.50, change: -0.30, changePercent: -1.79 },
-  "^TNX":     { price: 4.28, change: 0.01, changePercent: 0.23 },
   "USDCNY=X": { price: 7.25, change: 0.01, changePercent: 0.14 },
   "USDJPY=X": { price: 148.50, change: 0.20, changePercent: 0.13 },
+  "^VIX":     { price: 16.50, change: -0.30, changePercent: -1.79 },
+  "^TNX":     { price: 4.28, change: 0.01, changePercent: 0.23 },
 };
 
 let cache: { data: any; timestamp: number } | null = null;
 const CACHE_TTL = 60 * 1000;
 
-// ─── Strategy 1: Finnhub (ETF proxies for US indices) ────────
+// ─── Finnhub (ETF proxies for US indices/commodities) ─────────
 
 async function fetchFinnhub(symbols: string[]): Promise<Record<string, any>> {
   const apiKey = process.env.FINNHUB_API_KEY;
   if (!apiKey) return {};
 
   const results: Record<string, any> = {};
-  const symbolsWithFinnhub = symbols.filter(s => GLOBAL_SYMBOLS[s]?.finnhubSymbol);
+  const targets = symbols.filter(s => GLOBAL_SYMBOLS[s]?.finnhubSymbol);
 
-  const fetches = symbolsWithFinnhub.map(async (originalSymbol) => {
-    const finnhubSym = GLOBAL_SYMBOLS[originalSymbol].finnhubSymbol!;
+  await Promise.allSettled(targets.map(async (originalSymbol) => {
+    const cfg = GLOBAL_SYMBOLS[originalSymbol];
+    const scale = cfg.finnhubScale ?? 1;
     try {
-      const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(finnhubSym)}&token=${apiKey}`;
+      const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(cfg.finnhubSymbol!)}&token=${apiKey}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
       if (!res.ok) return;
       const data = await res.json();
       if (data.c && data.c > 0) {
+        const price = data.c * scale;
+        const change = (data.d ?? 0) * scale;
+        const changePercent = data.dp ?? 0;
         results[originalSymbol] = {
-          price: Number(data.c.toFixed(2)),
-          change: Number((data.d ?? 0).toFixed(2)),
-          changePercent: Number((data.dp ?? 0).toFixed(2)),
+          price: Number(price.toFixed(2)),
+          change: Number(change.toFixed(2)),
+          changePercent: Number(changePercent.toFixed(2)),
           source: 'finnhub',
         };
       }
     } catch { /* silent */ }
-  });
+  }));
 
-  await Promise.allSettled(fetches);
   return results;
 }
 
-// ─── Strategy 2: Sina Global Finance API ─────────────────────
+// ─── Yahoo Finance (non-US indices, commodities, FX, rates) ──
 
-async function fetchSinaGlobal(symbols: string[]): Promise<Record<string, any>> {
+async function fetchYahoo(symbols: string[]): Promise<Record<string, any>> {
   const results: Record<string, any> = {};
+  const targets = symbols.filter(s => GLOBAL_SYMBOLS[s]?.yahooSymbol);
 
-  const mappings: { original: string; sina: string }[] = [];
-  for (const sym of symbols) {
-    const sinaKey = GLOBAL_SYMBOLS[sym]?.sinaSymbol;
-    if (sinaKey) mappings.push({ original: sym, sina: sinaKey });
-  }
-  if (mappings.length === 0) return results;
+  await Promise.allSettled(targets.map(async (originalSymbol) => {
+    const yahooSym = GLOBAL_SYMBOLS[originalSymbol].yahooSymbol!;
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1d&range=2d`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122.0 Safari/537.36',
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const meta = data.chart?.result?.[0]?.meta;
+      if (!meta?.regularMarketPrice) return;
 
-  const sinaList = mappings.map(m => m.sina).join(",");
-  const url = `https://hq.sinajs.cn/list=${sinaList}`;
+      const price = meta.regularMarketPrice;
+      const prevClose = meta.chartPreviousClose || meta.previousClose || price;
+      const change = price - prevClose;
+      const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
 
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://finance.sina.com.cn',
-        'Accept-Charset': 'GBK',
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return results;
-
-    // Sina returns GBK-encoded text; decode via iconv
-    const buf = Buffer.from(await res.arrayBuffer());
-    const text = iconv.decode(buf, 'gbk');
-    const lines = text.split('\n').filter(l => l.includes('='));
-
-    for (const line of lines) {
-      const match = line.match(/hq_str_(\w+)="(.+)"/);
-      if (!match) continue;
-
-      const sinaKey = match[1];
-      const parts = match[2].split(',');
-      const mapping = mappings.find(m => m.sina === sinaKey);
-      if (!mapping) continue;
-
-      let price = 0, change = 0, changePercent = 0;
-      const scale = COMMODITY_SCALE[sinaKey] ?? 1;
-
-      try {
-        if (sinaKey.startsWith('int_')) {
-          // "道琼斯,46247.29,299.97,0.65"
-          price = parseFloat(parts[1]) || 0;
-          change = parseFloat(parts[2]) || 0;
-          changePercent = parseFloat(parts[3]) || 0;
-        } else if (sinaKey.startsWith('hf_')) {
-          // Futures: current price at [0], settle at [7], prev settle at [8]
-          const raw = parseFloat(parts[0]) || 0;
-          const prevSettle = parseFloat(parts[7]) || 0;
-          price = raw * scale;
-          const prevScaled = prevSettle * scale;
-          change = prevScaled > 0 ? price - prevScaled : 0;
-          changePercent = prevScaled > 0 ? (change / prevScaled) * 100 : 0;
-        } else if (sinaKey.startsWith('fx_')) {
-          // "time,current,bid,ask,..."
-          price = parseFloat(parts[1]) || 0;
-          const prevClose = parseFloat(parts[3]) || price;
-          change = price - prevClose;
-          changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-        } else if (sinaKey.startsWith('gb_')) {
-          // Bond yields
-          price = parseFloat(parts[1]) || 0;
-          change = parseFloat(parts[2]) || 0;
-          const prev = price - change;
-          changePercent = prev > 0 ? (change / prev) * 100 : 0;
-        }
-      } catch { continue; }
-
-      if (price > 0) {
-        results[mapping.original] = {
-          price: Number(price.toFixed(4)),
-          change: Number(change.toFixed(4)),
-          changePercent: Number(changePercent.toFixed(2)),
-          source: 'sina',
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('Sina global fetch failed:', err);
-  }
+      results[originalSymbol] = {
+        price: Number(price.toFixed(2)),
+        change: Number(change.toFixed(2)),
+        changePercent: Number(changePercent.toFixed(2)),
+        source: 'yahoo',
+      };
+    } catch { /* silent */ }
+  }));
 
   return results;
 }
 
-// ─── Main Handler ────────────────────────────────────────────
+// ─── Main Handler ─────────────────────────────────────────────
 
 export async function GET() {
   try {
@@ -194,24 +141,18 @@ export async function GET() {
     }
 
     const symbols = Object.keys(GLOBAL_SYMBOLS);
-    let quotes: Record<string, any> = {};
 
-    // Strategy 1: Finnhub for US ETF proxies
-    const finnhubQuotes = await fetchFinnhub(symbols);
-    Object.assign(quotes, finnhubQuotes);
+    // Run both sources in parallel
+    const [finnhubQuotes, yahooQuotes] = await Promise.all([
+      fetchFinnhub(symbols),
+      fetchYahoo(symbols),
+    ]);
 
-    // Strategy 2: Sina for everything else (or all if Finnhub unavailable)
-    const missingSymbols = symbols.filter(s => !quotes[s]);
-    const sinaQuotes = await fetchSinaGlobal(missingSymbols);
-    Object.assign(quotes, sinaQuotes);
+    const quotes: Record<string, any> = { ...yahooQuotes, ...finnhubQuotes };
 
     const liveCount = Object.values(quotes).filter((q: any) =>
-      q.source && q.source !== 'fallback' && q.source !== 'unavailable'
+      q.source && !['fallback', 'unavailable'].includes(q.source)
     ).length;
-
-    const finnhubCount = Object.values(quotes).filter((q: any) => q.source === 'finnhub').length;
-    const sinaCount = Object.values(quotes).filter((q: any) => q.source === 'sina').length;
-    const primarySource = finnhubCount > 0 ? 'finnhub+sina' : sinaCount > 0 ? 'sina' : 'fallback';
 
     const markets = Object.entries(GLOBAL_SYMBOLS).map(([symbol, meta]) => {
       const quote = quotes[symbol] || STATIC_FALLBACK[symbol] || { price: 0, change: 0, changePercent: 0, source: 'unavailable' };
@@ -226,6 +167,9 @@ export async function GET() {
         source: quote.source || 'fallback',
       };
     });
+
+    const sourceSet = new Set(Object.values(quotes).map((q: any) => q.source));
+    const primarySource = [...sourceSet].filter(s => !['fallback', 'unavailable'].includes(s)).join('+') || 'fallback';
 
     const responseData = {
       success: true,
