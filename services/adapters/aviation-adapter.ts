@@ -23,7 +23,8 @@ const MONITORED_ZONES: Record<string, [number, number, number, number]> = {
   "red_sea":        [12.0, 22.0, 36.0, 44.0],
 };
 
-const OPENSKY_API = "https://opensky-network.org/api/states/all";
+// Internal proxy endpoint — avoids CORS issues when called from the browser
+const AVIATION_PROXY_API = "/api/aviation";
 
 export class AviationAdapter implements DataAdapter<AviationEntity> {
   readonly name = "aviation";
@@ -39,76 +40,65 @@ export class AviationAdapter implements DataAdapter<AviationEntity> {
   }
 
   async fetch(): Promise<AviationEntity[]> {
-    const [latMin, latMax, lngMin, lngMax] = this.bbox;
-    const url = `${OPENSKY_API}?lamin=${latMin}&lomin=${lngMin}&lamax=${latMax}&lomax=${lngMax}`;
-
-    const headers: Record<string, string> = {};
-    const username = process.env.OPENSKY_USERNAME;
-    const password = process.env.OPENSKY_PASSWORD;
-    if (username && password) {
-      headers["Authorization"] = "Basic " + Buffer.from(`${username}:${password}`).toString("base64");
-    }
+    const url = `${AVIATION_PROXY_API}?zone=${this.zone}`;
 
     const res = await fetch(url, {
-      headers,
       signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
-      console.warn(`OpenSky API returned ${res.status}`);
+      console.warn(`Aviation proxy returned ${res.status}`);
       return [];
     }
 
     const data = await res.json();
-    if (!data.states || !Array.isArray(data.states)) return [];
+    if (!data.success || !Array.isArray(data.aircraft)) return [];
 
     const now = Date.now();
-    return data.states
-      .filter((s: any[]) => s[5] != null && s[6] != null) // must have coords
-      .slice(0, 200) // cap at 200 aircraft per zone
-      .map((s: any[]): AviationEntity => {
-        const icao24 = s[0] as string;
-        const callsign = (s[1] as string || "").trim();
-        const originCountry = s[2] as string;
-        const lng = s[5] as number;
-        const lat = s[6] as number;
-        const alt = (s[7] as number) ?? (s[13] as number) ?? 0; // baro alt or geo alt
-        const velocity = (s[9] as number) ?? 0;
-        const heading = (s[10] as number) ?? 0;
-        const onGround = s[8] as boolean;
-        const squawk = s[14] as string | undefined;
-
-        return {
-          id: `avi-${icao24}`,
-          type: EntityType.AVIATION,
-          subtype: this.classifyAircraft(callsign, squawk),
-          label: callsign || icao24,
-          coordinates: { lat, lng, alt },
-          value: alt,
-          delta: null,
-          deltaPercent: null,
-          status: onGround ? "neutral" : "active",
-          metadata: {
-            icao24,
-            callsign,
-            originCountry,
-            velocity,
-            heading,
-            onGround,
-            squawk,
-          },
-          source: "opensky",
-          timestamp: now,
-        };
-      });
+    return data.aircraft.map((a: {
+      icao24: string;
+      callsign: string;
+      originCountry: string;
+      lat: number;
+      lng: number;
+      alt: number;
+      onGround: boolean;
+      velocity: number;
+      heading: number;
+      squawk?: string;
+      subtype: AviationEntity["subtype"];
+    }): AviationEntity => ({
+      id: `avi-${a.icao24}`,
+      type: EntityType.AVIATION,
+      subtype: a.subtype,
+      label: a.callsign || a.icao24,
+      coordinates: { lat: a.lat, lng: a.lng, alt: a.alt },
+      value: a.alt,
+      delta: null,
+      deltaPercent: null,
+      status: a.onGround ? "neutral" : "active",
+      metadata: {
+        icao24: a.icao24,
+        callsign: a.callsign,
+        originCountry: a.originCountry,
+        velocity: a.velocity,
+        heading: a.heading,
+        onGround: a.onGround,
+        squawk: a.squawk,
+      },
+      source: "opensky",
+      timestamp: now,
+    }));
   }
 
   async isHealthy(): Promise<boolean> {
     try {
-      const res = await fetch("https://opensky-network.org/api/time", {
+      const res = await fetch(`${AVIATION_PROXY_API}?zone=${this.zone}`, {
         signal: AbortSignal.timeout(5000),
       });
-      return res.ok;
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data.success === true;
     } catch {
       return false;
     }

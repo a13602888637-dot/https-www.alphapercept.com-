@@ -25,12 +25,12 @@ export function SituationScreen() {
   const stream = useDataStream();
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#0a0e17] text-[#c8cdd5] flex flex-col">
+    <div className="h-dvh w-screen overflow-hidden bg-[#0a0e17] text-[#c8cdd5] flex flex-col">
       {/* Top ticker bar */}
       <TickerBar financials={stream.financials} />
 
       {/* Main 3-column grid */}
-      <div className="flex-1 grid grid-cols-[minmax(240px,1fr)_3fr_minmax(260px,1fr)] gap-px min-h-0">
+      <div className="flex-1 grid grid-cols-[260px_1fr_280px] gap-px min-h-0">
         {/* Left: Finance + Macro */}
         <div className="overflow-y-auto border-r border-[#1a2035]">
           <FinancePanel financials={stream.financials} isLoading={stream.isLoading} />
