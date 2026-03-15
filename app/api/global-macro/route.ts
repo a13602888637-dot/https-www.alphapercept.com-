@@ -8,47 +8,47 @@ interface SymbolConfig {
   name: string;
   category: string;
   region: string;
-  finnhubSymbol?: string;   // Finnhub ETF proxy
-  finnhubScale?: number;    // multiply ETF price to get index level
-  yahooSymbol?: string;     // Yahoo Finance for non-US indices
+  finnhubSymbol?: string; // ETF proxy (Finnhub free tier)
+  finnhubScale?: number;  // multiply ETF price → index level
+  stooqSymbol?: string;   // stooq.com direct symbol
 }
 
 const GLOBAL_SYMBOLS: Record<string, SymbolConfig> = {
-  // US Indices: ETF proxies × scale factor ≈ index level
+  // US Indices: Finnhub ETF proxies (most accurate for US)
   "^DJI":     { name: "道琼斯", category: "index", region: "us", finnhubSymbol: "DIA", finnhubScale: 100 },
   "^IXIC":    { name: "纳斯达克", category: "index", region: "us", finnhubSymbol: "QQQ", finnhubScale: 40 },
   "^GSPC":    { name: "标普500", category: "index", region: "us", finnhubSymbol: "SPY", finnhubScale: 10 },
-  // Non-US Indices: Yahoo Finance (works from Vercel US servers)
-  "^HSI":     { name: "恒生指数", category: "index", region: "hk", yahooSymbol: "^HSI" },
-  "^N225":    { name: "日经225", category: "index", region: "jp", yahooSymbol: "^N225" },
-  "^FTSE":    { name: "富时100", category: "index", region: "uk", yahooSymbol: "^FTSE" },
-  "^DAX":     { name: "德国DAX", category: "index", region: "eu", yahooSymbol: "^GDAXI" },
-  // Commodities: Finnhub ETF proxies
-  "GC=F":     { name: "黄金", category: "commodity", region: "global", finnhubSymbol: "GLD", finnhubScale: 10 },
-  "CL=F":     { name: "原油WTI", category: "commodity", region: "global", yahooSymbol: "CL=F" },
-  "SI=F":     { name: "白银", category: "commodity", region: "global", finnhubSymbol: "SLV", finnhubScale: 18 },
-  "HG=F":     { name: "铜", category: "commodity", region: "global", yahooSymbol: "HG=F" },
-  // FX: Yahoo Finance
-  "USDCNY=X": { name: "美元/人民币", category: "fx", region: "global", yahooSymbol: "USDCNY=X" },
-  "USDJPY=X": { name: "美元/日元", category: "fx", region: "global", yahooSymbol: "USDJPY=X" },
-  // Rates: Yahoo Finance
-  "^VIX":     { name: "VIX恐慌", category: "rate", region: "us", yahooSymbol: "^VIX" },
-  "^TNX":     { name: "美10Y国债", category: "rate", region: "us", yahooSymbol: "^TNX" },
+  // Non-US Indices: stooq.com (free, no key, works from Vercel)
+  "^HSI":     { name: "恒生指数", category: "index", region: "hk", stooqSymbol: "^hsi" },
+  "^N225":    { name: "日经225", category: "index", region: "jp", stooqSymbol: "^nkx" },
+  "^FTSE":    { name: "富时100", category: "index", region: "uk", stooqSymbol: "^ftx" },
+  "^DAX":     { name: "德国DAX", category: "index", region: "eu", stooqSymbol: "^dax" },
+  // Commodities: stooq.com futures
+  "GC=F":     { name: "黄金", category: "commodity", region: "global", stooqSymbol: "gc.f" },
+  "CL=F":     { name: "原油WTI", category: "commodity", region: "global", stooqSymbol: "cl.f" },
+  "SI=F":     { name: "白银", category: "commodity", region: "global", stooqSymbol: "si.f" },
+  "HG=F":     { name: "铜", category: "commodity", region: "global", stooqSymbol: "hg.f" },
+  // FX: stooq.com
+  "USDCNY=X": { name: "美元/人民币", category: "fx", region: "global", stooqSymbol: "usdcny" },
+  "USDJPY=X": { name: "美元/日元", category: "fx", region: "global", stooqSymbol: "usdjpy" },
+  // Rates: stooq.com
+  "^VIX":     { name: "VIX恐慌", category: "rate", region: "us", stooqSymbol: "vix.us" },
+  "^TNX":     { name: "美10Y国债", category: "rate", region: "us", stooqSymbol: "tnx.us" },
 };
 
 const STATIC_FALLBACK: Record<string, { price: number; change: number; changePercent: number }> = {
-  "^DJI":     { price: 46247.29, change: 299.97, changePercent: 0.65 },
-  "^IXIC":    { price: 22484.07, change: 99.37, changePercent: 0.44 },
-  "^GSPC":    { price: 6643.70, change: 38.98, changePercent: 0.59 },
+  "^DJI":     { price: 46641.00, change: -108.00, changePercent: -0.23 },
+  "^IXIC":    { price: 23748.00, change: -140.00, changePercent: -0.59 },
+  "^GSPC":    { price: 6622.90, change: -37.80, changePercent: -0.57 },
   "^HSI":     { price: 25465.60, change: -251.16, changePercent: -0.98 },
   "^N225":    { price: 44946.64, change: -408.35, changePercent: -0.90 },
   "^FTSE":    { price: 8400.00, change: 30.00, changePercent: 0.36 },
   "^DAX":     { price: 23000.00, change: 50.00, changePercent: 0.22 },
-  "GC=F":     { price: 3020.00, change: 15.00, changePercent: 0.50 },
-  "CL=F":     { price: 68.50, change: -0.80, changePercent: -1.16 },
+  "GC=F":     { price: 5061.70, change: -22.30, changePercent: -0.44 },
+  "CL=F":     { price: 97.21, change: -0.80, changePercent: -0.82 },
   "SI=F":     { price: 33.50, change: 0.20, changePercent: 0.60 },
   "HG=F":     { price: 4.20, change: 0.03, changePercent: 0.72 },
-  "USDCNY=X": { price: 7.25, change: 0.01, changePercent: 0.14 },
+  "USDCNY=X": { price: 6.899, change: 0.01, changePercent: 0.14 },
   "USDJPY=X": { price: 148.50, change: 0.20, changePercent: 0.13 },
   "^VIX":     { price: 16.50, change: -0.30, changePercent: -1.79 },
   "^TNX":     { price: 4.28, change: 0.01, changePercent: 0.23 },
@@ -57,7 +57,7 @@ const STATIC_FALLBACK: Record<string, { price: number; change: number; changePer
 let cache: { data: any; timestamp: number } | null = null;
 const CACHE_TTL = 60 * 1000;
 
-// ─── Finnhub (ETF proxies for US indices/commodities) ─────────
+// ─── Source 1: Finnhub (US ETF proxies) ─────────────────────
 
 async function fetchFinnhub(symbols: string[]): Promise<Record<string, any>> {
   const apiKey = process.env.FINNHUB_API_KEY;
@@ -66,8 +66,8 @@ async function fetchFinnhub(symbols: string[]): Promise<Record<string, any>> {
   const results: Record<string, any> = {};
   const targets = symbols.filter(s => GLOBAL_SYMBOLS[s]?.finnhubSymbol);
 
-  await Promise.allSettled(targets.map(async (originalSymbol) => {
-    const cfg = GLOBAL_SYMBOLS[originalSymbol];
+  await Promise.allSettled(targets.map(async (sym) => {
+    const cfg = GLOBAL_SYMBOLS[sym];
     const scale = cfg.finnhubScale ?? 1;
     try {
       const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(cfg.finnhubSymbol!)}&token=${apiKey}`;
@@ -75,13 +75,10 @@ async function fetchFinnhub(symbols: string[]): Promise<Record<string, any>> {
       if (!res.ok) return;
       const data = await res.json();
       if (data.c && data.c > 0) {
-        const price = data.c * scale;
-        const change = (data.d ?? 0) * scale;
-        const changePercent = data.dp ?? 0;
-        results[originalSymbol] = {
-          price: Number(price.toFixed(2)),
-          change: Number(change.toFixed(2)),
-          changePercent: Number(changePercent.toFixed(2)),
+        results[sym] = {
+          price: Number((data.c * scale).toFixed(2)),
+          change: Number(((data.d ?? 0) * scale).toFixed(2)),
+          changePercent: Number((data.dp ?? 0).toFixed(2)),
           source: 'finnhub',
         };
       }
@@ -91,39 +88,41 @@ async function fetchFinnhub(symbols: string[]): Promise<Record<string, any>> {
   return results;
 }
 
-// ─── Yahoo Finance (non-US indices, commodities, FX, rates) ──
+// ─── Source 2: stooq.com (global indices, commodities, FX) ──
 
-async function fetchYahoo(symbols: string[]): Promise<Record<string, any>> {
+async function fetchStooq(symbols: string[]): Promise<Record<string, any>> {
   const results: Record<string, any> = {};
-  const targets = symbols.filter(s => GLOBAL_SYMBOLS[s]?.yahooSymbol);
+  const targets = symbols.filter(s => GLOBAL_SYMBOLS[s]?.stooqSymbol);
 
-  await Promise.allSettled(targets.map(async (originalSymbol) => {
-    const yahooSym = GLOBAL_SYMBOLS[originalSymbol].yahooSymbol!;
+  // Stooq doesn't support batch, fetch individually but in parallel
+  await Promise.allSettled(targets.map(async (sym) => {
+    const stooqSym = GLOBAL_SYMBOLS[sym].stooqSymbol!;
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1d&range=2d`;
+      const url = `https://stooq.com/q/l/?s=${encodeURIComponent(stooqSym)}&f=sd2t2ohlcvn&e=json`;
       const res = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122.0 Safari/537.36',
-          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; StockAnalysis/1.0)',
         },
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return;
       const data = await res.json();
-      const meta = data.chart?.result?.[0]?.meta;
-      if (!meta?.regularMarketPrice) return;
+      const item = data?.symbols?.[0];
+      if (!item?.close) return;
 
-      const price = meta.regularMarketPrice;
-      const prevClose = meta.chartPreviousClose || meta.previousClose || price;
-      const change = price - prevClose;
-      const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
+      const close = parseFloat(item.close);
+      const open = parseFloat(item.open) || close;
+      const change = Number((close - open).toFixed(4));
+      const changePercent = open > 0 ? Number(((change / open) * 100).toFixed(2)) : 0;
 
-      results[originalSymbol] = {
-        price: Number(price.toFixed(2)),
-        change: Number(change.toFixed(2)),
-        changePercent: Number(changePercent.toFixed(2)),
-        source: 'yahoo',
-      };
+      if (close > 0) {
+        results[sym] = {
+          price: close,
+          change,
+          changePercent,
+          source: 'stooq',
+        };
+      }
     } catch { /* silent */ }
   }));
 
@@ -142,13 +141,14 @@ export async function GET() {
 
     const symbols = Object.keys(GLOBAL_SYMBOLS);
 
-    // Run both sources in parallel
-    const [finnhubQuotes, yahooQuotes] = await Promise.all([
+    // Both sources run in parallel
+    const [finnhubQuotes, stooqQuotes] = await Promise.all([
       fetchFinnhub(symbols),
-      fetchYahoo(symbols),
+      fetchStooq(symbols),
     ]);
 
-    const quotes: Record<string, any> = { ...yahooQuotes, ...finnhubQuotes };
+    // Finnhub takes priority for US, stooq fills the rest
+    const quotes: Record<string, any> = { ...stooqQuotes, ...finnhubQuotes };
 
     const liveCount = Object.values(quotes).filter((q: any) =>
       q.source && !['fallback', 'unavailable'].includes(q.source)
@@ -168,8 +168,9 @@ export async function GET() {
       };
     });
 
-    const sourceSet = new Set(Object.values(quotes).map((q: any) => q.source));
-    const primarySource = [...sourceSet].filter(s => !['fallback', 'unavailable'].includes(s)).join('+') || 'fallback';
+    const sourceSet = [...new Set(Object.values(quotes).map((q: any) => q.source))]
+      .filter(s => !['fallback', 'unavailable'].includes(s));
+    const primarySource = sourceSet.length > 0 ? sourceSet.join('+') : 'fallback';
 
     const responseData = {
       success: true,
@@ -188,21 +189,14 @@ export async function GET() {
   } catch (error) {
     console.error("Error in global-macro API:", error);
     const markets = Object.entries(GLOBAL_SYMBOLS).map(([symbol, meta]) => ({
-      symbol,
-      name: meta.name,
-      category: meta.category,
-      region: meta.region,
+      symbol, name: meta.name, category: meta.category, region: meta.region,
       ...(STATIC_FALLBACK[symbol] || { price: 0, change: 0, changePercent: 0 }),
       source: 'fallback',
     }));
     return NextResponse.json({
-      success: true,
-      markets,
-      primarySource: 'fallback',
-      liveCount: 0,
-      totalCount: markets.length,
-      timestamp: new Date().toISOString(),
-      fallback: true,
+      success: true, markets, primarySource: 'fallback',
+      liveCount: 0, totalCount: markets.length,
+      timestamp: new Date().toISOString(), fallback: true,
     });
   }
 }
