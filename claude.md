@@ -360,6 +360,17 @@ git reset --hard HEAD~1
 - Server components must not use hooks
 - Hydration mismatch errors = missing `"use client"`
 
+### ⚠️ External Market Data APIs
+- **Finnhub free tier**: Direct index symbols (`^DJI`, `^GSPC`) blocked → use ETF proxies: DIA×100≈Dow, QQQ×40≈Nasdaq, SPY×10≈S&P500
+- **stooq.com**: Free, no API key, works from Vercel US; endpoint: `https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlcvn&e=json`; symbols: `^hsi`, `^nkx`, `gc.f`, `cl.f`, `usdcny`
+- **Sina hq.sinajs.cn**: GBK-encoded, geo-blocked from Vercel US for global symbols; only reliable for A-shares
+- **OpenSky Network**: Browser fetch blocked by CORS → proxy through Next.js API route (see `/api/aviation`)
+- **AISStream**: WebSocket-only → use short-lived server-side connection via `ws` package (10s window, cache 60s as REST)
+
+### ⚠️ Full-Screen Route Isolation
+- For full-screen pages (OSINT dashboard, etc.), create `app/<route>/layout.tsx` returning `<>{children}</>` to suppress global nav/sidebar
+- Without this, bento grid is constrained by the shell layout
+
 ### ⚠️ Sensitive Files
 - `.env*` files block edits (security hook)
 - Use `vercel env` for production secrets

@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import {
-  BarChart3,
   Bell,
   Brain,
   Globe,
@@ -28,19 +27,14 @@ const navItems = [
     href: "/dashboard",
   },
   {
-    title: "态势感知",
+    title: "OSINT 雷达",
     icon: Globe,
-    href: "/dashboard/macro",
+    href: "/osint",
   },
   {
     title: "自选股",
     icon: Star,
     href: "/watchlist",
-  },
-  {
-    title: "实时市场",
-    icon: BarChart3,
-    href: "/live-feed",
   },
   {
     title: "策略推荐",
