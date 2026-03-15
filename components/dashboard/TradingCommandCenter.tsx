@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Brain,
+  X,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -343,6 +344,31 @@ export function TradingCommandCenter() {
       toast.error(
         error instanceof Error ? error.message : "Failed to add stock"
       );
+    }
+  };
+
+  // -------------------------------------------------------------------
+  // Delete stock handler
+  // -------------------------------------------------------------------
+  const handleDeleteStock = async (id: string, stockName: string) => {
+    try {
+      const token = await getToken();
+      const response = await fetch(`/api/watchlist?id=${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error("Failed to delete");
+      const result = await response.json();
+      if (result.success) {
+        setWatchlist((prev) => prev.filter((item) => item.id !== id));
+        toast.success(`${stockName} removed from watchlist`);
+      }
+    } catch (error) {
+      console.error("Error deleting stock:", error);
+      toast.error("Failed to remove stock");
     }
   };
 
@@ -672,7 +698,7 @@ export function TradingCommandCenter() {
                         : "border-gray-800 hover:border-gray-700"
                     }`}
                   >
-                    {/* Header: Code + Name */}
+                    {/* Header: Code + Name + Actions */}
                     <div className="flex items-start justify-between mb-2">
                       <div className="min-w-0">
                         <div className="font-bold text-sm text-white leading-tight truncate">
@@ -682,15 +708,27 @@ export function TradingCommandCenter() {
                           {item.stockName}
                         </div>
                       </div>
-                      {hasAlert && (
-                        <AlertTriangle
-                          className={`h-3.5 w-3.5 flex-shrink-0 mt-0.5 ${
-                            hasStopLossAlert
-                              ? "text-red-400"
-                              : "text-green-400"
-                          }`}
-                        />
-                      )}
+                      <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                        {hasAlert && (
+                          <AlertTriangle
+                            className={`h-3.5 w-3.5 ${
+                              hasStopLossAlert
+                                ? "text-red-400"
+                                : "text-green-400"
+                            }`}
+                          />
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteStock(item.id, item.stockName);
+                          }}
+                          className="text-gray-600 hover:text-red-400 transition-colors p-0.5 rounded hover:bg-red-900/20"
+                          title="Remove from watchlist"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Price row */}
