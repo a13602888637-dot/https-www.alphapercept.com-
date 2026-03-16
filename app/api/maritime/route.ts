@@ -72,7 +72,7 @@ interface FetchResult {
 }
 
 async function fetchFromAISStream(zoneKeys: string[]): Promise<FetchResult> {
-  const apiKey = process.env.AISSTREAM_API_KEY;
+  const apiKey = process.env.AISSTREAM_API_KEY?.trim();
   if (!apiKey) return { vessels: [], connected: false, noApiKey: true };
 
   const vessels: VesselData[] = [];
