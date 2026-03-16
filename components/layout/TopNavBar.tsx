@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { ArrowLeft, Brain, Globe, LayoutDashboard } from "lucide-react";
+import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
+import { ArrowLeft, Brain, Globe, LayoutDashboard, LogIn } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "交易台", icon: LayoutDashboard },
@@ -12,6 +13,7 @@ const NAV_LINKS = [
 export function TopNavBar() {
   const router = useRouter();
   const pathname = usePathname();
+  const { isSignedIn, isLoaded } = useUser();
 
   return (
     <nav className="flex-shrink-0 h-10 bg-[#060a12] border-b border-[#1a2035]/40 flex items-center px-3 gap-3 z-50">
@@ -57,6 +59,32 @@ export function TopNavBar() {
           );
         })}
       </div>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Auth */}
+      {isLoaded && (
+        <div className="flex items-center">
+          {isSignedIn ? (
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: "h-6 w-6",
+                },
+              }}
+              afterSignOutUrl="/sign-in"
+            />
+          ) : (
+            <SignInButton mode="redirect" forceRedirectUrl="/dashboard">
+              <button className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-white bg-[#111827] hover:bg-[#1a2035] px-2.5 py-1 rounded transition-colors">
+                <LogIn className="h-3 w-3" />
+                <span>登录</span>
+              </button>
+            </SignInButton>
+          )}
+        </div>
+      )}
     </nav>
   );
 }

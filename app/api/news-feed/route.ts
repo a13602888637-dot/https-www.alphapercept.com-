@@ -11,13 +11,39 @@ interface NewsItem {
   pubDate: string;
 }
 
-let newsCache: { data: NewsItem[]; aiSummary: string; timestamp: number } | null = null;
+interface FeedSourceStatus {
+  name: string;
+  ok: boolean;
+  count: number;
+  method: 'rsshub' | 'fallback';
+}
+
+let newsCache: {
+  data: NewsItem[];
+  aiSummary: string;
+  timestamp: number;
+  sources: FeedSourceStatus[];
+} | null = null;
 const CACHE_TTL = 10 * 60 * 1000;
+// Empty-result cache TTL: retry sooner if nothing was fetched
+const EMPTY_CACHE_TTL = 60 * 1000;
 
 const RSS_FEEDS = [
-  { url: 'https://rsshub.app/cls/telegraph', name: '财联社电报' },
-  { url: 'https://rsshub.app/eastmoney/report/strategy', name: '东方财富策略' },
-  { url: 'https://rsshub.app/sina/finance', name: '新浪财经' },
+  {
+    url: 'https://rsshub.app/cls/telegraph',
+    name: '财联社电报',
+    fallbackUrl: 'https://www.cls.cn/nodeapi/updateTelegraphList?app=CailianpressWeb&os=web&sv=7.7.5',
+  },
+  {
+    url: 'https://rsshub.app/eastmoney/report/strategy',
+    name: '东方财富策略',
+    fallbackUrl: 'https://newsapi.eastmoney.com/kuaixun/v1/getlist_102_ajaxResult_50_1_.html',
+  },
+  {
+    url: 'https://rsshub.app/sina/finance',
+    name: '新浪财经',
+    fallbackUrl: 'https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2516&k=&num=20&page=1&r=0.1&callback=',
+  },
 ];
 
 function extractTitlesFromXML(xml: string): string[] {
@@ -33,25 +59,125 @@ function extractTitlesFromXML(xml: string): string[] {
   return titles.slice(0, 20);
 }
 
-async function fetchRSSFeed(feedUrl: string, feedName: string): Promise<{ titles: string[]; source: string }> {
+function extractTitlesFromCLS(json: any): string[] {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch(feedUrl, {
+    const items = json?.data?.roll_data || json?.data || [];
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item: any) => item.title || item.brief || item.content || '')
+      .filter((t: string) => t.length > 5)
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+function extractTitlesFromEastmoney(json: any): string[] {
+  try {
+    const items = json?.LivesList || json?.data || [];
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item: any) => item.title || item.Title || item.digest || '')
+      .filter((t: string) => t.length > 5)
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+function extractTitlesFromSina(json: any): string[] {
+  try {
+    const items = json?.result?.data || json?.data || [];
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item: any) => item.title || item.stitle || '')
+      .filter((t: string) => t.length > 5)
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+const FALLBACK_PARSERS: Record<string, (json: any) => string[]> = {
+  '财联社电报': extractTitlesFromCLS,
+  '东方财富策略': extractTitlesFromEastmoney,
+  '新浪财经': extractTitlesFromSina,
+};
+
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; StockAnalysis/1.0)',
-        'Accept': 'application/rss+xml, application/xml, text/xml',
+        'Accept': 'application/rss+xml, application/xml, text/xml, application/json',
       },
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
+    return response;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+async function fetchFallbackFeed(
+  fallbackUrl: string,
+  feedName: string,
+): Promise<string[]> {
+  try {
+    const response = await fetchWithTimeout(fallbackUrl, 8000);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const text = await response.text();
+
+    // Strip JSONP callback wrapper only when text doesn't already start with JSON.
+    // Plain JSON responses (starting with { or [) must NOT have trailing braces stripped —
+    // the original regex /[)}\];]*$/ would eat legitimate closing }} and break JSON.parse.
+    const trimmed = text.trimStart();
+    let jsonText: string;
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      jsonText = trimmed; // already plain JSON
+    } else {
+      jsonText = text.replace(/^[^({[]*/, '').replace(/[)}\];]*$/, '');
+    }
+
+    if (jsonText.startsWith('{') || jsonText.startsWith('[')) {
+      const json = JSON.parse(jsonText);
+      const parser = FALLBACK_PARSERS[feedName];
+      if (parser) return parser(json);
+    }
+    return [];
+  } catch (err) {
+    console.warn(`Fallback fetch failed for ${feedName}:`, err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
+async function fetchRSSFeed(
+  feedUrl: string,
+  feedName: string,
+  fallbackUrl: string,
+): Promise<{ titles: string[]; source: string; method: 'rsshub' | 'fallback' }> {
+  // Try RSSHub first
+  try {
+    const response = await fetchWithTimeout(feedUrl, 8000);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const xml = await response.text();
-    return { titles: extractTitlesFromXML(xml), source: feedName };
+    const titles = extractTitlesFromXML(xml);
+    if (titles.length > 0) {
+      return { titles, source: feedName, method: 'rsshub' };
+    }
   } catch (err) {
     console.warn(`RSS fetch failed for ${feedName}:`, err instanceof Error ? err.message : err);
-    return { titles: [], source: feedName };
   }
+
+  // Fallback to direct API
+  console.log(`Trying fallback for ${feedName}...`);
+  const fallbackTitles = await fetchFallbackFeed(fallbackUrl, feedName);
+  return { titles: fallbackTitles, source: feedName, method: 'fallback' };
 }
 
 async function generateAISummary(headlines: string[]): Promise<{ items: NewsItem[]; summary: string }> {
@@ -119,43 +245,80 @@ async function generateAISummary(headlines: string[]): Promise<{ items: NewsItem
 
 export async function GET() {
   try {
-    if (newsCache && Date.now() - newsCache.timestamp < CACHE_TTL) {
+    const now = new Date();
+    const lastFetchedAt = now.toISOString();
+
+    const ttl = newsCache?.data.length === 0 ? EMPTY_CACHE_TTL : CACHE_TTL;
+    if (newsCache && Date.now() - newsCache.timestamp < ttl) {
       return NextResponse.json({
         success: true,
         news: newsCache.data,
         summary: newsCache.aiSummary,
         cached: true,
-        timestamp: new Date().toISOString(),
+        source: 'news-feed',
+        lastFetchedAt: new Date(newsCache.timestamp).toISOString(),
+        isLive: Date.now() - newsCache.timestamp < CACHE_TTL,
+        sources: newsCache.sources,
+        timestamp: lastFetchedAt,
       });
     }
 
     const feedResults = await Promise.allSettled(
-      RSS_FEEDS.map(feed => fetchRSSFeed(feed.url, feed.name))
+      RSS_FEEDS.map(feed => fetchRSSFeed(feed.url, feed.name, feed.fallbackUrl))
     );
 
     const allHeadlines: string[] = [];
+    const sources: FeedSourceStatus[] = [];
+
     for (const result of feedResults) {
-      if (result.status === 'fulfilled' && result.value.titles.length > 0) {
-        allHeadlines.push(...result.value.titles);
+      if (result.status === 'fulfilled') {
+        const { titles, source, method } = result.value;
+        allHeadlines.push(...titles);
+        sources.push({
+          name: source,
+          ok: titles.length > 0,
+          count: titles.length,
+          method,
+        });
+      } else {
+        sources.push({
+          name: 'unknown',
+          ok: false,
+          count: 0,
+          method: 'rsshub',
+        });
       }
     }
 
     const uniqueHeadlines = [...new Set(allHeadlines)];
     const { items, summary } = await generateAISummary(uniqueHeadlines);
 
-    newsCache = { data: items, aiSummary: summary, timestamp: Date.now() };
+    newsCache = { data: items, aiSummary: summary, timestamp: Date.now(), sources };
 
     return NextResponse.json({
       success: true,
       news: items,
       summary,
       totalHeadlines: uniqueHeadlines.length,
-      timestamp: new Date().toISOString(),
+      source: 'news-feed',
+      lastFetchedAt,
+      isLive: uniqueHeadlines.length > 0,
+      sources,
+      timestamp: lastFetchedAt,
     });
   } catch (error) {
     console.error("Error in news-feed API:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch news feed", news: [], summary: '' },
+      {
+        success: false,
+        error: "Failed to fetch news feed",
+        news: [],
+        summary: '',
+        source: 'news-feed',
+        lastFetchedAt: new Date().toISOString(),
+        isLive: false,
+        sources: [],
+      },
       { status: 500 }
     );
   }

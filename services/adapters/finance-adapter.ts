@@ -18,14 +18,36 @@ import {
 // ─── Financial center coordinates for map plotting ───────────
 
 const MARKET_COORDS: Record<string, Coordinates> = {
-  "us":     { lat: 40.71, lng: -74.01 },
-  "hk":     { lat: 22.32, lng: 114.17 },
-  "jp":     { lat: 35.68, lng: 139.69 },
-  "uk":     { lat: 51.51, lng: -0.13 },
-  "eu":     { lat: 50.11, lng: 8.68 },
-  "global": { lat: 0, lng: 0 },
-  "cn":     { lat: 31.23, lng: 121.47 },
+  "us":        { lat: 40.71,  lng: -74.01  },
+  "hk":        { lat: 22.32,  lng: 114.17  },
+  "jp":        { lat: 35.68,  lng: 139.69  },
+  "uk":        { lat: 51.51,  lng: -0.13   },
+  "eu":        { lat: 50.11,  lng: 8.68    },
+  "global":    { lat: 0,      lng: 0       },
+  "cn":        { lat: 31.23,  lng: 121.47  },
+  // Semantic overrides for non-geographic entity types
+  "commodity": { lat: 25.0,   lng: 55.0   }, // Persian Gulf / commodity hub
+  "fx":        { lat: 51.5,   lng: -0.1   }, // London / FX hub
+  "fed":       { lat: 38.9,   lng: -77.0  }, // Washington DC / Fed
 };
+
+// Spread out co-located entities using deterministic per-index offsets
+function jitter(base: Coordinates, index: number): Coordinates {
+  const offsets = [
+    [0,    0   ],
+    [0.4,  0.4 ],
+    [-0.4, 0.4 ],
+    [0.4,  -0.4],
+    [-0.4, -0.4],
+    [0.6,  0   ],
+    [-0.6, 0   ],
+    [0,    0.6 ],
+    [0,    -0.6],
+    [0.5,  0.5 ],
+  ] as const;
+  const [dlat, dlng] = offsets[index % offsets.length];
+  return { lat: base.lat + dlat, lng: base.lng + dlng };
+}
 
 // ─── Global symbols config ──────────────────────────────────
 
@@ -110,14 +132,14 @@ export class FinanceAdapter implements DataAdapter<FinancialEntity> {
     if (!data.success || !data.prices) return [];
 
     const now = Date.now();
-    return Object.entries(A_SHARE_INDICES).map(([code, name]) => {
+    return Object.entries(A_SHARE_INDICES).map(([code, name], index) => {
       const p = data.prices[code];
       return {
         id: `fin-ashare-${code}`,
         type: EntityType.FINANCIAL,
         subtype: "index" as const,
         label: name,
-        coordinates: MARKET_COORDS["cn"],
+        coordinates: jitter(MARKET_COORDS["cn"], index),
         value: p?.price ?? null,
         delta: p?.change ?? null,
         deltaPercent: p?.changePercent ?? null,
@@ -145,15 +167,46 @@ export class FinanceAdapter implements DataAdapter<FinancialEntity> {
     if (!data.success || !data.markets) return [];
 
     const now = Date.now();
+
+    // Build per-region counters so jitter index is per-region, not global
+    const regionCounters: Record<string, number> = {};
+
+    // Resolve the geographic base coordinate for a market entry,
+    // mapping "global" subtypes to their semantic hub locations.
+    function resolveCoords(symbol: string, region: string, subtype: string): Coordinates {
+      if (region !== "global") {
+        const base = MARKET_COORDS[region];
+        if (!base) return MARKET_COORDS["us"]; // safe fallback
+        const idx = regionCounters[region] ?? 0;
+        regionCounters[region] = idx + 1;
+        return jitter(base, idx);
+      }
+      // "global" region — route to semantic hub based on subtype
+      let hubKey: string;
+      if (subtype === "commodity") {
+        hubKey = "commodity";
+      } else if (subtype === "fx") {
+        hubKey = "fx";
+      } else {
+        // rate or unknown global — Washington DC / Fed
+        hubKey = "fed";
+      }
+      const base = MARKET_COORDS[hubKey];
+      const idx = regionCounters[hubKey] ?? 0;
+      regionCounters[hubKey] = idx + 1;
+      return jitter(base, idx);
+    }
+
     return data.markets.map((m: any) => {
       const config = GLOBAL_SYMBOLS[m.symbol];
       const region = config?.region ?? m.region ?? "global";
+      const subtype = (config?.subtype ?? "index") as FinancialEntity["subtype"];
       return {
         id: `fin-global-${m.symbol}`,
         type: EntityType.FINANCIAL,
-        subtype: (config?.subtype ?? "index") as FinancialEntity["subtype"],
+        subtype,
         label: m.name,
-        coordinates: MARKET_COORDS[region] ?? null,
+        coordinates: resolveCoords(m.symbol, region, subtype),
         value: m.price ?? null,
         delta: m.change ?? null,
         deltaPercent: m.changePercent ?? null,

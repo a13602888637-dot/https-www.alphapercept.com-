@@ -2,8 +2,13 @@
  * Maritime API: AISStream.io WebSocket → REST cache
  *
  * AISStream uses WebSocket for real-time streaming.
- * This route opens a short-lived WebSocket connection,
- * collects vessel data for 10s, then caches and returns as REST JSON.
+ * This route opens a short-lived 6s WebSocket connection,
+ * collects vessel data, caches and returns as REST JSON.
+ *
+ * Cache tiers:
+ *   FRESH   (< 60s)  — returned immediately, stale: false
+ *   SEMI    (60–300s) — used as fallback if live fetch returns 0 vessels, stale: true
+ *   EXPIRED (> 300s) — discarded
  *
  * Env vars:
  *   AISSTREAM_API_KEY
@@ -13,12 +18,25 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
 
-// Cache vessels for 60 seconds to avoid rate limits
+// Cache tiers (milliseconds)
+const CACHE_FRESH_TTL  = 60  * 1000; //  60s — serve immediately
+const CACHE_SEMI_TTL   = 300 * 1000; // 300s — use as stale fallback
+const LIVE_THRESHOLD   = 120 * 1000; // data is "live" if fetched within 120s
+
 const vesselCache = new Map<string, {
   data: VesselData[];
   timestamp: number;
+  connected: boolean;
 }>();
-const CACHE_TTL = 60 * 1000;
+
+// Ship type classification based on AIS type codes
+function classifyShipType(code: number): string {
+  if (code >= 70 && code <= 79) return "cargo";
+  if (code >= 80 && code <= 89) return "tanker";
+  if (code >= 60 && code <= 69) return "passenger";
+  if (code >= 35 && code <= 39) return "military";
+  return "unknown";
+}
 
 interface VesselData {
   mmsi: string;
@@ -29,6 +47,7 @@ interface VesselData {
   speed: number;
   course: number;
   shipType: number;
+  shipTypeLabel: string;
   destination?: string;
   flag?: string;
   zone: string;
@@ -46,33 +65,49 @@ const MARITIME_ZONES: Record<string, {
   panama:   { name: "巴拿马运河", bbox: { min_latitude: 8.5, max_latitude: 9.5, min_longitude: -80.0, max_longitude: -79.0 } },
 };
 
-async function fetchFromAISStream(zoneKeys: string[]): Promise<VesselData[]> {
+interface FetchResult {
+  vessels: VesselData[];
+  connected: boolean;
+  noApiKey?: boolean;
+}
+
+async function fetchFromAISStream(zoneKeys: string[]): Promise<FetchResult> {
   const apiKey = process.env.AISSTREAM_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) return { vessels: [], connected: false, noApiKey: true };
 
   const vessels: VesselData[] = [];
   const seenMMSI = new Set<string>();
+  // Track IMO numbers from ShipStaticData messages keyed by MMSI
+  const imoByMMSI = new Map<string, string>();
 
   const boundingBoxes = zoneKeys
     .filter(k => MARITIME_ZONES[k])
     .map(k => MARITIME_ZONES[k].bbox);
 
-  if (boundingBoxes.length === 0) return [];
+  if (boundingBoxes.length === 0) return { vessels: [], connected: false };
 
   return new Promise((resolve) => {
     let ws: any;
     let timeout: NodeJS.Timeout;
+    let didConnect = false;
 
     try {
       const WebSocket = require('ws');
       ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
 
       timeout = setTimeout(() => {
+        // Before closing, backfill IMO numbers from ShipStaticData
+        for (const v of vessels) {
+          if (!v.imo && imoByMMSI.has(v.mmsi)) {
+            v.imo = imoByMMSI.get(v.mmsi);
+          }
+        }
         try { ws?.close(); } catch {}
-        resolve(vessels);
-      }, 10000); // 10 second collection window
+        resolve({ vessels, connected: didConnect });
+      }, 6000); // 6s collection window — safe within Vercel Hobby 10s limit
 
       ws.on('open', () => {
+        didConnect = true;
         const subscribeMsg = {
           APIKey: apiKey,
           BoundingBoxes: boundingBoxes.map(b => [[b.min_latitude, b.min_longitude], [b.max_latitude, b.max_longitude]]),
@@ -88,7 +123,25 @@ async function fetchFromAISStream(zoneKeys: string[]): Promise<VesselData[]> {
           if (!meta?.MMSI) return;
 
           const mmsi = String(meta.MMSI);
-          if (seenMMSI.has(mmsi)) return;
+
+          // Extract IMO from ShipStaticData messages
+          if (msg.MessageType === 'ShipStaticData' && msg.Message?.ShipStaticData?.ImoNumber) {
+            const imo = String(msg.Message.ShipStaticData.ImoNumber);
+            if (imo && imo !== '0') {
+              imoByMMSI.set(mmsi, imo);
+            }
+          }
+
+          if (seenMMSI.has(mmsi)) {
+            // Even if we already have this vessel, update its IMO if newly available
+            if (imoByMMSI.has(mmsi)) {
+              const existing = vessels.find(v => v.mmsi === mmsi);
+              if (existing && !existing.imo) {
+                existing.imo = imoByMMSI.get(mmsi);
+              }
+            }
+            return;
+          }
           seenMMSI.add(mmsi);
 
           // Find which zone this vessel is in
@@ -106,14 +159,17 @@ async function fetchFromAISStream(zoneKeys: string[]): Promise<VesselData[]> {
             }
           }
 
+          const shipTypeCode = meta.ShipType ?? 0;
           const vessel: VesselData = {
             mmsi,
+            imo: imoByMMSI.get(mmsi),
             shipName: (meta.ShipName ?? '').trim() || mmsi,
             lat: parseFloat(lat.toFixed(4)),
             lng: parseFloat(lng.toFixed(4)),
             speed: parseFloat((meta.Sog ?? 0).toFixed(1)),
             course: parseFloat((meta.Cog ?? 0).toFixed(1)),
-            shipType: meta.ShipType ?? 0,
+            shipType: shipTypeCode,
+            shipTypeLabel: classifyShipType(shipTypeCode),
             destination: meta.Destination?.trim() || undefined,
             flag: meta.Flag || undefined,
             zone,
@@ -124,8 +180,14 @@ async function fetchFromAISStream(zoneKeys: string[]): Promise<VesselData[]> {
           // Stop after collecting 300 unique vessels
           if (vessels.length >= 300) {
             clearTimeout(timeout);
+            // Backfill IMO before resolving
+            for (const v of vessels) {
+              if (!v.imo && imoByMMSI.has(v.mmsi)) {
+                v.imo = imoByMMSI.get(v.mmsi);
+              }
+            }
             try { ws?.close(); } catch {}
-            resolve(vessels);
+            resolve({ vessels, connected: didConnect });
           }
         } catch { /* skip malformed messages */ }
       });
@@ -133,58 +195,158 @@ async function fetchFromAISStream(zoneKeys: string[]): Promise<VesselData[]> {
       ws.on('error', (err: Error) => {
         console.warn('AISStream WebSocket error:', err.message);
         clearTimeout(timeout);
-        resolve(vessels);
+        resolve({ vessels, connected: didConnect });
       });
 
       ws.on('close', () => {
         clearTimeout(timeout);
-        resolve(vessels);
+        resolve({ vessels, connected: didConnect });
       });
     } catch (err) {
       console.warn('AISStream connection failed:', err);
       clearTimeout(timeout!);
-      resolve(vessels);
+      resolve({ vessels, connected: false });
     }
   });
+}
+
+/** Build the vesselsByZone summary map from a vessel list. */
+function buildVesselsByZone(vessels: VesselData[], zoneKeys: string[]): Record<string, number> {
+  const summary: Record<string, number> = {};
+  for (const zk of zoneKeys) {
+    if (MARITIME_ZONES[zk]) summary[zk] = 0;
+  }
+  for (const v of vessels) {
+    if (v.zone in summary) summary[v.zone]++;
+  }
+  return summary;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const { zones = ['malacca', 'red_sea', 'taiwan'] } = await request.json().catch(() => ({}));
-    const cacheKey = zones.sort().join(',');
+    const cacheKey = [...zones].sort().join(',');
+    const now = Date.now();
 
-    // Return cached data if fresh
     const cached = vesselCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    const cacheAge = cached ? now - cached.timestamp : Infinity;
+
+    // --- TIER 1: FRESH cache (< 60s) — return immediately ---
+    if (cached && cacheAge < CACHE_FRESH_TTL) {
+      const isLive = cacheAge < LIVE_THRESHOLD;
       return NextResponse.json({
         success: true,
         vessels: cached.data,
         count: cached.data.length,
+        vesselCount: cached.data.length,
+        connected: cached.connected,
+        isLive,
+        lastFetchedAt: new Date(cached.timestamp).toISOString(),
+        zones: zones.filter((z: string) => MARITIME_ZONES[z]).map((z: string) => ({
+          key: z,
+          name: MARITIME_ZONES[z].name,
+          count: cached.data.filter((v: VesselData) => v.zone === z).length,
+        })),
+        vesselsByZone: buildVesselsByZone(cached.data, zones),
         cached: true,
+        stale: false,
         timestamp: new Date().toISOString(),
       });
     }
 
-    const vessels = await fetchFromAISStream(zones);
+    // --- Attempt live fetch ---
+    const result = await fetchFromAISStream(zones);
+    const fetchedAt = Date.now();
 
-    vesselCache.set(cacheKey, { data: vessels, timestamp: Date.now() });
+    if (result.vessels.length > 0) {
+      // Live fetch succeeded — update cache and return fresh data
+      vesselCache.set(cacheKey, {
+        data: result.vessels,
+        timestamp: fetchedAt,
+        connected: result.connected,
+      });
 
+      return NextResponse.json({
+        success: true,
+        vessels: result.vessels,
+        count: result.vessels.length,
+        vesselCount: result.vessels.length,
+        connected: result.connected,
+        isLive: result.connected,
+        lastFetchedAt: new Date(fetchedAt).toISOString(),
+        zones: zones.filter((z: string) => MARITIME_ZONES[z]).map((z: string) => ({
+          key: z,
+          name: MARITIME_ZONES[z].name,
+          count: result.vessels.filter((v: VesselData) => v.zone === z).length,
+        })),
+        vesselsByZone: buildVesselsByZone(result.vessels, zones),
+        cached: false,
+        stale: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // --- Live fetch returned 0 vessels ---
+
+    // TIER 2: SEMI-FRESH stale cache (60–300s) — return with stale flag
+    if (cached && cacheAge < CACHE_SEMI_TTL) {
+      console.warn(`AISStream returned 0 vessels; serving semi-fresh stale cache (age: ${Math.round(cacheAge / 1000)}s)`);
+      return NextResponse.json({
+        success: true,
+        vessels: cached.data,
+        count: cached.data.length,
+        vesselCount: cached.data.length,
+        connected: false,
+        isLive: false,
+        lastFetchedAt: new Date(cached.timestamp).toISOString(),
+        zones: zones.filter((z: string) => MARITIME_ZONES[z]).map((z: string) => ({
+          key: z,
+          name: MARITIME_ZONES[z].name,
+          count: cached.data.filter((v: VesselData) => v.zone === z).length,
+        })),
+        vesselsByZone: buildVesselsByZone(cached.data, zones),
+        cached: true,
+        stale: true,
+        staleSince: new Date(cached.timestamp).toISOString(),
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // TIER 3: No usable cache at all — return empty with explanation
     return NextResponse.json({
       success: true,
-      vessels,
-      count: vessels.length,
+      vessels: [],
+      count: 0,
+      vesselCount: 0,
+      connected: result.connected,
+      isLive: false,
+      lastFetchedAt: null,
       zones: zones.filter((z: string) => MARITIME_ZONES[z]).map((z: string) => ({
         key: z,
         name: MARITIME_ZONES[z].name,
-        count: vessels.filter(v => v.zone === z).length,
+        count: 0,
       })),
+      vesselsByZone: buildVesselsByZone([], zones),
       cached: false,
+      stale: false,
+      noDataReason: result.noApiKey
+        ? "AISSTREAM_API_KEY not configured — maritime data unavailable"
+        : "AISStream returned no vessels for these zones at this time",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Maritime API error:', error);
     return NextResponse.json(
-      { success: false, error: 'Maritime data fetch failed', vessels: [] },
+      {
+        success: false,
+        error: 'Maritime data fetch failed',
+        vessels: [],
+        vesselCount: 0,
+        connected: false,
+        isLive: false,
+        lastFetchedAt: null,
+        stale: false,
+      },
       { status: 500 }
     );
   }

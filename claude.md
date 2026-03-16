@@ -64,6 +64,7 @@ stock-analysis/
 │   │   └── ... (20+ total routes)
 │   ├── dashboard/                # Main dashboard
 │   │   └── macro/                # Macro market overview
+│   ├── osint/                    # Full-screen OSINT radar (own layout.tsx suppresses global nav)
 │   ├── portfolio/                # Portfolio management page
 │   ├── stocks/[code]/            # Individual stock details
 │   ├── live-feed/                # Intelligence feed
@@ -75,11 +76,15 @@ stock-analysis/
 │   ├── layout/                   # Navigation, sidebar, headers
 │   ├── charts/                   # Charts (technical indicators, K-lines)
 │   ├── intelligence-feed/        # Feed items, filtering
+│   ├── osint-v2/                 # OSINT situational awareness (GeoMapInner, IntelFeed, StatusBar, AISituationBrain)
 │   ├── portfolio/                # Portfolio UI
 │   ├── macro/                    # Macro indicators
 │   ├── global-search/            # Unified search results
 │   ├── strategy-chat/            # Strategy recommendation UI
 │   └── ui/                       # shadcn/ui primitives
+│
+├── services/                     # Data adapters (normalized to SituationalEntity type)
+│   └── adapters/                 # finance-adapter, maritime-adapter, aviation-adapter, geoconflict-adapter
 │
 ├── lib/                          # Utility functions
 │   ├── api/                      # API client helpers
@@ -159,37 +164,20 @@ npm run build            # Pre-flight check
 
 ---
 
-## API Routes Overview
+## Key API Routes
 
-### Market Data
-- `GET /api/market-data` - Current stock data
-- `GET /api/stock-prices` - Price history
-- `GET /api/stock-price-history` - Detailed OHLC data
-- `GET /api/stocks/search` - Stock search by code/name
-- `GET /api/stocks/hot` - Trending stocks
-
-### Intelligence Feed
-- `GET /api/intelligence-feed` - Market insights
-- `POST /api/intelligence-feed/generate` - Generate AI analysis
-
-### Strategy & Recommendations
-- `GET /api/strategy-recommendation` - Trading signals
-- `POST /api/analyze-watchlist` - Analyze portfolio
-
-### Portfolio
-- `GET /api/portfolio` - User portfolio
-- `POST /api/portfolio` - Create/update portfolio
-- `GET /api/portfolio/:id` - Portfolio details
-
-### Global Search
-- `GET /api/unified-search` - A-stock + US stock search
-
-### AI & Chat
-- `POST /api/ai/stream` - Streaming AI responses
-
-### Utilities
-- `GET /api/users/sync` - Sync user data with Clerk
-- `GET /api/debug-auth` - Authentication debugging
+| Route | Notes |
+|-------|-------|
+| `/api/stock-price-history` | OHLC via East Money K-line API (not DB) |
+| `/api/maritime` | AISStream vessels, 3-tier stale cache |
+| `/api/geoconflict` | GDELT conflict events (ACLED replacement) |
+| `/api/aviation` | OpenSky proxied (CORS workaround) |
+| `/api/news-feed` | Returns `{ news, summary }` |
+| `/api/intelligence-feed` | Returns `{ feed }` |
+| `/api/ai/situation-analysis` | DeepSeek macro analysis (3min cache, mock if no key) |
+| `/api/ai/stream` | Streaming AI responses |
+| `/api/unified-search` | A-stock + US stock search |
+| `/api/users/sync` | Sync Clerk user to DB |
 
 ---
 
@@ -204,7 +192,7 @@ Core entities in `prisma/schema.prisma`:
 | **IntelligenceFeed** | AI insights | stockCode, actionSignal, trapProbability |
 | **Portfolio** | Investment portfolio | userId, totalValue, cash |
 | **BacktestResult** | Strategy backtests | strategyId, returns, sharpeRatio |
-| **StockPriceHistory** | Price data cache | stockCode, price, timestamp |
+| **StockPriceHistory** | Price data cache (unused) | table is empty — OHLC fetched live from East Money API |
 
 **Important**: All user-specific data requires `userId` filter in API routes for privacy.
 
@@ -365,7 +353,17 @@ git reset --hard HEAD~1
 - **stooq.com**: Free, no API key, works from Vercel US; endpoint: `https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlcvn&e=json`; symbols: `^hsi`, `^nkx`, `gc.f`, `cl.f`, `usdcny`
 - **Sina hq.sinajs.cn**: GBK-encoded, geo-blocked from Vercel US for global symbols; only reliable for A-shares
 - **OpenSky Network**: Browser fetch blocked by CORS → proxy through Next.js API route (see `/api/aviation`)
-- **AISStream**: WebSocket-only → use short-lived server-side connection via `ws` package (10s window, cache 60s as REST)
+- **AISStream**: WebSocket-only → use short-lived server-side connection via `ws` package (6s window, cache 60s as REST); 3-tier cache: fresh <60s → return, stale <300s → return with `stale:true`, else `noDataReason`
+- **East Money K-line API**: `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid}&klt=101&fqt=1` — secid: `1.6xx`/`1.9xx` for Shanghai, `0.0xx`/`0.3xx` for Shenzhen; replaces empty `StockPriceHistory` Prisma table; see `app/api/stock-price-history/route.ts`
+- **GDELT GeoJSON**: Free geo-conflict data (ACLED requires paid credentials) → `https://api.gdeltproject.org/api/v2/geo/geo?query=conflict+OR+military&mode=PointData&format=GeoJSON&timespan=24h`; see `app/api/geoconflict/route.ts`
+- **Map marker jitter**: Multiple entities at same coordinates stack invisibly — apply deterministic ±0.4°~0.6° lat/lng offsets by index; see `jitter()` in `services/adapters/finance-adapter.ts`
+
+### ⚠️ Sonner Toaster
+- `app/layout.tsx` must mount BOTH `<ShadcnToaster />` AND `<SonnerToaster />` — sonner's `toast()` calls are silently dropped without its own Toaster in the tree
+
+### ⚠️ Internal API Response Shapes
+- `/api/intelligence-feed` returns `{ feed: SituationFeed[] }` (not `data` or `items`)
+- `/api/news-feed` returns `{ news: NewsItem[], summary: string }` (not `data` or `items`)
 
 ### ⚠️ Full-Screen Route Isolation
 - For full-screen pages (OSINT dashboard, etc.), create `app/<route>/layout.tsx` returning `<>{children}</>` to suppress global nav/sidebar
@@ -427,36 +425,8 @@ For trading logic & decision rules, see `TRADING_STRATEGY.md`.
 
 ---
 
-## Vibe Coding Collaboration Protocol
-
-See protocol details below for git discipline and development workflow.
-
-### 1. Git Safety
-- Commit baseline before major refactors
-- Roll back on 3+ consecutive failures
-- Always review with `git diff` before pushing
-
-### 2. Development Process
-1. Modify code locally
-2. Test with `npm run dev`
-3. Review changes with `git diff --cached`
-4. Commit with proper message format
-5. Verify build with `npm run build`
-
-### 3. Error Priority
-1. **Compilation errors** - immediate fix
-2. **Runtime errors** - fix within 24h
-3. **Functionality bugs** - per scope
-4. **Performance** - next iteration
-
-### 4. Documentation Sync
-- API changes → update API docs
-- Config changes → update this file
-- Architecture changes → update README
-
----
 
 **Project Version**: 0.1.0
-**Last Updated**: 2026-03-15
+**Last Updated**: 2026-03-16
 **Node.js Required**: 20.19.0+
 **Maintained By**: Alpha-Quant-Copilot Team

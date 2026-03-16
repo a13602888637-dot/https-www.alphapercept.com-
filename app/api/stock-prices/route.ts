@@ -40,7 +40,7 @@ async function fetchFromTencent(symbols: string[]): Promise<MarketData[]> {
   // 注意：指数检查必须在通用前缀检查之前
   const tencentSymbols = symbols.map(s => {
     // 指数优先判断
-    if (s === '000300' || s === '000905') return `sh${s}`;
+    if (s === '000001' || s === '000300' || s === '000905') return `sh${s}`;
     if (s.startsWith('399')) return `sz${s}`;
     // 普通股票
     if (s.startsWith('6') || s.startsWith('9')) return `sh${s}`;

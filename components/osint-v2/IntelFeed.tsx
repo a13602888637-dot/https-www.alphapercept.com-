@@ -83,60 +83,40 @@ export function IntelFeed({ entities, conflicts, errors }: IntelFeedProps) {
     const items: FeedItem[] = [];
 
     try {
-      const intelRes = await fetch("/api/intelligence-feed?limit=20");
-      if (intelRes.ok) {
-        const intelData = await intelRes.json();
-        const intelItems: unknown[] = Array.isArray(intelData)
-          ? intelData
-          : (intelData?.data ?? intelData?.items ?? []);
-        for (const raw of intelItems) {
-          const item = raw as Record<string, unknown>;
-          const trapProb = Number(item.trapProbability ?? 0);
-          const severity: FeedItem["severity"] =
-            trapProb > 70 ? "high" : trapProb > 40 ? "medium" : "low";
-          items.push({
-            id: `intel-${item.id ?? Math.random()}`,
-            timestamp:
-              typeof item.createdAt === "string"
-                ? new Date(item.createdAt).getTime()
-                : Date.now(),
-            severity,
-            icon: "AI",
-            headline: String(item.title ?? item.headline ?? item.stockCode ?? ""),
-            body: String(item.summary ?? item.content ?? item.actionSignal ?? "").slice(0, 120),
-            source: String(item.source ?? "intelligence-feed"),
-          });
-        }
-      }
-    } catch {
-      // silently ignore fetch errors for API data
-    }
-
-    try {
       const newsRes = await fetch("/api/news-feed");
       if (newsRes.ok) {
         const newsData = await newsRes.json();
         const newsItems: unknown[] = Array.isArray(newsData)
           ? newsData
-          : (newsData?.data ?? newsData?.items ?? []);
+          : (newsData?.news ?? []);
         for (const raw of newsItems) {
           const item = raw as Record<string, unknown>;
-          const impact = String(item.impact ?? item.importance ?? "low").toLowerCase();
+          const impact = String(item.impact ?? "low").toLowerCase();
           const severity: FeedItem["severity"] =
-            impact === "high" ? "critical" : impact === "medium" ? "medium" : "low";
+            impact === "high" ? "high" : impact === "medium" ? "medium" : "low";
           items.push({
             id: `news-${item.id ?? Math.random()}`,
             timestamp:
-              typeof item.publishedAt === "string"
-                ? new Date(item.publishedAt).getTime()
-                : typeof item.createdAt === "string"
-                ? new Date(item.createdAt).getTime()
+              typeof item.pubDate === "string"
+                ? new Date(item.pubDate).getTime()
                 : Date.now(),
             severity,
             icon: "NEWS",
             headline: String(item.title ?? item.headline ?? ""),
             body: String(item.summary ?? item.description ?? item.content ?? "").slice(0, 120),
             source: String(item.source ?? "news-feed"),
+          });
+        }
+
+        if (newsData?.summary && newsData.summary.length > 10 && newsData.summary !== '暂无新闻摘要') {
+          items.unshift({
+            id: 'news-ai-summary',
+            timestamp: Date.now(),
+            severity: 'low' as const,
+            icon: 'AI',
+            headline: '今日财经要闻摘要',
+            body: newsData.summary.slice(0, 120),
+            source: 'AI摘要',
           });
         }
       }
@@ -213,7 +193,27 @@ export function IntelFeed({ entities, conflicts, errors }: IntelFeedProps) {
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-px p-1">
-        {allItems.length === 0 ? (
+        {allItems.length === 0 && Object.keys(errors).length > 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-2">
+            <svg
+              className="w-5 h-5 text-red-500"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="text-[11px] text-red-400 font-medium">
+              数据源连接失败
+            </span>
+            <span className="text-[9px] text-[#5a6580]">
+              请检查网络连接
+            </span>
+          </div>
+        ) : allItems.length === 0 ? (
           <div className="text-center py-8 text-[#3a4560] text-[11px]">
             No active intelligence items
           </div>

@@ -480,6 +480,11 @@ function normalizeSymbolForTencent(symbol: string): string {
     return cleanSymbol;
   }
 
+  // A-share major indices — must use sh prefix regardless of code pattern
+  if (cleanSymbol === '000001' || cleanSymbol === '000300' || cleanSymbol === '000905') {
+    return `sh${cleanSymbol}`;
+  }
+
   // Determine exchange prefix
   if (cleanSymbol.startsWith('6')) {
     return `sh${cleanSymbol}`;
@@ -499,6 +504,11 @@ function normalizeSymbolForSina(symbol: string): string {
   // If already starts with sh/sz, return as is
   if (cleanSymbol.startsWith('sh') || cleanSymbol.startsWith('sz')) {
     return cleanSymbol;
+  }
+
+  // A-share major indices — must use sh prefix regardless of code pattern
+  if (cleanSymbol === '000001' || cleanSymbol === '000300' || cleanSymbol === '000905') {
+    return `sh${cleanSymbol}`;
   }
 
   // Determine exchange prefix

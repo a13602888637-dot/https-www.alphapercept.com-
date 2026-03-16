@@ -44,6 +44,7 @@ export class GeoConflictAdapter implements DataAdapter<GeoConflictEntity> {
   private cachedEvents: GeoConflictEntity[] = [];
   private lastFetchTime = 0;
   private cacheValidMs = 600_000; // 10min cache
+  private lastFetchSuccess = false;
 
   async fetch(): Promise<GeoConflictEntity[]> {
     // If cache is fresh, return cached
@@ -51,8 +52,8 @@ export class GeoConflictAdapter implements DataAdapter<GeoConflictEntity> {
       return this.cachedEvents;
     }
 
-    const apiKey = process.env.ACLED_API_KEY;
-    const email = process.env.ACLED_EMAIL;
+    const apiKey = typeof process !== "undefined" ? process.env?.ACLED_API_KEY : undefined;
+    const email = typeof process !== "undefined" ? process.env?.ACLED_EMAIL : undefined;
 
     if (!apiKey || !email) {
       console.warn("ACLED credentials not configured, using server proxy");
@@ -85,15 +86,26 @@ export class GeoConflictAdapter implements DataAdapter<GeoConflictEntity> {
 
       this.cachedEvents = data.data.map(this.normalizeEvent);
       this.lastFetchTime = Date.now();
+      this.lastFetchSuccess = true;
       return this.cachedEvents;
     } catch (err) {
-      console.warn("ACLED fetch failed:", err);
-      return this.cachedEvents;
+      console.warn("ACLED fetch failed, trying proxy:", err);
+      this.lastFetchSuccess = false;
+      return this.fetchViaProxy();
     }
   }
 
   async isHealthy(): Promise<boolean> {
-    return !!(process.env.ACLED_API_KEY && process.env.ACLED_EMAIL);
+    // Health is based on last fetch success, not env var presence
+    // (env vars are not available client-side, and the proxy route
+    // handles GDELT fallback server-side)
+    if (this.lastFetchSuccess) return true;
+    if (this.cachedEvents.length > 0 && Date.now() - this.lastFetchTime < this.cacheValidMs) {
+      return true;
+    }
+    // If we've never fetched, optimistically assume proxy is available
+    if (this.lastFetchTime === 0) return true;
+    return false;
   }
 
   private async fetchViaProxy(): Promise<GeoConflictEntity[]> {
@@ -101,15 +113,20 @@ export class GeoConflictAdapter implements DataAdapter<GeoConflictEntity> {
       const res = await fetch("/api/geoconflict", {
         signal: AbortSignal.timeout(10000),
       });
-      if (!res.ok) return [];
+      if (!res.ok) {
+        this.lastFetchSuccess = false;
+        return this.cachedEvents.length > 0 ? this.cachedEvents : [];
+      }
       const data = await res.json();
       if (data.success && Array.isArray(data.events)) {
         this.cachedEvents = data.events.map(this.normalizeEvent);
         this.lastFetchTime = Date.now();
+        this.lastFetchSuccess = true;
       }
       return this.cachedEvents;
     } catch {
-      return [];
+      this.lastFetchSuccess = false;
+      return this.cachedEvents.length > 0 ? this.cachedEvents : [];
     }
   }
 

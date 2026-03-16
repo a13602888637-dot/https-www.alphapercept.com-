@@ -55,6 +55,7 @@ export class MaritimeAdapter implements DataAdapter<MaritimeEntity> {
   private activeZones: string[];
   private cachedVessels: MaritimeEntity[] = [];
   private lastFetchTime = 0;
+  lastFetchSuccess = false;
 
   constructor(zones: string[] = ["malacca", "red_sea", "taiwan"]) {
     this.activeZones = zones;
@@ -72,6 +73,7 @@ export class MaritimeAdapter implements DataAdapter<MaritimeEntity> {
 
       if (!res.ok) {
         console.warn(`Maritime API returned ${res.status}`);
+        this.lastFetchSuccess = false;
         return this.cachedVessels;
       }
 
@@ -79,17 +81,23 @@ export class MaritimeAdapter implements DataAdapter<MaritimeEntity> {
       if (data.success && Array.isArray(data.vessels)) {
         this.cachedVessels = data.vessels.map(this.normalizeVessel);
         this.lastFetchTime = Date.now();
+        this.lastFetchSuccess = true;
+      } else {
+        this.lastFetchSuccess = false;
       }
 
       return this.cachedVessels;
     } catch (err) {
       console.warn("Maritime fetch failed:", err);
+      this.lastFetchSuccess = false;
       return this.cachedVessels;
     }
   }
 
   async isHealthy(): Promise<boolean> {
-    return !!process.env.AISSTREAM_API_KEY;
+    // Client-side: track health based on last fetch outcome
+    // (process.env.AISSTREAM_API_KEY is not available in the browser)
+    return this.lastFetchSuccess;
   }
 
   setZones(zones: string[]) {
