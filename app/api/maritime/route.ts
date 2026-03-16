@@ -89,22 +89,34 @@ async function fetchFromAISStream(zoneKeys: string[]): Promise<FetchResult> {
   return new Promise((resolve) => {
     let ws: any;
     let timeout: NodeJS.Timeout;
+    let dataTimeout: NodeJS.Timeout;
     let didConnect = false;
+    let resolved = false;
+
+    function doResolve(result: FetchResult) {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeout);
+      clearTimeout(dataTimeout);
+      // Backfill IMO numbers
+      for (const v of result.vessels) {
+        if (!v.imo && imoByMMSI.has(v.mmsi)) {
+          v.imo = imoByMMSI.get(v.mmsi);
+        }
+      }
+      resolve(result);
+    }
 
     try {
       const WebSocket = require('ws');
       ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
 
+      // Hard wall: must return within 7.5s total (Vercel Hobby = 10s, leave 2.5s margin)
       timeout = setTimeout(() => {
-        // Before closing, backfill IMO numbers from ShipStaticData
-        for (const v of vessels) {
-          if (!v.imo && imoByMMSI.has(v.mmsi)) {
-            v.imo = imoByMMSI.get(v.mmsi);
-          }
-        }
+        console.log(`AISStream timeout hit: vessels=${vessels.length} connected=${didConnect}`);
         try { ws?.close(); } catch {}
-        resolve({ vessels, connected: didConnect });
-      }, 6000); // 6s collection window — safe within Vercel Hobby 10s limit
+        doResolve({ vessels, connected: didConnect });
+      }, 7500);
 
       ws.on('open', () => {
         didConnect = true;
@@ -114,13 +126,34 @@ async function fetchFromAISStream(zoneKeys: string[]): Promise<FetchResult> {
           FilterMessageTypes: ["PositionReport", "ShipStaticData"],
         };
         ws.send(JSON.stringify(subscribeMsg));
+        console.log(`AISStream subscription sent for zones: ${zoneKeys.join(',')}`);
+
+        // If no data arrives within 3s of connection, close and resolve early
+        // (prevents holding the function alive if AISStream is not responding with data)
+        dataTimeout = setTimeout(() => {
+          if (vessels.length === 0) {
+            console.warn(`AISStream: no data received 3s after subscription, closing early`);
+            try { ws?.close(); } catch {}
+          }
+        }, 3000);
       });
 
       ws.on('message', (raw: Buffer) => {
         try {
           const msg = JSON.parse(raw.toString());
           const meta = msg.MetaData;
-          if (!meta?.MMSI) return;
+          if (!meta?.MMSI) {
+            // Log non-vessel messages (e.g. auth errors, server notices)
+            if (msg.error || msg.message || msg.status) {
+              console.warn('AISStream server message:', JSON.stringify(msg).substring(0, 200));
+            }
+            return;
+          }
+
+          // First data received — cancel the early-close dataTimeout
+          if (vessels.length === 0) {
+            clearTimeout(dataTimeout);
+          }
 
           const mmsi = String(meta.MMSI);
 
@@ -179,33 +212,24 @@ async function fetchFromAISStream(zoneKeys: string[]): Promise<FetchResult> {
 
           // Stop after collecting 300 unique vessels
           if (vessels.length >= 300) {
-            clearTimeout(timeout);
-            // Backfill IMO before resolving
-            for (const v of vessels) {
-              if (!v.imo && imoByMMSI.has(v.mmsi)) {
-                v.imo = imoByMMSI.get(v.mmsi);
-              }
-            }
             try { ws?.close(); } catch {}
-            resolve({ vessels, connected: didConnect });
+            doResolve({ vessels, connected: didConnect });
           }
         } catch { /* skip malformed messages */ }
       });
 
       ws.on('error', (err: Error) => {
         console.warn('AISStream WebSocket error:', err.message);
-        clearTimeout(timeout);
-        resolve({ vessels, connected: didConnect });
+        doResolve({ vessels, connected: didConnect });
       });
 
-      ws.on('close', () => {
-        clearTimeout(timeout);
-        resolve({ vessels, connected: didConnect });
+      ws.on('close', (code: number, reason: Buffer) => {
+        console.warn(`AISStream WS closed: code=${code} reason=${reason?.toString() || 'none'} didConnect=${didConnect} vessels=${vessels.length}`);
+        doResolve({ vessels, connected: didConnect });
       });
     } catch (err) {
       console.warn('AISStream connection failed:', err);
-      clearTimeout(timeout!);
-      resolve({ vessels, connected: false });
+      doResolve({ vessels, connected: false });
     }
   });
 }
