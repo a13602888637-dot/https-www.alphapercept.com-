@@ -373,6 +373,20 @@ git reset --hard HEAD~1
 - `.env*` files block edits (security hook)
 - Use `vercel env` for production secrets
 - Never commit Clerk/Supabase credentials
+- **`printf '%s' "$val" | vercel env add KEY production`** — 必须用 `printf`，不能用 `echo`；`echo` 会注入尾部 `\n`，导致 AISStream 等 API Key 鉴权静默失败（表现为 connected=true 但 0 数据）
+- 追加 `.env.local` 时先确认文件末尾有换行，否则用 Python 修正（`echo >>` 可能污染上一行）
+
+### ⚠️ A股指数 Sina/Tencent 符号前缀
+- `000001`（上证指数）、`000300`（沪深300）、`000905`（中证500）必须用 `sh` 前缀，不能走通用 `startsWith('0') → sz` 规则
+- 相关函数：`skills/data_crawler.ts` 的 `normalizeSymbolForSina`/`normalizeSymbolForTencent`，以及 `app/api/stock-prices/route.ts` 的 `fetchFromTencent`
+
+### ⚠️ news-feed Fallback API 解析
+- CLS / Sina / 东方财富 fallback API 返回**纯 UTF-8 JSON**（非 GBK，非 JSONP）
+- JSONP 剥离正则 `/[)}\];]*$/` 不能对 `{`/`[` 开头的响应使用，会吃掉末尾 `}}` 导致 JSON.parse 失败
+- 判断：`trimmed.startsWith('{') || trimmed.startsWith('[')` → 跳过尾部剥离
+
+### ⚠️ 本地调试 curl
+- 本地 curl 测试 dev server 必须加 `--noproxy localhost`，否则走系统代理（127.0.0.1:1087）返回 503
 
 ### ⚠️ Claude Code Configuration
 - `.claude/` directory is gitignored (personal tool config)
