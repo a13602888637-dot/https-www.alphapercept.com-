@@ -283,6 +283,110 @@ function makeChartOptions(
 }
 
 // ---------------------------------------------------------------------------
+// TechDataStrip — always rendered, shows skeleton when data is loading
+// ---------------------------------------------------------------------------
+
+interface TechDataStripProps {
+  symbol: string;
+  stockName: string;
+  rtPrice: RealtimePrice | null;
+  lastKline: KlineRecord | null;
+  onBack: () => void;
+}
+
+function TechDataStrip({ symbol, stockName, rtPrice, lastKline, onBack }: TechDataStripProps) {
+  const isUp = (rtPrice?.changePercent ?? lastKline?.changePercent ?? 0) > 0;
+  const isFlat = (rtPrice?.changePercent ?? lastKline?.changePercent ?? 0) === 0;
+  const priceColor = isUp ? "text-[#ef4444]" : isFlat ? "text-gray-200" : "text-[#22c55e]";
+  const sign = isUp ? "+" : "";
+
+  const displayPrice = rtPrice?.price ?? lastKline?.close ?? null;
+  const displayChange = rtPrice?.change ?? lastKline?.change ?? 0;
+  const displayChangePct = rtPrice?.changePercent ?? lastKline?.changePercent ?? 0;
+
+  function cell(label: string, value: string | null | undefined, colorClass?: string) {
+    return (
+      <div className="flex flex-col items-start min-w-0">
+        <span className="text-[9px] text-white/30 leading-none tracking-wider uppercase">{label}</span>
+        {value == null ? (
+          <span className="mt-0.5 h-3 w-10 rounded bg-white/5 animate-pulse" />
+        ) : (
+          <span className={`text-[10px] font-mono tabular-nums leading-tight mt-0.5 ${colorClass ?? "text-gray-200"}`}>
+            {value}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  const changeColor = isUp ? "text-[#ef4444]" : isFlat ? "text-gray-200" : "text-[#22c55e]";
+
+  return (
+    <header
+      className="sticky top-0 z-30 backdrop-blur-md border-b"
+      style={{ background: "rgba(6,10,18,0.95)", borderColor: "rgba(255,255,255,0.06)" }}
+    >
+      <div className="max-w-screen-2xl mx-auto px-3 py-2">
+        {/* Row 1: Back / Identity / Price */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-gray-300 transition-colors shrink-0"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            <span className="font-mono">返回</span>
+          </button>
+
+          <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
+            <span className="text-white text-xs font-bold font-mono tracking-wide shrink-0">{symbol}</span>
+            {stockName && <span className="text-gray-500 text-[11px] truncate">{stockName}</span>}
+          </div>
+
+          {/* C-position: current price */}
+          <div className="text-right shrink-0">
+            {displayPrice != null ? (
+              <>
+                <div className={`font-mono text-2xl font-bold leading-none tabular-nums ${priceColor}`}>
+                  {fmtNum(displayPrice)}
+                </div>
+                <div className={`font-mono text-[10px] tabular-nums mt-0.5 ${changeColor}`}>
+                  {sign}{fmtNum(displayChange)}&nbsp;{sign}{fmtNum(displayChangePct)}%
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1">
+                <div className="h-6 w-20 rounded bg-white/5 animate-pulse" />
+                <div className="h-3 w-16 rounded bg-white/5 animate-pulse ml-auto" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Data grid */}
+        <div className="mt-2 grid grid-cols-7 gap-x-3 gap-y-1.5 border-t border-white/[0.04] pt-2">
+          {cell("今开", rtPrice?.open != null ? fmtNum(rtPrice.open) : lastKline?.open != null ? fmtNum(lastKline.open) : null)}
+          {cell("昨收", rtPrice?.prevClose != null ? fmtNum(rtPrice.prevClose) : null)}
+          {cell("最高", rtPrice?.high != null ? fmtNum(rtPrice.high) : lastKline?.high != null ? fmtNum(lastKline.high) : null, "text-[#ef4444]")}
+          {cell("最低", rtPrice?.low != null ? fmtNum(rtPrice.low) : lastKline?.low != null ? fmtNum(lastKline.low) : null, "text-[#22c55e]")}
+          {cell("成交量", rtPrice?.volume != null ? fmtVol(rtPrice.volume) : lastKline?.volume != null ? fmtVol(lastKline.volume) : null)}
+          {cell("成交额", rtPrice?.turnover != null ? fmtVol(rtPrice.turnover) : lastKline?.amount != null ? fmtVol(lastKline.amount) : null)}
+          {cell("换手率",
+            rtPrice?.turnoverRate != null ? fmtNum(rtPrice.turnoverRate) + "%" :
+            lastKline?.turnoverRate != null ? fmtNum(lastKline.turnoverRate) + "%" : null
+          )}
+          {cell("量比", rtPrice?.volumeRatio != null ? fmtNum(rtPrice.volumeRatio) : null)}
+          {cell("委比", rtPrice?.bidRatio != null ? fmtNum(rtPrice.bidRatio) + "%" : null)}
+          {cell("PE", rtPrice?.peRatio != null ? fmtNum(rtPrice.peRatio) : null)}
+          {cell("PB", rtPrice?.pbRatio != null ? fmtNum(rtPrice.pbRatio) : null)}
+          {cell("总市值", rtPrice?.marketCap != null ? fmtMktCap(rtPrice.marketCap) : null)}
+          {cell("流通市值", rtPrice?.circulatingMarketCap != null ? fmtMktCap(rtPrice.circulatingMarketCap) : null)}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -389,8 +493,10 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
         const res = await fetch("/api/global-macro");
         if (!res.ok) return;
         const json = await res.json();
-        if (json.success && json.data?.[symbol]) {
-          const d = json.data[symbol];
+        const d = Array.isArray(json.markets)
+          ? json.markets.find((m: any) => m.symbol === symbol)
+          : null;
+        if (d) {
           setRtPrice({
             price: d.price ?? 0,
             change: d.change ?? 0,
@@ -530,7 +636,15 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
     const macdChart = createChart(macdEl, makeChartOptions(width, MACD_HEIGHT, false));
     chartsRef.current.macd = macdChart;
 
-    const { dif, dea, histogram } = calcMACDIndicator(closes);
+    let macdResult = { dif: [] as number[], dea: [] as number[], histogram: [] as number[] };
+    let kdjResult = { k: [] as number[], d: [] as number[], j: [] as number[] };
+    try {
+      macdResult = calcMACDIndicator(closes);
+      kdjResult = calcKDJIndicator(highs, lows, closes);
+    } catch (e) {
+      console.error("[AssetDetailView] indicator calc error:", e);
+    }
+    const { dif, dea, histogram } = macdResult;
 
     const difSeries = macdChart.addLineSeries({ color: "#3b82f6", lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
     const deaSeries = macdChart.addLineSeries({ color: "#f59e0b", lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
@@ -556,7 +670,7 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
     const kdjChart = createChart(kdjEl, makeChartOptions(width, KDJ_HEIGHT, true));
     chartsRef.current.kdj = kdjChart;
 
-    const { k, d, j } = calcKDJIndicator(highs, lows, closes);
+    const { k, d, j } = kdjResult;
 
     const kSeries = kdjChart.addLineSeries({ color: "#3b82f6", lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
     const dSeries = kdjChart.addLineSeries({ color: "#f59e0b", lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
@@ -772,66 +886,13 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
       className="min-h-screen overflow-y-auto"
       style={{ background: PAGE_BG, fontFamily: "'JetBrains Mono', 'SF Mono', monospace" }}
     >
-      {/* ── Sticky Header: Tech Data Strip ─────────────────────────── */}
-      <header
-        className="sticky top-0 z-30 backdrop-blur-md border-b"
-        style={{
-          background: "rgba(6,10,18,0.92)",
-          borderColor: BORDER_COLOR,
-        }}
-      >
-        <div className="max-w-screen-2xl mx-auto px-3 py-2.5">
-          {/* Row 1: Back / Name / Price */}
-          <div className="flex items-center justify-between gap-3">
-            {/* Back button */}
-            <button
-              onClick={handleBack}
-              className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 transition-colors shrink-0"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>返回</span>
-            </button>
-
-            {/* Symbol + Name */}
-            <div className="flex items-baseline gap-2 min-w-0">
-              <span className="text-white font-bold text-sm tracking-wide">{symbol}</span>
-              {stockName && (
-                <span className="text-gray-400 text-xs truncate">{stockName}</span>
-              )}
-            </div>
-
-            {/* Price block */}
-            <div className="text-right shrink-0">
-              {displayPrice !== null ? (
-                <>
-                  <div className={`font-mono text-xl font-bold leading-none ${priceColor}`}>
-                    {fmtNum(displayPrice)}
-                  </div>
-                  <div className={`font-mono text-[10px] mt-0.5 ${priceColor}`}>
-                    {sign}
-                    {fmtNum(displayChange)}&nbsp;&nbsp;{sign}
-                    {fmtNum(displayChangePct)}%
-                  </div>
-                </>
-              ) : (
-                <span className="text-gray-600 text-xs">--</span>
-              )}
-            </div>
-          </div>
-
-          {/* Row 2: Info grid */}
-          <div className="mt-2 grid grid-cols-7 gap-x-1 gap-y-1 sm:grid-cols-13">
-            {infoItems.map((item) => (
-              <div key={item.label} className="flex flex-col items-center">
-                <span className="text-[9px] text-gray-600 leading-none">{item.label}</span>
-                <span className="text-[10px] text-gray-300 font-mono leading-tight mt-0.5">
-                  {item.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </header>
+      <TechDataStrip
+        symbol={symbol}
+        stockName={stockName}
+        rtPrice={rtPrice}
+        lastKline={lastKline}
+        onBack={handleBack}
+      />
 
       {/* ── Content ────────────────────────────────────────────────── */}
       <div className="max-w-screen-2xl mx-auto px-2 sm:px-3 pb-6" ref={wrapperRef}>
