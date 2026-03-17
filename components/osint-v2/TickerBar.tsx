@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { SituationalEntity } from "@/services/types";
 
 interface TickerBarProps {
@@ -7,6 +8,7 @@ interface TickerBarProps {
 }
 
 export function TickerBar({ financials }: TickerBarProps) {
+  const router = useRouter();
   if (financials.length === 0) {
     return (
       <div className="h-7 bg-[#0d1220] border-b border-[#1a2035] flex items-center px-3">
@@ -21,7 +23,14 @@ export function TickerBar({ financials }: TickerBarProps) {
         {financials.map((e) => {
           const up = (e.deltaPercent ?? 0) >= 0;
           return (
-            <span key={e.id} className="text-[11px] font-mono inline-flex items-center gap-1.5">
+            <span
+              key={e.id}
+              className="text-[11px] font-mono inline-flex items-center gap-1.5 cursor-pointer hover:bg-[#1a2035]/50 rounded px-1 transition-colors"
+              onClick={() => {
+                const symbol = (e as any).metadata?.symbol || e.id;
+                router.push(`/dashboard/asset/${encodeURIComponent(symbol)}`);
+              }}
+            >
               <span className="text-[#5a6580]">{e.label}</span>
               <span className="text-white">{e.value?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? "—"}</span>
               <span className={up ? "text-[#ef4444]" : "text-[#22c55e]"}>

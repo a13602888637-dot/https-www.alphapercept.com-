@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { SituationalEntity, FinancialEntity } from "@/services/types";
 import { Sparkline } from "./Sparkline";
 
@@ -21,6 +22,8 @@ const GROUP_LABELS: Record<GroupKey, string> = {
 const GROUP_ORDER: GroupKey[] = ["index", "commodity", "fx", "rate", "stock"];
 
 export function FinancePanel({ financials, isLoading }: FinancePanelProps) {
+  const router = useRouter();
+
   // Group by subtype
   const groups = new Map<GroupKey, SituationalEntity[]>();
   for (const e of financials) {
@@ -58,7 +61,8 @@ export function FinancePanel({ financials, isLoading }: FinancePanelProps) {
                 return (
                   <div
                     key={e.id}
-                    className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-[#0f1520] transition-colors duration-150 group"
+                    className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-[#0f1520] transition-colors duration-150 group cursor-pointer"
+                    onClick={() => router.push(`/dashboard/asset/${encodeURIComponent((e as FinancialEntity).metadata?.symbol || e.id)}`)}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-[11px] text-[#8892a8] truncate group-hover:text-white transition-colors">
