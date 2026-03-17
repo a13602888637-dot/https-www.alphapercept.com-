@@ -4,12 +4,8 @@
  * Primary: AISStream.com WebSocket API (requires free API key)
  * Fallback: REST polling mode with cached data
  *
- * Monitors key chokepoints:
- *   - Strait of Malacca
- *   - Red Sea / Bab el-Mandeb
- *   - Panama Canal
- *   - Strait of Hormuz
- *   - Taiwan Strait
+ * Monitors 20 global maritime zones including chokepoints,
+ * regional seas, and major ocean shipping routes.
  *
  * Env vars:
  *   AISSTREAM_API_KEY - AISStream API key (free tier available)
@@ -23,11 +19,30 @@ import {
 
 // Chokepoint bounding boxes [lat_min, lat_max, lng_min, lng_max]
 export const MARITIME_ZONES: Record<string, { name: string; bbox: [number, number, number, number] }> = {
+  // Core chokepoints
   "malacca":  { name: "马六甲海峡", bbox: [0.5, 4.5, 99.0, 104.5] },
-  "red_sea":  { name: "红海", bbox: [12.0, 22.0, 36.0, 44.0] },
-  "hormuz":   { name: "霍尔木兹海峡", bbox: [25.0, 27.5, 55.0, 58.0] },
-  "panama":   { name: "巴拿马运河", bbox: [8.5, 9.5, -80.0, -79.0] },
-  "taiwan":   { name: "台湾海峡", bbox: [22.5, 26.0, 117.5, 121.0] },
+  "red_sea":  { name: "红海", bbox: [12.0, 30.0, 32.0, 44.0] },
+  "hormuz":   { name: "霍尔木兹", bbox: [23.0, 28.0, 54.0, 60.0] },
+  "taiwan":   { name: "台湾海峡", bbox: [21.0, 27.0, 116.0, 122.0] },
+  "panama":   { name: "巴拿马运河", bbox: [7.0, 10.0, -81.0, -77.0] },
+  // East & South Asia
+  "south_china_sea": { name: "南海", bbox: [3.0, 22.0, 105.0, 121.0] },
+  "east_china_sea":  { name: "东海", bbox: [25.0, 33.0, 120.0, 130.0] },
+  "japan_sea":       { name: "日本海", bbox: [33.0, 43.0, 128.0, 142.0] },
+  "korea_strait":    { name: "朝鲜海峡", bbox: [33.0, 36.0, 126.0, 132.0] },
+  "singapore":       { name: "新加坡海峡", bbox: [1.0, 1.5, 103.5, 104.5] },
+  // Middle East & Africa
+  "persian_gulf":    { name: "波斯湾", bbox: [24.0, 30.5, 48.0, 56.5] },
+  "gulf_of_aden":    { name: "亚丁湾", bbox: [10.0, 15.5, 43.0, 54.0] },
+  "suez":            { name: "苏伊士运河", bbox: [29.5, 31.5, 32.0, 33.5] },
+  // Europe
+  "mediterranean":   { name: "地中海", bbox: [30.0, 45.0, -6.0, 36.0] },
+  "english_channel": { name: "英吉利海峡", bbox: [49.0, 51.5, -5.5, 2.0] },
+  "baltic":          { name: "波罗的海", bbox: [53.5, 60.0, 10.0, 30.0] },
+  "black_sea":       { name: "黑海", bbox: [41.0, 46.5, 27.5, 42.0] },
+  // Ocean routes
+  "north_atlantic":  { name: "北大西洋航线", bbox: [35.0, 50.0, -45.0, -10.0] },
+  "indian_ocean":    { name: "印度洋航线", bbox: [-5.0, 15.0, 55.0, 80.0] },
 };
 
 // Ship type codes (AIS standard)
@@ -57,7 +72,7 @@ export class MaritimeAdapter implements DataAdapter<MaritimeEntity> {
   private lastFetchTime = 0;
   lastFetchSuccess = false;
 
-  constructor(zones: string[] = ["malacca", "red_sea", "taiwan"]) {
+  constructor(zones: string[] = Object.keys(MARITIME_ZONES)) {
     this.activeZones = zones;
   }
 

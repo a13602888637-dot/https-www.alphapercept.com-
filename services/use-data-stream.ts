@@ -43,7 +43,7 @@ export function useDataStream(): DataStreamHook {
     engine
       .register(new FinanceAdapter())
       .register(new AviationAdapter("taiwan_strait"))
-      .register(new MaritimeAdapter(["malacca", "red_sea", "taiwan"]))
+      .register(new MaritimeAdapter())
       .register(new GeoConflictAdapter());
 
     // Subscribe to state changes

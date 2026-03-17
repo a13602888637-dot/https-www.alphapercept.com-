@@ -58,11 +58,30 @@ const MARITIME_ZONES: Record<string, {
   name: string;
   bbox: { min_latitude: number; max_latitude: number; min_longitude: number; max_longitude: number };
 }> = {
+  // Core chokepoints
   malacca:  { name: "马六甲海峡", bbox: { min_latitude: 0.5, max_latitude: 4.5, min_longitude: 99.0, max_longitude: 104.5 } },
-  red_sea:  { name: "红海", bbox: { min_latitude: 12.0, max_latitude: 22.0, min_longitude: 36.0, max_longitude: 44.0 } },
-  hormuz:   { name: "霍尔木兹", bbox: { min_latitude: 25.0, max_latitude: 27.5, min_longitude: 55.0, max_longitude: 58.0 } },
-  taiwan:   { name: "台湾海峡", bbox: { min_latitude: 22.5, max_latitude: 26.0, min_longitude: 117.5, max_longitude: 121.0 } },
-  panama:   { name: "巴拿马运河", bbox: { min_latitude: 8.5, max_latitude: 9.5, min_longitude: -80.0, max_longitude: -79.0 } },
+  red_sea:  { name: "红海", bbox: { min_latitude: 12.0, max_latitude: 30.0, min_longitude: 32.0, max_longitude: 44.0 } },
+  hormuz:   { name: "霍尔木兹", bbox: { min_latitude: 23.0, max_latitude: 28.0, min_longitude: 54.0, max_longitude: 60.0 } },
+  taiwan:   { name: "台湾海峡", bbox: { min_latitude: 21.0, max_latitude: 27.0, min_longitude: 116.0, max_longitude: 122.0 } },
+  panama:   { name: "巴拿马运河", bbox: { min_latitude: 7.0, max_latitude: 10.0, min_longitude: -81.0, max_longitude: -77.0 } },
+  // East & South Asia
+  south_china_sea: { name: "南海", bbox: { min_latitude: 3.0, max_latitude: 22.0, min_longitude: 105.0, max_longitude: 121.0 } },
+  east_china_sea:  { name: "东海", bbox: { min_latitude: 25.0, max_latitude: 33.0, min_longitude: 120.0, max_longitude: 130.0 } },
+  japan_sea:       { name: "日本海", bbox: { min_latitude: 33.0, max_latitude: 43.0, min_longitude: 128.0, max_longitude: 142.0 } },
+  korea_strait:    { name: "朝鲜海峡", bbox: { min_latitude: 33.0, max_latitude: 36.0, min_longitude: 126.0, max_longitude: 132.0 } },
+  singapore:       { name: "新加坡海峡", bbox: { min_latitude: 1.0, max_latitude: 1.5, min_longitude: 103.5, max_longitude: 104.5 } },
+  // Middle East & Africa
+  persian_gulf:    { name: "波斯湾", bbox: { min_latitude: 24.0, max_latitude: 30.5, min_longitude: 48.0, max_longitude: 56.5 } },
+  gulf_of_aden:    { name: "亚丁湾", bbox: { min_latitude: 10.0, max_latitude: 15.5, min_longitude: 43.0, max_longitude: 54.0 } },
+  suez:            { name: "苏伊士运河", bbox: { min_latitude: 29.5, max_latitude: 31.5, min_longitude: 32.0, max_longitude: 33.5 } },
+  // Europe
+  mediterranean:   { name: "地中海", bbox: { min_latitude: 30.0, max_latitude: 45.0, min_longitude: -6.0, max_longitude: 36.0 } },
+  english_channel: { name: "英吉利海峡", bbox: { min_latitude: 49.0, max_latitude: 51.5, min_longitude: -5.5, max_longitude: 2.0 } },
+  baltic:          { name: "波罗的海", bbox: { min_latitude: 53.5, max_latitude: 60.0, min_longitude: 10.0, max_longitude: 30.0 } },
+  black_sea:       { name: "黑海", bbox: { min_latitude: 41.0, max_latitude: 46.5, min_longitude: 27.5, max_longitude: 42.0 } },
+  // Ocean routes
+  north_atlantic:  { name: "北大西洋航线", bbox: { min_latitude: 35.0, max_latitude: 50.0, min_longitude: -45.0, max_longitude: -10.0 } },
+  indian_ocean:    { name: "印度洋航线", bbox: { min_latitude: -5.0, max_latitude: 15.0, min_longitude: 55.0, max_longitude: 80.0 } },
 };
 
 interface FetchResult {
@@ -210,8 +229,8 @@ async function fetchFromAISStream(zoneKeys: string[]): Promise<FetchResult> {
 
           vessels.push(vessel);
 
-          // Stop after collecting 300 unique vessels
-          if (vessels.length >= 300) {
+          // Stop after collecting 1500 unique vessels
+          if (vessels.length >= 1500) {
             try { ws?.close(); } catch {}
             doResolve({ vessels, connected: didConnect });
           }
@@ -248,7 +267,8 @@ function buildVesselsByZone(vessels: VesselData[], zoneKeys: string[]): Record<s
 
 export async function POST(request: NextRequest) {
   try {
-    const { zones = ['malacca', 'red_sea', 'taiwan'] } = await request.json().catch(() => ({}));
+    const allZoneKeys = Object.keys(MARITIME_ZONES);
+    const { zones = allZoneKeys } = await request.json().catch(() => ({}));
     const cacheKey = [...zones].sort().join(',');
     const now = Date.now();
 

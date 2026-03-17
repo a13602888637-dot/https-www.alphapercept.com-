@@ -36,23 +36,7 @@ const GLOBAL_SYMBOLS: Record<string, SymbolConfig> = {
   "^TNX":     { name: "美10Y国债", category: "rate", region: "us", stooqSymbol: "tnx.us" },
 };
 
-const STATIC_FALLBACK: Record<string, { price: number; change: number; changePercent: number }> = {
-  "^DJI":     { price: 46641.00, change: -108.00, changePercent: -0.23 },
-  "^IXIC":    { price: 23748.00, change: -140.00, changePercent: -0.59 },
-  "^GSPC":    { price: 6622.90, change: -37.80, changePercent: -0.57 },
-  "^HSI":     { price: 25465.60, change: -251.16, changePercent: -0.98 },
-  "^N225":    { price: 44946.64, change: -408.35, changePercent: -0.90 },
-  "^FTSE":    { price: 8400.00, change: 30.00, changePercent: 0.36 },
-  "^DAX":     { price: 23000.00, change: 50.00, changePercent: 0.22 },
-  "GC=F":     { price: 5061.70, change: -22.30, changePercent: -0.44 },
-  "CL=F":     { price: 97.21, change: -0.80, changePercent: -0.82 },
-  "SI=F":     { price: 33.50, change: 0.20, changePercent: 0.60 },
-  "HG=F":     { price: 4.20, change: 0.03, changePercent: 0.72 },
-  "USDCNY=X": { price: 6.899, change: 0.01, changePercent: 0.14 },
-  "USDJPY=X": { price: 148.50, change: 0.20, changePercent: 0.13 },
-  "^VIX":     { price: 16.50, change: -0.30, changePercent: -1.79 },
-  "^TNX":     { price: 4.28, change: 0.01, changePercent: 0.23 },
-};
+const UNAVAILABLE_QUOTE = { price: null, change: null, changePercent: null, source: 'unavailable' as const };
 
 let cache: { data: any; timestamp: number } | null = null;
 const CACHE_TTL = 60 * 1000;
@@ -98,7 +82,7 @@ async function fetchStooq(symbols: string[]): Promise<Record<string, any>> {
   await Promise.allSettled(targets.map(async (sym) => {
     const stooqSym = GLOBAL_SYMBOLS[sym].stooqSymbol!;
     try {
-      const url = `https://stooq.com/q/l/?s=${encodeURIComponent(stooqSym)}&f=sd2t2ohlcvn&e=json`;
+      const url = `https://stooq.com/q/l/?s=${encodeURIComponent(stooqSym)}&f=sd2t2ohlcpvn&e=json`;
       const res = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; StockAnalysis/1.0)',
@@ -111,9 +95,9 @@ async function fetchStooq(symbols: string[]): Promise<Record<string, any>> {
       if (!item?.close) return;
 
       const close = parseFloat(item.close);
-      const open = parseFloat(item.open) || close;
-      const change = Number((close - open).toFixed(4));
-      const changePercent = open > 0 ? Number(((change / open) * 100).toFixed(2)) : 0;
+      const prevClose = parseFloat(item.previous_close) || parseFloat(item.open) || close;
+      const change = Number((close - prevClose).toFixed(4));
+      const changePercent = prevClose > 0 ? Number(((change / prevClose) * 100).toFixed(2)) : 0;
 
       if (close > 0) {
         results[sym] = {
@@ -155,7 +139,7 @@ export async function GET() {
     ).length;
 
     const markets = Object.entries(GLOBAL_SYMBOLS).map(([symbol, meta]) => {
-      const quote = quotes[symbol] || STATIC_FALLBACK[symbol] || { price: 0, change: 0, changePercent: 0, source: 'unavailable' };
+      const quote = quotes[symbol] || UNAVAILABLE_QUOTE;
       return {
         symbol,
         name: meta.name,
@@ -164,7 +148,7 @@ export async function GET() {
         price: quote.price,
         change: quote.change,
         changePercent: quote.changePercent,
-        source: quote.source || 'fallback',
+        source: quote.source || 'unavailable',
       };
     });
 
@@ -190,13 +174,13 @@ export async function GET() {
     console.error("Error in global-macro API:", error);
     const markets = Object.entries(GLOBAL_SYMBOLS).map(([symbol, meta]) => ({
       symbol, name: meta.name, category: meta.category, region: meta.region,
-      ...(STATIC_FALLBACK[symbol] || { price: 0, change: 0, changePercent: 0 }),
-      source: 'fallback',
+      price: null, change: null, changePercent: null,
+      source: 'unavailable',
     }));
     return NextResponse.json({
-      success: true, markets, primarySource: 'fallback',
+      success: false, markets, primarySource: 'unavailable',
       liveCount: 0, totalCount: markets.length,
-      timestamp: new Date().toISOString(), fallback: true,
+      timestamp: new Date().toISOString(),
     });
   }
 }
