@@ -14,6 +14,7 @@ export interface DeepSeekStreamOptions {
   messages: DeepSeekMessage[];
   temperature?: number;
   max_tokens?: number;
+  model?: string;
   onChunk?: (chunk: string) => void;
   onComplete?: (fullText: string) => void;
   onError?: (error: Error) => void;
@@ -36,7 +37,7 @@ export async function callDeepSeekStream(options: DeepSeekStreamOptions): Promis
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
+      model: options.model || DEEPSEEK_MODEL,
       messages: options.messages,
       stream: true,
       temperature: options.temperature ?? 0.7,

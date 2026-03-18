@@ -388,6 +388,26 @@ git reset --hard HEAD~1
 ### ⚠️ 本地调试 curl
 - 本地 curl 测试 dev server 必须加 `--noproxy localhost`，否则走系统代理（127.0.0.1:1087）返回 503
 
+### ⚠️ /api/global-macro 响应结构
+- 返回 `{ markets: [{symbol, name, price, change, changePercent, source}] }` — 是数组不是对象
+- 查找特定 symbol：`json.markets?.find(m => m.symbol === sym)` — 不能用 `json.markets?.[sym]`
+- `source` 字段可能为 `'finnhub'` / `'stooq'` / `'unavailable'`（null 表示 API 失败，无 fallback 假数据）
+
+### ⚠️ global-macro STATIC_FALLBACK 已删除
+- 历史上曾有硬编码陈旧价格 fallback，已删除。API 失败现在返回 `null` + `source:'unavailable'`
+- 不要重新添加任何硬编码价格作为 fallback — 宁可显示 `--` 也不能显示假数据
+- Stooq change 计算：URL 参数必须加 `p`（prevClose）: `f=sd2t2ohlcpvn`；用 `close - previous_close`，不能用 `close - open`
+
+### ⚠️ AISStream 全球覆盖
+- `MaritimeAdapter()` 无参默认订阅全部 20 个航区；如需限定区域才传数组
+- 船只上限 1500，7.5s WebSocket 窗口（Vercel Hobby 限制）
+
+### ⚠️ lightweight-charts 多图联动
+- 时间轴缝合：上层图 `timeScale: { visible: false }`，仅底图 `visible: true`
+- 十字光标同步：`subscribeCrosshairMove` + `setCrosshairPosition(val, time, series)`；需共享 `isSyncing` flag 防循环
+- 缩放同步：`subscribeVisibleLogicalRangeChange` + `setVisibleLogicalRange(range)`
+- `technicalindicators` 计算必须 try-catch 保护（数据不足时会抛出）
+
 ### ⚠️ Claude Code Configuration
 - `.claude/` directory is gitignored (personal tool config)
 - `.mcp.json` is committed (team shares MCP server list)

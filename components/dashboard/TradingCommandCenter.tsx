@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import Link from "next/link";
@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { StockSearchInput } from "@/components/watchlist/StockSearchInput";
-import { QAChat } from "@/components/strategy-chat/qa-chat";
+import { QAChat, DashboardContext } from "@/components/strategy-chat/qa-chat";
 import { AICandidatesPanel } from "@/components/dashboard/AICandidatesPanel";
 import { toast } from "sonner";
 import {
@@ -84,6 +84,9 @@ export function TradingCommandCenter() {
   // Alert state
   const [alerts, setAlerts] = useState<Map<string, AlertType[]>>(new Map());
   const firedNotifications = useRef<Set<string>>(new Set());
+
+  // News headlines for AI context
+  const [newsHeadlines, setNewsHeadlines] = useState<string[]>([]);
 
   // UI state
   const [searchQuery, setSearchQuery] = useState("");
@@ -294,6 +297,59 @@ export function TradingCommandCenter() {
 
     return () => clearInterval(interval);
   }, [watchlist.length, fetchStockPrices, watchlist]);
+
+  // -------------------------------------------------------------------
+  // Fetch news headlines for AI context
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        const res = await fetch("/api/news-feed");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.news && Array.isArray(data.news)) {
+          setNewsHeadlines(
+            data.news.slice(0, 5).map((n: { title?: string; headline?: string }) => n.title || n.headline || "")
+          );
+        }
+      } catch {
+        // non-critical
+      }
+    };
+    fetchNews();
+    const interval = setInterval(fetchNews, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // -------------------------------------------------------------------
+  // Build dashboard context for AI assistant
+  // -------------------------------------------------------------------
+  const dashboardContext: DashboardContext = useMemo(() => {
+    const ctx: DashboardContext = {};
+
+    // Watchlist with prices
+    if (watchlist.length > 0) {
+      ctx.watchlist = watchlist.map((item) => {
+        const pd = stockPrices[item.stockCode];
+        return {
+          stockCode: item.stockCode,
+          stockName: item.stockName,
+          price: pd?.price ?? 0,
+          changePercent: pd?.changePercent ?? 0,
+          buyPrice: item.buyPrice,
+          stopLossPrice: item.stopLossPrice,
+          targetPrice: item.targetPrice,
+        };
+      });
+    }
+
+    // News
+    if (newsHeadlines.length > 0) {
+      ctx.newsHeadlines = newsHeadlines;
+    }
+
+    return ctx;
+  }, [watchlist, stockPrices, newsHeadlines]);
 
   // -------------------------------------------------------------------
   // Add stock handler
@@ -825,17 +881,17 @@ export function TradingCommandCenter() {
         </main>
 
         {/* ----------------------------------------------------------- */}
-        {/* AI SIDEBAR (~25%)                                            */}
+        {/* AI COMMAND TOWER (~25%)                                      */}
         {/* ----------------------------------------------------------- */}
-        <aside className="hidden lg:flex flex-col w-80 xl:w-96 border-l border-gray-800 overflow-hidden">
-          {/* AI Candidates */}
-          <div className="flex-shrink-0 border-b border-gray-800 overflow-y-auto max-h-[45%]">
+        <aside className="hidden lg:flex flex-col w-80 xl:w-96 border-l border-[#111125] bg-[#050505] overflow-hidden">
+          {/* AI Candidates — fixed ~35% */}
+          <div className="flex-shrink-0 h-[35%] border-b border-[#111125] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1a1a2e] scrollbar-track-transparent">
             <AICandidatesPanel />
           </div>
 
-          {/* QA Chat */}
-          <div className="flex-1 overflow-hidden">
-            <QAChat className="h-full border-0 rounded-none bg-transparent" />
+          {/* QA Chat — fills remaining ~65% */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <QAChat dashboardContext={dashboardContext} />
           </div>
         </aside>
       </div>

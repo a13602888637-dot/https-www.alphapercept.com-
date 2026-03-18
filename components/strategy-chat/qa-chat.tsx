@@ -6,26 +6,17 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
   Send,
-  User,
-  Bot,
   Copy,
-  ThumbsUp,
-  ThumbsDown,
   RefreshCw,
   Trash2,
   Download,
-  BookOpen,
-  BarChart3,
-  TrendingUp,
+  ChevronDown,
 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 export interface ChatMessage {
   id: string
@@ -36,44 +27,94 @@ export interface ChatMessage {
   feedback?: "positive" | "negative" | null
 }
 
+export type AIModel = "deepseek-chat" | "deepseek-reasoner" | "claude-3-5-sonnet" | "claude-3-haiku"
+
+const MODEL_LABELS: Record<AIModel, string> = {
+  "deepseek-chat": "DeepSeek-V3",
+  "deepseek-reasoner": "DeepSeek-R1",
+  "claude-3-5-sonnet": "Claude 3.5 Sonnet",
+  "claude-3-haiku": "Claude 3 Haiku",
+}
+
+export interface DashboardContext {
+  watchlist?: Array<{
+    stockCode: string
+    stockName: string
+    price: number
+    changePercent: number
+    buyPrice?: number | null
+    stopLossPrice?: number | null
+    targetPrice?: number | null
+  }>
+  indices?: Array<{
+    label: string
+    value: number
+    deltaPercent: number
+  }>
+  newsHeadlines?: string[]
+}
+
 interface QAChatProps {
   className?: string
   initialMessages?: ChatMessage[]
+  dashboardContext?: DashboardContext
 }
 
-// 预定义问题模板
+// ---------------------------------------------------------------------------
+// Quick question chips
+// ---------------------------------------------------------------------------
+
 const QUICK_QUESTIONS = [
-  "分析当前市场趋势",
-  "推荐价值投资标的",
-  "MA60破位股票有哪些？",
-  "今日热点板块分析",
-  "风险评估和仓位建议",
-  "技术指标解读",
+  "大盘趋势",
+  "自选股诊断",
+  "风险评估",
+  "仓位建议",
+  "热点板块",
+  "技术面解读",
 ]
 
-export function QAChat({ className, initialMessages }: QAChatProps) {
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function QAChat({ className, initialMessages, dashboardContext }: QAChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(
     initialMessages || [
       {
         id: "welcome",
         role: "assistant",
-        content: "您好！我是Alpha-Quant-Copilot AI助手。我可以帮助您分析市场趋势、推荐投资策略、解读技术指标等。请问有什么可以帮您的？",
+        content: "SYSTEM ONLINE. Alpha-Quant-Copilot ready.\nAwaiting query...",
         timestamp: new Date(),
       },
     ]
   )
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null)
+  const [selectedModel, setSelectedModel] = useState<AIModel>("deepseek-chat")
+  const [showModelMenu, setShowModelMenu] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const streamContentRef = useRef("")
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
+  const modelMenuRef = useRef<HTMLDivElement>(null)
 
-  // 滚动到底部
+  // Close model menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setShowModelMenu(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+      }
     })
   }, [])
 
@@ -81,6 +122,47 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
     scrollToBottom()
   }, [messages, scrollToBottom])
 
+  // -----------------------------------------------------------------------
+  // Build context string for system prompt injection
+  // -----------------------------------------------------------------------
+  const buildContextPayload = useCallback((): string | undefined => {
+    if (!dashboardContext) return undefined
+
+    const parts: string[] = []
+
+    if (dashboardContext.indices && dashboardContext.indices.length > 0) {
+      parts.push("## 大盘指数")
+      dashboardContext.indices.forEach((idx) => {
+        const sign = idx.deltaPercent >= 0 ? "+" : ""
+        parts.push(`- ${idx.label}: ${idx.value.toFixed(2)} (${sign}${idx.deltaPercent.toFixed(2)}%)`)
+      })
+    }
+
+    if (dashboardContext.watchlist && dashboardContext.watchlist.length > 0) {
+      parts.push("\n## 用户自选股")
+      dashboardContext.watchlist.forEach((s) => {
+        const sign = s.changePercent >= 0 ? "+" : ""
+        let line = `- ${s.stockCode} ${s.stockName}: ¥${s.price.toFixed(2)} (${sign}${s.changePercent.toFixed(2)}%)`
+        if (s.buyPrice) line += ` | 买入价:¥${s.buyPrice.toFixed(2)}`
+        if (s.stopLossPrice) line += ` | 止损:¥${s.stopLossPrice.toFixed(2)}`
+        if (s.targetPrice) line += ` | 目标:¥${s.targetPrice.toFixed(2)}`
+        parts.push(line)
+      })
+    }
+
+    if (dashboardContext.newsHeadlines && dashboardContext.newsHeadlines.length > 0) {
+      parts.push("\n## 最新新闻")
+      dashboardContext.newsHeadlines.slice(0, 5).forEach((h, i) => {
+        parts.push(`${i + 1}. ${h}`)
+      })
+    }
+
+    return parts.length > 0 ? parts.join("\n") : undefined
+  }, [dashboardContext])
+
+  // -----------------------------------------------------------------------
+  // Send message
+  // -----------------------------------------------------------------------
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
 
@@ -97,7 +179,6 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
     setIsLoading(true)
     streamContentRef.current = ""
 
-    // 添加思考中占位消息
     const aiMessageId = `ai-${Date.now()}`
     setMessages((prev) => [
       ...prev,
@@ -111,31 +192,35 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
     ])
 
     try {
-      // 构建历史消息（最近10条）
       const historyMessages = messages
         .filter((m) => !m.isThinking && m.id !== "welcome")
         .slice(-10)
         .map((m) => ({ role: m.role, content: m.content }))
       historyMessages.push({ role: "user", content: currentInput })
 
+      const contextPayload = buildContextPayload()
+
       abortControllerRef.current = new AbortController()
       const response = await fetch("/api/ai/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: historyMessages }),
+        body: JSON.stringify({
+          messages: historyMessages,
+          model: selectedModel,
+          dashboardContext: contextPayload,
+        }),
         signal: abortControllerRef.current.signal,
       })
 
       if (!response.ok) {
-        throw new Error(`API错误: ${response.status}`)
+        throw new Error(`API error: ${response.status}`)
       }
 
       const reader = response.body?.getReader()
-      if (!reader) throw new Error("无法读取响应流")
+      if (!reader) throw new Error("Cannot read response stream")
 
       const decoder = new TextDecoder()
 
-      // 节流更新函数（100ms批量更新，防止UI卡顿）
       const flushUpdate = () => {
         const content = streamContentRef.current
         setMessages((prev) =>
@@ -164,7 +249,6 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
             const parsed = JSON.parse(data)
             if (parsed.delta) {
               streamContentRef.current += parsed.delta
-              // 节流：100ms最多更新一次
               if (!updateTimerRef.current) {
                 updateTimerRef.current = setTimeout(() => {
                   flushUpdate()
@@ -172,7 +256,7 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
                 }, 100)
               }
             } else if (parsed.error) {
-              streamContentRef.current += `\n\n**错误**: ${parsed.error}`
+              streamContentRef.current += `\n\n**Error**: ${parsed.error}`
             }
           } catch {
             continue
@@ -180,7 +264,6 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
         }
       }
 
-      // 最终刷新
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current)
         updateTimerRef.current = null
@@ -188,11 +271,11 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
       flushUpdate()
     } catch (error) {
       if ((error as Error).name === "AbortError") return
-      const errorMsg = error instanceof Error ? error.message : "未知错误"
+      const errorMsg = error instanceof Error ? error.message : "Unknown error"
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === aiMessageId
-            ? { ...msg, content: `抱歉，AI服务暂时不可用: ${errorMsg}`, isThinking: false }
+            ? { ...msg, content: `[SYS_ERR] AI service unavailable: ${errorMsg}`, isThinking: false }
             : msg
         )
       )
@@ -204,15 +287,6 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
 
   const handleQuickQuestion = (question: string) => {
     setInput(question)
-    setSelectedQuestion(question)
-  }
-
-  const handleFeedback = (messageId: string, feedback: "positive" | "negative") => {
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId ? { ...msg, feedback } : msg
-      )
-    )
   }
 
   const handleCopy = (content: string) => {
@@ -224,14 +298,14 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
       {
         id: "welcome",
         role: "assistant",
-        content: "聊天记录已清空。请问有什么可以帮您的？",
+        content: "SYSTEM RESET. Awaiting query...",
         timestamp: new Date(),
       },
     ])
   }
 
   const handleExportChat = () => {
-    const chatData = messages.map(msg => ({
+    const chatData = messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
       timestamp: msg.timestamp.toISOString(),
@@ -254,221 +328,190 @@ export function QAChat({ className, initialMessages }: QAChatProps) {
     }
   }
 
+  // -----------------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------------
   return (
-    <Card className={cn("h-full flex flex-col", className)}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Bot className="h-6 w-6 text-blue-500" />
-            <CardTitle className="text-xl font-bold">
-              AI量化助手
-            </CardTitle>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Badge variant="outline" className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
-              DeepSeek
-            </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearChat}
+    <div className={cn("flex flex-col h-full bg-[#050505]", className)}>
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-[#1a1a2e]">
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-pulse" />
+          <span className="text-[10px] font-mono font-semibold text-cyan-500/90 uppercase tracking-widest">
+            AI Command
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {/* Model selector */}
+          <div className="relative" ref={modelMenuRef}>
+            <button
+              onClick={() => setShowModelMenu(!showModelMenu)}
+              className="flex items-center gap-1 text-[10px] font-mono text-[#4a5568] hover:text-cyan-400 px-1.5 py-0.5 rounded border border-[#1a1a2e] hover:border-cyan-900/50 transition-colors"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              清空
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="flex-1 overflow-hidden">
-        {/* 快速问题 */}
-        <div className="mb-4">
-          <div className="text-sm font-medium mb-2">快速提问</div>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_QUESTIONS.map((question, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickQuestion(question)}
-                className={cn(
-                  "text-xs",
-                  selectedQuestion === question && "border-primary"
-                )}
-              >
-                {question}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* 聊天区域 */}
-        <ScrollArea className="h-[500px] pr-4">
-          <div className="space-y-6">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex gap-3",
-                  message.role === "user" ? "flex-row-reverse" : "flex-row"
-                )}
-              >
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>
-                    {message.role === "user" ? (
-                      <User className="h-4 w-4" />
-                    ) : (
-                      <Bot className="h-4 w-4" />
-                    )}
-                  </AvatarFallback>
-                </Avatar>
-
-                <div
-                  className={cn(
-                    "flex-1 space-y-2",
-                    message.role === "user" ? "items-end" : "items-start"
-                  )}
-                >
-                  <div
+              {MODEL_LABELS[selectedModel]}
+              <ChevronDown className="h-2.5 w-2.5" />
+            </button>
+            {showModelMenu && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-[#0a0a0f] border border-[#1a1a2e] rounded shadow-xl min-w-[160px]">
+                {(Object.keys(MODEL_LABELS) as AIModel[]).map((model) => (
+                  <button
+                    key={model}
+                    onClick={() => {
+                      setSelectedModel(model)
+                      setShowModelMenu(false)
+                    }}
                     className={cn(
-                      "rounded-lg px-4 py-3 max-w-[80%]",
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted",
-                      message.isThinking && "animate-pulse"
+                      "w-full text-left text-[10px] font-mono px-3 py-1.5 hover:bg-[#111125] transition-colors",
+                      selectedModel === model
+                        ? "text-cyan-400"
+                        : "text-[#4a5568]"
                     )}
                   >
-                    {message.isThinking ? (
-                      <div className="flex items-center space-x-2">
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        <span>思考中...</span>
-                      </div>
-                    ) : message.role === "assistant" ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      <div className="whitespace-pre-wrap">{message.content}</div>
-                    )}
-                  </div>
+                    {MODEL_LABELS[model]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-                  {/* 消息操作 */}
-                  {!message.isThinking && (
-                    <div
-                      className={cn(
-                        "flex items-center gap-2 text-xs",
-                        message.role === "user" ? "justify-end" : "justify-start"
-                      )}
+          <button
+            onClick={handleExportChat}
+            className="text-[#2a3040] hover:text-[#4a5568] p-1 transition-colors"
+            title="Export"
+          >
+            <Download className="h-3 w-3" />
+          </button>
+          <button
+            onClick={handleClearChat}
+            className="text-[#2a3040] hover:text-red-500/60 p-1 transition-colors"
+            title="Clear"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Quick question chips ────────────────────────────────────── */}
+      <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-[#0d0d18] overflow-x-auto scrollbar-none">
+        {QUICK_QUESTIONS.map((q, i) => (
+          <button
+            key={i}
+            onClick={() => handleQuickQuestion(q)}
+            className="flex-shrink-0 text-[9px] font-mono text-[#3a4560] hover:text-cyan-400 px-2 py-0.5 rounded border border-[#151525] hover:border-cyan-900/40 transition-colors whitespace-nowrap"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Chat log ────────────────────────────────────────────────── */}
+      <div
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto px-3 py-2 space-y-1 scrollbar-thin scrollbar-thumb-[#1a1a2e] scrollbar-track-transparent"
+      >
+        {messages.map((message) => (
+          <div key={message.id} className="group">
+            {message.role === "user" ? (
+              <div className="flex items-start gap-1.5">
+                <span className="text-[10px] font-mono text-emerald-600 flex-shrink-0 select-none leading-[18px]">
+                  {">"} USER:
+                </span>
+                <span className="text-[11px] font-mono text-white/90 leading-[18px] break-all">
+                  {message.content}
+                </span>
+              </div>
+            ) : message.isThinking ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-mono text-cyan-700 flex-shrink-0 select-none">
+                  [SYS_AI]:
+                </span>
+                <RefreshCw className="h-2.5 w-2.5 text-cyan-700 animate-spin" />
+                <span className="text-[10px] font-mono text-cyan-700 animate-pulse">
+                  processing...
+                </span>
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[10px] font-mono text-cyan-700 flex-shrink-0 select-none leading-[18px]">
+                    [SYS_AI]:
+                  </span>
+                  <div className="text-[11px] font-mono text-white/85 leading-[18px] prose-terminal max-w-full overflow-hidden">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                        strong: ({ children }) => <strong className="text-cyan-400 font-semibold">{children}</strong>,
+                        em: ({ children }) => <em className="text-amber-400/80 not-italic">{children}</em>,
+                        li: ({ children }) => <li className="ml-3 list-disc text-white/80">{children}</li>,
+                        code: ({ children }) => (
+                          <code className="bg-[#111125] text-cyan-300 px-1 rounded text-[10px]">{children}</code>
+                        ),
+                        h1: ({ children }) => <div className="text-cyan-400 font-bold text-[12px] mt-2 mb-1">{children}</div>,
+                        h2: ({ children }) => <div className="text-cyan-400/80 font-bold text-[11px] mt-1.5 mb-0.5">{children}</div>,
+                        h3: ({ children }) => <div className="text-cyan-400/60 font-semibold text-[11px] mt-1 mb-0.5">{children}</div>,
+                      }}
                     >
-                      <span className="text-muted-foreground">
-                        {message.timestamp.toLocaleTimeString("zh-CN", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-
-                      {message.role === "assistant" && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleCopy(message.content)}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              "h-6 w-6",
-                              message.feedback === "positive" && "text-green-500"
-                            )}
-                            onClick={() => handleFeedback(message.id, "positive")}
-                          >
-                            <ThumbsUp className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              "h-6 w-6",
-                              message.feedback === "negative" && "text-red-500"
-                            )}
-                            onClick={() => handleFeedback(message.id, "negative")}
-                          >
-                            <ThumbsDown className="h-3 w-3" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+                {/* Hover actions */}
+                <div className="absolute -right-1 top-0 hidden group-hover:flex items-center gap-0.5">
+                  <button
+                    onClick={() => handleCopy(message.content)}
+                    className="text-[#2a3040] hover:text-cyan-500 p-0.5 transition-colors"
+                    title="Copy"
+                  >
+                    <Copy className="h-2.5 w-2.5" />
+                  </button>
                 </div>
               </div>
-            ))}
-            <div ref={messagesEndRef} />
+            )}
           </div>
-        </ScrollArea>
-      </CardContent>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
 
-      <CardFooter className="pt-4 border-t">
-        <div className="flex-1 space-y-3">
-          {/* 输入区域 */}
-          <div className="relative">
-            <Textarea
-              placeholder="输入您的问题...（按Enter发送，Shift+Enter换行）"
+      {/* ── Input area ──────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 border-t border-[#1a1a2e] px-3 py-2">
+        <div className="flex items-end gap-2">
+          <div className="flex-1 relative">
+            <textarea
+              placeholder="Enter query..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="min-h-[80px] pr-12"
+              rows={1}
               disabled={isLoading}
+              className="w-full bg-transparent border border-[#1a1a2e] focus:border-cyan-900/50 rounded px-2.5 py-1.5 text-[11px] font-mono text-white/90 placeholder:text-[#2a3040] focus:outline-none resize-none leading-[18px]"
+              style={{ minHeight: "32px", maxHeight: "80px" }}
+              onInput={(e) => {
+                const el = e.target as HTMLTextAreaElement
+                el.style.height = "auto"
+                el.style.height = Math.min(el.scrollHeight, 80) + "px"
+              }}
             />
-            <Button
-              size="icon"
-              className="absolute right-2 bottom-2"
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-            >
-              <Send className="h-4 w-4" />
-            </Button>
           </div>
-
-          {/* 底部操作 */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-              <div className="flex items-center">
-                <BookOpen className="h-3 w-3 mr-1" />
-                <span>支持Markdown</span>
-              </div>
-              <Separator orientation="vertical" className="h-4" />
-              <div className="flex items-center">
-                <BarChart3 className="h-3 w-3 mr-1" />
-                <span>实时数据</span>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportChat}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                导出
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickQuestion("当前市场分析")}
-              >
-                <TrendingUp className="h-4 w-4 mr-2" />
-                市场分析
-              </Button>
-            </div>
-          </div>
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || isLoading}
+            className="flex-shrink-0 h-8 w-8 flex items-center justify-center rounded border border-[#1a1a2e] text-[#2a3040] hover:text-cyan-400 hover:border-cyan-900/50 disabled:opacity-30 transition-colors"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
         </div>
-      </CardFooter>
-    </Card>
+        {/* Context indicator */}
+        {dashboardContext && (
+          <div className="mt-1 flex items-center gap-1">
+            <div className="h-1 w-1 rounded-full bg-emerald-600" />
+            <span className="text-[8px] font-mono text-[#2a3040] uppercase tracking-wider">
+              ctx: live data linked
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
