@@ -13,6 +13,10 @@ export enum EntityType {
   MARITIME = "maritime",
   GEO_CONFLICT = "geo_conflict",
   ALERT = "alert",
+  ECONOMIC = "economic",
+  HUMANITARIAN = "humanitarian",
+  WEATHER = "weather",
+  SOCIAL = "social",
 }
 
 export enum Severity {
@@ -123,6 +127,82 @@ export interface AlertEntity extends SituationalEntity {
   };
 }
 
+// ─── Economic subtypes ──────────────────────────────────────
+
+export interface EconomicEntity extends SituationalEntity {
+  type: EntityType.ECONOMIC;
+  subtype: "indicator" | "yield" | "energy" | "supply_chain";
+  metadata: {
+    seriesId: string;
+    name: string;
+    unit: string;
+    value: number;
+    previousValue: number;
+    frequency: string;
+    tradingSignal?: "bullish" | "bearish" | "neutral";
+  };
+}
+
+// ─── Humanitarian subtypes ──────────────────────────────────
+
+export interface HumanitarianEntity extends SituationalEntity {
+  type: EntityType.HUMANITARIAN;
+  subtype: "crisis" | "outbreak";
+  metadata: {
+    title: string;
+    country: string;
+    disasterType: string;
+    url: string;
+    tradingSignal?: "bearish" | "neutral";
+  };
+}
+
+// ─── Weather subtypes ───────────────────────────────────────
+
+export interface WeatherEntity extends SituationalEntity {
+  type: EntityType.WEATHER;
+  subtype: "alert" | "hurricane";
+  metadata: {
+    event: string;
+    severity: string;
+    areaDesc: string;
+    headline: string;
+    onset: string;
+    expires: string;
+    impactedCommodity?: string;
+    tradingSignal?: "bullish" | "bearish" | "neutral";
+  };
+}
+
+// ─── Social subtypes ────────────────────────────────────────
+
+export interface SocialEntity extends SituationalEntity {
+  type: EntityType.SOCIAL;
+  subtype: "sentiment" | "trending";
+  metadata: {
+    platform: string;
+    text: string;
+    author: string;
+    sentimentScore: number;
+    tradingSignal?: "bullish" | "bearish" | "neutral";
+  };
+}
+
+// ─── Delta Event ────────────────────────────────────────────
+
+export interface DeltaEvent {
+  id: string;
+  entityType: EntityType;
+  changeType: "new" | "removed" | "value_change" | "threshold_breach";
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+  severity: Severity;
+  timestamp: number;
+  description: string;
+  tradingSignal?: "bullish" | "bearish" | "neutral";
+}
+
 // ─── Data Adapter Interface ──────────────────────────────────
 
 export interface DataAdapter<T extends SituationalEntity = SituationalEntity> {
@@ -144,6 +224,7 @@ export interface DataStreamState {
   lastUpdate: Record<EntityType, number>; // last fetch timestamp per type
   errors: Record<string, string>; // adapter name -> last error
   adapterHealth: Record<string, boolean>;
+  deltaEvents: DeltaEvent[];
 }
 
 // ─── Dashboard Layout Slot IDs ───────────────────────────────

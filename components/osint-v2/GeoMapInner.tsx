@@ -3,16 +3,18 @@
 import { useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { EntityType, type SituationalEntity, type AviationEntity, type MaritimeEntity, type GeoConflictEntity } from "@/services/types";
+import { type SituationalEntity, type AviationEntity, type MaritimeEntity, type GeoConflictEntity } from "@/services/types";
 
 interface GeoMapInnerProps {
   aviation: SituationalEntity[];
   maritime: SituationalEntity[];
   conflicts: SituationalEntity[];
   financials: SituationalEntity[];
+  weather?: SituationalEntity[];
+  humanitarian?: SituationalEntity[];
 }
 
-type LayerKey = "all" | "financial" | "maritime" | "aviation" | "conflict";
+type LayerKey = "all" | "financial" | "maritime" | "aviation" | "conflict" | "weather" | "humanitarian";
 
 const LAYER_TABS: { key: LayerKey; label: string; color: string }[] = [
   { key: "all",       label: "全部",   color: "#6b7280" },
@@ -20,6 +22,8 @@ const LAYER_TABS: { key: LayerKey; label: string; color: string }[] = [
   { key: "maritime",  label: "海事",   color: "#818cf8" },
   { key: "aviation",  label: "航空",   color: "#38bdf8" },
   { key: "conflict",  label: "冲突",   color: "#f97316" },
+  { key: "weather",       label: "气象",   color: "#06b6d4" },
+  { key: "humanitarian",  label: "人道",   color: "#ec4899" },
 ];
 
 // Layer color scheme
@@ -29,15 +33,19 @@ const LAYER_COLORS = {
   conflict:      "#f97316",
   financial_up:  "#ef4444",
   financial_down:"#22c55e",
+  weather:       "#06b6d4",
+  humanitarian:  "#ec4899",
 };
 
-export default function GeoMapInner({ aviation, maritime, conflicts, financials }: GeoMapInnerProps) {
+export default function GeoMapInner({ aviation, maritime, conflicts, financials, weather, humanitarian }: GeoMapInnerProps) {
   const [activeLayer, setActiveLayer] = useState<LayerKey>("all");
 
   const showFinancial = activeLayer === "all" || activeLayer === "financial";
   const showMaritime  = activeLayer === "all" || activeLayer === "maritime";
   const showAviation  = activeLayer === "all" || activeLayer === "aviation";
   const showConflict  = activeLayer === "all" || activeLayer === "conflict";
+  const showWeather   = activeLayer === "all" || activeLayer === "weather";
+  const showHumanitarian = activeLayer === "all" || activeLayer === "humanitarian";
 
   const financialMarkers = financials.filter(e => e.coordinates);
 
@@ -182,6 +190,41 @@ export default function GeoMapInner({ aviation, maritime, conflicts, financials 
             </CircleMarker>,
           ];
         })}
+        {/* Layer: Weather Alerts */}
+        {showWeather && (weather || []).filter(e => e.coordinates).map((e) => (
+          <CircleMarker
+            key={e.id}
+            center={[e.coordinates!.lat, e.coordinates!.lng]}
+            radius={6}
+            pathOptions={{ color: "#06b6d4", fillColor: "#06b6d4", fillOpacity: 0.4, weight: 1 }}
+          >
+            <Popup>
+              <div className="text-[10px]">
+                <div className="font-bold">{e.label}</div>
+                <div>{(e.metadata as any)?.headline || ""}</div>
+                <div>Area: {(e.metadata as any)?.areaDesc || ""}</div>
+              </div>
+            </Popup>
+          </CircleMarker>
+        ))}
+
+        {/* Layer: Humanitarian */}
+        {showHumanitarian && (humanitarian || []).filter(e => e.coordinates).map((e) => (
+          <CircleMarker
+            key={e.id}
+            center={[e.coordinates!.lat, e.coordinates!.lng]}
+            radius={5}
+            pathOptions={{ color: "#ec4899", fillColor: "#ec4899", fillOpacity: 0.5, weight: 1 }}
+          >
+            <Popup>
+              <div className="text-[10px]">
+                <div className="font-bold">{e.label}</div>
+                <div>{(e.metadata as any)?.country || ""}</div>
+                <div>{(e.metadata as any)?.disasterType || ""}</div>
+              </div>
+            </Popup>
+          </CircleMarker>
+        ))}
       </MapContainer>
 
       {/* Layer toggle — top-center overlay */}
@@ -215,6 +258,8 @@ export default function GeoMapInner({ aviation, maritime, conflicts, financials 
           { color: LAYER_COLORS.maritime,      label: "海事" },
           { color: LAYER_COLORS.conflict,      label: "冲突" },
           { color: LAYER_COLORS.financial_up,  label: "股指" },
+          { color: "#06b6d4", label: "气象" },
+          { color: "#ec4899", label: "人道" },
         ].map(({ color, label }) => (
           <div key={label} className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />

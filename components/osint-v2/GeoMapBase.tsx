@@ -8,6 +8,8 @@ interface GeoMapBaseProps {
   maritime: SituationalEntity[];
   conflicts: SituationalEntity[];
   financials: SituationalEntity[];
+  weather?: SituationalEntity[];
+  humanitarian?: SituationalEntity[];
 }
 
 const GeoMapInner = dynamic(() => import("./GeoMapInner"), {

@@ -8,9 +8,9 @@
  *   │        │         TICKER BAR           │        │
  *   │  LEFT  ├──────────────────────────────┤ RIGHT  │
  *   │  20%   │        CENTER MAP  60%       │  20%   │
- *   │Finance │    Geo-Spatial Base Layer    │ Intel  │
- *   │Sparkln │  Aviation + Maritime + Geo   │ Feed   │
- *   │        │                              │        │
+ *   │  Tab:  │    Geo-Spatial Base Layer    │  Tab:  │
+ *   │ 行情/宏│  Aviation + Maritime + Geo   │情报/变化│
+ *   │  观    │   + Weather + Humanitarian   │ /舆情  │
  *   └────────┴──────────────────────────────┴────────┘
  */
 
@@ -18,14 +18,45 @@ import { useMemo, useState, useEffect } from "react";
 import { useDataStream } from "@/services/use-data-stream";
 import { EntityType } from "@/services/types";
 import { FinancePanel } from "./FinancePanel";
+import { EconomicPanel } from "./EconomicPanel";
 import { GeoMapBase } from "./GeoMapBase";
 import { IntelFeed } from "./IntelFeed";
+import { DeltaPanel } from "./DeltaPanel";
+import { SocialPanel } from "./SocialPanel";
 import { AISituationBrain } from "./AISituationBrain";
 import { TickerBar } from "./TickerBar";
 import { StatusBar } from "./StatusBar";
 
+type LeftTab = "market" | "macro";
+type RightTab = "intel" | "delta" | "social";
+
+function TabButton({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-[11px] font-mono px-2 py-1 transition-colors ${
+        active
+          ? "text-[#c8cdd5] border-b border-[#4a90d9]"
+          : "text-[#3a4560] hover:text-[#5a6580]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function SituationScreen() {
   const stream = useDataStream();
+  const [leftTab, setLeftTab] = useState<LeftTab>("market");
+  const [rightTab, setRightTab] = useState<RightTab>("intel");
 
   // Real news headlines fetched from /api/news-feed (refreshed every 5 min)
   const [realNewsHeadlines, setRealNewsHeadlines] = useState<string[]>([]);
@@ -49,6 +80,38 @@ export function SituationScreen() {
     return () => { cancelled = true; clearInterval(iv); };
   }, []);
 
+  // Fetch user watchlist/portfolio for personalized AI analysis
+  const [watchlistSummary, setWatchlistSummary] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadWatchlist() {
+      try {
+        const res = await fetch("/api/watchlist", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = data.watchlist ?? [];
+        if (items.length === 0) {
+          if (!cancelled) setWatchlistSummary("");
+          return;
+        }
+        const summary = items
+          .map((item: { stockCode: string; stockName: string; buyPrice?: number | null; targetPrice?: number | null; stopLossPrice?: number | null }) => {
+            const parts = [`${item.stockName}(${item.stockCode})`];
+            if (item.buyPrice) parts.push(`买入价:${item.buyPrice}`);
+            if (item.targetPrice) parts.push(`目标价:${item.targetPrice}`);
+            if (item.stopLossPrice) parts.push(`止损价:${item.stopLossPrice}`);
+            return parts.join(" ");
+          })
+          .join("; ");
+        if (!cancelled) setWatchlistSummary(summary);
+      } catch { /* silent — user may not be logged in */ }
+    }
+    loadWatchlist();
+    const iv = setInterval(loadWatchlist, 5 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
+
   // Derive AI brain props from stream data (fallback when real news not yet loaded)
   const newsHeadlines = useMemo(() => {
     return stream.entities
@@ -65,6 +128,14 @@ export function SituationScreen() {
       .join("; ");
   }, [stream.financials]);
 
+  const economicSummary = useMemo(() => {
+    if (stream.economic.length === 0) return "";
+    return stream.economic
+      .slice(0, 5)
+      .map((e) => `${e.label}: ${e.value ?? "N/A"}`)
+      .join("; ");
+  }, [stream.economic]);
+
   return (
     <div className="h-full w-full overflow-hidden bg-[#060a12] text-[#c8cdd5] flex flex-col">
       {/* Top ticker bar */}
@@ -72,9 +143,19 @@ export function SituationScreen() {
 
       {/* Main 3-column grid */}
       <div className="flex-1 grid grid-cols-[260px_1fr_280px] gap-px min-h-0">
-        {/* Left: Finance + Macro */}
-        <div className="overflow-y-auto border-r border-[#1a2035]">
-          <FinancePanel financials={stream.financials} isLoading={stream.isLoading} />
+        {/* Left: Tab [行情] / [宏观] */}
+        <div className="overflow-hidden border-r border-[#1a2035] flex flex-col min-h-0">
+          <div className="flex items-center gap-0 px-2 py-1 border-b border-[#1a2035]/50">
+            <TabButton active={leftTab === "market"} label="行情" onClick={() => setLeftTab("market")} />
+            <TabButton active={leftTab === "macro"} label="宏观" onClick={() => setLeftTab("macro")} />
+          </div>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {leftTab === "market" ? (
+              <FinancePanel financials={stream.financials} isLoading={stream.isLoading} />
+            ) : (
+              <EconomicPanel economic={stream.economic} isLoading={stream.isLoading} />
+            )}
+          </div>
         </div>
 
         {/* Center: Geo-Spatial Map */}
@@ -84,23 +165,40 @@ export function SituationScreen() {
             maritime={stream.maritime}
             conflicts={stream.conflicts}
             financials={stream.financials}
+            weather={stream.weather}
+            humanitarian={stream.humanitarian}
           />
         </div>
 
-        {/* Right: AI Brain + Intelligence Feed */}
+        {/* Right: Tab [情报] / [变化] / [舆情] */}
         <div className="overflow-hidden border-l border-[#1a2035] flex flex-col min-h-0">
           <AISituationBrain
             newsHeadlines={realNewsHeadlines.length > 0 ? realNewsHeadlines : newsHeadlines}
             conflictCount={stream.conflicts.length}
             marketSummary={marketSummary}
             vesselCount={stream.maritime.length}
+            economicSummary={economicSummary}
+            deltaEventCount={stream.deltaEvents.length}
+            weatherAlertCount={stream.weather.length}
+            watchlistSummary={watchlistSummary}
           />
+          <div className="flex items-center gap-0 px-2 py-1 border-b border-[#1a2035]/50">
+            <TabButton active={rightTab === "intel"} label="情报" onClick={() => setRightTab("intel")} />
+            <TabButton active={rightTab === "delta"} label="变化" onClick={() => setRightTab("delta")} />
+            <TabButton active={rightTab === "social"} label="舆情" onClick={() => setRightTab("social")} />
+          </div>
           <div className="flex-1 overflow-hidden min-h-0">
-            <IntelFeed
-              entities={stream.entities}
-              conflicts={stream.conflicts}
-              errors={stream.errors}
-            />
+            {rightTab === "intel" ? (
+              <IntelFeed
+                entities={stream.entities}
+                conflicts={stream.conflicts}
+                errors={stream.errors}
+              />
+            ) : rightTab === "delta" ? (
+              <DeltaPanel deltaEvents={stream.deltaEvents} />
+            ) : (
+              <SocialPanel social={stream.social} isLoading={stream.isLoading} />
+            )}
           </div>
         </div>
       </div>

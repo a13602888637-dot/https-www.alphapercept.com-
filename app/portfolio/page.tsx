@@ -11,11 +11,12 @@ import { SearchResults, StockResult } from "@/components/portfolio/search-result
 import { SignInButton, useAuth } from "@clerk/nextjs"
 import { useToast } from "@/hooks/use-toast"
 import { AddPositionDialog } from "@/components/portfolio/AddPositionDialog"
+import { StopLossConfig, type StopLossMethod, SL_DEFAULT_PARAMS } from "@/components/portfolio/StopLossConfig"
+import { TakeProfitConfig, type TakeProfitMethod, TP_DEFAULT_PARAMS } from "@/components/portfolio/TakeProfitConfig"
 import {
   Wallet,
   TrendingUp,
   BarChart3,
-  Plus,
   Eye,
   EyeOff,
   Search,
@@ -29,7 +30,12 @@ import {
   AlertCircle,
   ThumbsUp,
   ThumbsDown,
-  Trash2
+  Trash2,
+  Shield,
+  Target,
+  ChevronUp,
+  RefreshCw,
+  Settings2
 } from "lucide-react"
 
 // 自选股接口定义
@@ -41,6 +47,15 @@ interface WatchlistItem {
   stopLossPrice: number | null
   targetPrice: number | null
   notes: string | null
+  stopLossMethod: string | null
+  stopLossParams: Record<string, number> | null
+  takeProfitMethod: string | null
+  takeProfitParams: Record<string, number> | null
+  highWaterMark: number | null
+  computeStatus: string | null
+  dataFrequency: string | null
+  cachedAtr: number | null
+  lastComputedAt: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -110,6 +125,18 @@ export default function PortfolioPage() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [showWatchlist, setShowWatchlist] = useState(false)
   const [watchlistLoading, setWatchlistLoading] = useState(false)
+
+  // SL/TP 编辑状态
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
+  const [editingSLTP, setEditingSLTP] = useState<Record<string, {
+    slMethod: StopLossMethod
+    slParams: Record<string, number>
+    tpMethod: TakeProfitMethod
+    tpParams: Record<string, number>
+    buyPrice: string
+  }>>({})
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [recalculating, setRecalculating] = useState(false)
 
   // AI深度推演相关状态
   const [aiAnalysis, setAiAnalysis] = useState<any[]>([])
@@ -251,6 +278,97 @@ export default function PortfolioPage() {
       setAiLoading(false)
     }
   }
+
+  // 展开/编辑 SL/TP 配置
+  const handleExpandItem = (item: WatchlistItem) => {
+    if (expandedItemId === item.id) {
+      setExpandedItemId(null)
+      return
+    }
+    setExpandedItemId(item.id)
+    if (!editingSLTP[item.id]) {
+      setEditingSLTP(prev => ({
+        ...prev,
+        [item.id]: {
+          slMethod: (item.stopLossMethod as StopLossMethod) || "atr",
+          slParams: (item.stopLossParams as Record<string, number>) || SL_DEFAULT_PARAMS.atr,
+          tpMethod: (item.takeProfitMethod as TakeProfitMethod) || "trailing",
+          tpParams: (item.takeProfitParams as Record<string, number>) || TP_DEFAULT_PARAMS.trailing,
+          buyPrice: item.buyPrice?.toString() || "",
+        }
+      }))
+    }
+  }
+
+  // 保存 SL/TP 配置
+  const handleSaveSLTP = async (itemId: string) => {
+    const edit = editingSLTP[itemId]
+    if (!edit) return
+    setSavingId(itemId)
+    try {
+      const buyPrice = parseFloat(edit.buyPrice) || null
+      const response = await fetch('/api/watchlist', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: itemId,
+          buyPrice,
+          stopLossMethod: edit.slMethod,
+          stopLossParams: edit.slParams,
+          takeProfitMethod: edit.tpMethod,
+          takeProfitParams: edit.tpParams,
+          highWaterMark: buyPrice,
+        })
+      })
+      if (!response.ok) throw new Error("保存失败")
+      toast({ title: "保存成功", description: "止盈止损配置已更新" })
+      // Trigger recalculation for this item
+      await handleRecalculate([itemId])
+      await loadWatchlist()
+    } catch (err) {
+      toast({ title: "保存失败", description: err instanceof Error ? err.message : "未知错误", variant: "destructive" })
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  // 批量重算 SL/TP
+  const handleRecalculate = async (ids?: string[]) => {
+    setRecalculating(true)
+    try {
+      const response = await fetch('/api/watchlist/recalculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ids ? { ids } : {}),
+      })
+      if (!response.ok) throw new Error("重算失败")
+      const data = await response.json()
+      if (data.success) {
+        await loadWatchlist()
+        if (!ids) {
+          toast({ title: "重算完成", description: `已更新 ${data.recalculated} 项` })
+        }
+      }
+    } catch (err) {
+      if (!ids) {
+        toast({ title: "重算失败", description: err instanceof Error ? err.message : "未知错误", variant: "destructive" })
+      }
+    } finally {
+      setRecalculating(false)
+    }
+  }
+
+  // 定时重算（5分钟间隔）
+  useEffect(() => {
+    if (!showWatchlist || watchlist.length === 0) return
+    const hasConfigured = watchlist.some(item => item.stopLossMethod || item.takeProfitMethod)
+    if (!hasConfigured) return
+    const interval = setInterval(() => {
+      handleRecalculate()
+    }, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showWatchlist, watchlist.length])
 
   // 搜索股票
   const handleSearch = async (query: string) => {
@@ -613,6 +731,19 @@ export default function PortfolioPage() {
                       {watchlist.length > 0 && (
                         <>
                           <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRecalculate()}
+                            disabled={recalculating}
+                          >
+                            {recalculating ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                            )}
+                            重算SL/TP
+                          </Button>
+                          <Button
                             variant="default"
                             size="sm"
                             onClick={handleAiAnalysis}
@@ -718,55 +849,181 @@ export default function PortfolioPage() {
                   ) : (
                     <Card>
                       <CardContent className="pt-6">
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {watchlist.map((item) => {
-                            // 从股票代码推断市场
                             const market = item.stockCode.startsWith('6') ? 'SH' :
                                           item.stockCode.startsWith('0') || item.stockCode.startsWith('3') ? 'SZ' : 'Unknown';
+                            const isExpanded = expandedItemId === item.id
+                            const edit = editingSLTP[item.id]
+                            const statusColors: Record<string, string> = {
+                              live: "text-emerald-500",
+                              low_freq: "text-amber-500",
+                              cached: "text-blue-500",
+                              awaiting_data: "text-red-500",
+                            }
+                            const statusLabels: Record<string, string> = {
+                              live: "LIVE",
+                              low_freq: "低频推演",
+                              cached: "缓存",
+                              awaiting_data: "数据等待",
+                            }
 
                             return (
-                              <div
-                                key={item.id}
-                                className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors"
-                              >
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="font-semibold text-gray-900">{item.stockName}</h3>
-                                        <span
-                                          className={`px-2 py-0.5 text-xs font-medium rounded-full border ${
-                                            market === "SH"
-                                              ? "text-red-600 bg-red-50 border-red-200"
-                                              : market === "SZ"
-                                              ? "text-green-600 bg-green-50 border-green-200"
-                                              : "text-gray-600 bg-gray-50 border-gray-200"
-                                          }`}
-                                        >
-                                          {market === "SH" ? "上证" : market === "SZ" ? "深证" : "其他"}
+                              <div key={item.id} className="border rounded-lg overflow-hidden">
+                                {/* Main row */}
+                                <div className="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <h3 className="font-semibold text-gray-900 truncate">{item.stockName}</h3>
+                                      <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full border shrink-0 ${
+                                        market === "SH" ? "text-red-600 bg-red-50 border-red-200" :
+                                        market === "SZ" ? "text-green-600 bg-green-50 border-green-200" :
+                                        "text-gray-600 bg-gray-50 border-gray-200"
+                                      }`}>
+                                        {market === "SH" ? "沪" : market === "SZ" ? "深" : "其他"}
+                                      </span>
+                                      <span className="text-xs text-gray-400">{item.stockCode}</span>
+                                      {item.computeStatus && (
+                                        <span className={`text-[10px] font-mono ${statusColors[item.computeStatus] || "text-gray-400"}`}>
+                                          [{statusLabels[item.computeStatus] || item.computeStatus}]
                                         </span>
-                                      </div>
-                                      <p className="text-sm text-gray-500">{item.stockCode}</p>
-                                      <p className="text-xs text-gray-400 mt-1">
-                                        添加时间: {new Date(item.createdAt).toLocaleDateString()}{" "}
-                                        {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                      </p>
-                                      {item.notes && (
-                                        <p className="text-xs text-gray-500 mt-1">
-                                          备注: {item.notes}
-                                        </p>
+                                      )}
+                                    </div>
+                                    {/* SL/TP summary row */}
+                                    <div className="flex items-center gap-3 text-xs">
+                                      {item.buyPrice != null && (
+                                        <span className="text-gray-500">买入: ¥{item.buyPrice.toFixed(2)}</span>
+                                      )}
+                                      {item.stopLossPrice != null && (
+                                        <span className="text-red-500 flex items-center gap-0.5">
+                                          <Shield className="h-3 w-3" />
+                                          止损: ¥{item.stopLossPrice.toFixed(2)}
+                                          {item.stopLossMethod && <span className="text-gray-400 ml-0.5">({
+                                            item.stopLossMethod === "atr" ? "ATR" :
+                                            item.stopLossMethod === "chandelier" ? "吊灯" :
+                                            item.stopLossMethod === "ma" ? "均线" : "固定"
+                                          })</span>}
+                                        </span>
+                                      )}
+                                      {item.targetPrice != null && (
+                                        <span className="text-emerald-500 flex items-center gap-0.5">
+                                          <Target className="h-3 w-3" />
+                                          止盈: ¥{item.targetPrice.toFixed(2)}
+                                          {item.takeProfitMethod && <span className="text-gray-400 ml-0.5">({
+                                            item.takeProfitMethod === "trailing" ? "追踪" :
+                                            item.takeProfitMethod === "atr_multiple" ? "ATR" : "固定"
+                                          })</span>}
+                                        </span>
+                                      )}
+                                      {!item.stopLossPrice && !item.targetPrice && !item.buyPrice && (
+                                        <span className="text-gray-400 italic">未配置止盈止损</span>
                                       )}
                                     </div>
                                   </div>
+                                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 w-8 p-0"
+                                      onClick={() => handleExpandItem(item)}
+                                      title="配置止盈止损"
+                                    >
+                                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                      onClick={() => handleRemoveFromWatchlist(item.id)}
+                                      title="移除"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  onClick={() => handleRemoveFromWatchlist(item.id)}
-                                >
-                                  移除
-                                </Button>
+
+                                {/* Expanded SL/TP config panel */}
+                                {isExpanded && edit && (
+                                  <div className="border-t bg-gray-50/50 p-4 space-y-4">
+                                    {/* Buy price input */}
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-xs text-gray-500 w-16 shrink-0">买入价</label>
+                                      <Input
+                                        type="number"
+                                        value={edit.buyPrice}
+                                        onChange={(e) => setEditingSLTP(prev => ({
+                                          ...prev,
+                                          [item.id]: { ...prev[item.id], buyPrice: e.target.value }
+                                        }))}
+                                        placeholder="输入买入价"
+                                        className="h-7 text-xs max-w-[140px]"
+                                        min={0}
+                                        step={0.01}
+                                      />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      {/* Stop Loss Config */}
+                                      <div className="border rounded-lg p-3 bg-white">
+                                        <StopLossConfig
+                                          method={edit.slMethod}
+                                          params={edit.slParams}
+                                          buyPrice={parseFloat(edit.buyPrice) || null}
+                                          computedPrice={item.stopLossPrice}
+                                          computeStatus={item.computeStatus}
+                                          dataFrequency={item.dataFrequency}
+                                          onMethodChange={(m) => setEditingSLTP(prev => ({
+                                            ...prev,
+                                            [item.id]: { ...prev[item.id], slMethod: m, slParams: SL_DEFAULT_PARAMS[m] }
+                                          }))}
+                                          onParamsChange={(p) => setEditingSLTP(prev => ({
+                                            ...prev,
+                                            [item.id]: { ...prev[item.id], slParams: p }
+                                          }))}
+                                        />
+                                      </div>
+
+                                      {/* Take Profit Config */}
+                                      <div className="border rounded-lg p-3 bg-white">
+                                        <TakeProfitConfig
+                                          method={edit.tpMethod}
+                                          params={edit.tpParams}
+                                          buyPrice={parseFloat(edit.buyPrice) || null}
+                                          computedPrice={item.targetPrice}
+                                          computeStatus={item.computeStatus}
+                                          highWaterMark={item.highWaterMark}
+                                          onMethodChange={(m) => setEditingSLTP(prev => ({
+                                            ...prev,
+                                            [item.id]: { ...prev[item.id], tpMethod: m, tpParams: TP_DEFAULT_PARAMS[m] }
+                                          }))}
+                                          onParamsChange={(p) => setEditingSLTP(prev => ({
+                                            ...prev,
+                                            [item.id]: { ...prev[item.id], tpParams: p }
+                                          }))}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    {/* Save button */}
+                                    <div className="flex items-center justify-between pt-2">
+                                      <div className="text-[10px] text-gray-400">
+                                        {item.lastComputedAt && `上次计算: ${new Date(item.lastComputedAt).toLocaleString()}`}
+                                        {item.dataFrequency && item.dataFrequency !== "daily" && ` · ${item.dataFrequency === "weekly" ? "周线数据" : "月线数据"}`}
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleSaveSLTP(item.id)}
+                                        disabled={savingId === item.id || !edit.buyPrice}
+                                      >
+                                        {savingId === item.id ? (
+                                          <><Loader2 className="h-3 w-3 mr-1 animate-spin" />保存中...</>
+                                        ) : (
+                                          "保存并计算"
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

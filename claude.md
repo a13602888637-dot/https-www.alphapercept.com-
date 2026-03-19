@@ -63,7 +63,9 @@ stock-analysis/
 │   │   ├── unified-search/       # Global A-stock/US stock search
 │   │   └── ... (20+ total routes)
 │   ├── dashboard/                # Main dashboard
-│   │   └── macro/                # Macro market overview
+│   │   ├── macro/                # Macro market overview
+│   │   ├── asset/[symbol]/       # Global asset detail (crypto/commodity/index)
+│   │   └── stock/[symbol]/       # A-share/US stock detail
 │   ├── osint/                    # Full-screen OSINT radar (own layout.tsx suppresses global nav)
 │   ├── portfolio/                # Portfolio management page
 │   ├── stocks/[code]/            # Individual stock details
@@ -408,6 +410,21 @@ git reset --hard HEAD~1
 - 缩放同步：`subscribeVisibleLogicalRangeChange` + `setVisibleLogicalRange(range)`
 - `technicalindicators` 计算必须 try-catch 保护（数据不足时会抛出）
 
+### ⚠️ lib/utils/mockKlineData.ts — 非死代码
+- 被 `lib/kline-api/fallback.ts` 引用，作为所有真实API失败后的最终降级数据源
+- 不要以"mock/test/example"命名为由删除 — 先 `grep -r mockKlineData` 确认无引用
+
+### ⚠️ npx tsc --noEmit 与 .next/ 缓存
+- 删除 API route 后 tsc 会报 `.next/types/app/api/...` 找不到模块 — 这是 stale 缓存，非真实错误
+- `npm run build` 重新生成 `.next/` 后错误消失；过滤命令：`npx tsc --noEmit 2>&1 | grep -v "^.next/"`
+
+### ⚠️ git branch -d 对纯本地分支失败
+- 从未 push 过的分支即使已合并到 HEAD，`git branch -d` 仍报错（无 remote tracking ref）
+- 安全删除：确认已合并后用 `git branch -D <branch>`
+
+### ⚠️ CLAUDE.md 双文件说明
+- `CLAUDE.md` 与 `claude.md` 是同一文件的硬链接（相同 inode）— 编辑任意一个即可，两者始终同步
+
 ### ⚠️ Claude Code Configuration
 - `.claude/` directory is gitignored (personal tool config)
 - `.mcp.json` is committed (team shares MCP server list)
@@ -461,6 +478,6 @@ For trading logic & decision rules, see `TRADING_STRATEGY.md`.
 
 
 **Project Version**: 0.1.0
-**Last Updated**: 2026-03-16
+**Last Updated**: 2026-03-18
 **Node.js Required**: 20.19.0+
 **Maintained By**: Alpha-Quant-Copilot Team

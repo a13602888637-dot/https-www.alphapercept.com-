@@ -23,15 +23,15 @@ const GLOBAL_SYMBOLS: Record<string, SymbolConfig> = {
   "^N225":    { name: "日经225", category: "index", region: "jp", stooqSymbol: "^nkx" },
   "^FTSE":    { name: "富时100", category: "index", region: "uk", stooqSymbol: "^ftx" },
   "^DAX":     { name: "德国DAX", category: "index", region: "eu", stooqSymbol: "^dax" },
-  // Commodities: stooq.com futures
-  "GC=F":     { name: "黄金", category: "commodity", region: "global", stooqSymbol: "gc.f" },
-  "CL=F":     { name: "原油WTI", category: "commodity", region: "global", stooqSymbol: "cl.f" },
+  // Commodities: Finnhub primary, stooq fallback
+  "GC=F":     { name: "黄金", category: "commodity", region: "global", finnhubSymbol: "OANDA:XAU_USD", stooqSymbol: "gc.f" },
+  "CL=F":     { name: "原油WTI", category: "commodity", region: "global", finnhubSymbol: "OANDA:BCO_USD", stooqSymbol: "cl.f" },
   "SI=F":     { name: "白银", category: "commodity", region: "global", stooqSymbol: "si.f" },
   "HG=F":     { name: "铜", category: "commodity", region: "global", stooqSymbol: "hg.f" },
-  // FX: stooq.com
-  "USDCNY=X": { name: "美元/人民币", category: "fx", region: "global", stooqSymbol: "usdcny" },
-  "USDJPY=X": { name: "美元/日元", category: "fx", region: "global", stooqSymbol: "usdjpy" },
-  // Rates: stooq.com
+  // FX: Finnhub primary, stooq fallback
+  "USDCNY=X": { name: "美元/人民币", category: "fx", region: "global", finnhubSymbol: "OANDA:USD_CNH", stooqSymbol: "usdcny" },
+  "USDJPY=X": { name: "美元/日元", category: "fx", region: "global", finnhubSymbol: "OANDA:USD_JPY", stooqSymbol: "usdjpy" },
+  // Rates: stooq only (no reliable Finnhub symbols for VIX/bonds)
   "^VIX":     { name: "VIX恐慌", category: "rate", region: "us", stooqSymbol: "vix.us" },
   "^TNX":     { name: "美10Y国债", category: "rate", region: "us", stooqSymbol: "tnx.us" },
 };
@@ -56,7 +56,10 @@ async function fetchFinnhub(symbols: string[]): Promise<Record<string, any>> {
     try {
       const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(cfg.finnhubSymbol!)}&token=${apiKey}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.warn(`[global-macro] Finnhub HTTP ${res.status} for ${sym} (${cfg.finnhubSymbol})`);
+        return;
+      }
       const data = await res.json();
       if (data.c && data.c > 0) {
         results[sym] = {
@@ -66,7 +69,9 @@ async function fetchFinnhub(symbols: string[]): Promise<Record<string, any>> {
           source: 'finnhub',
         };
       }
-    } catch { /* silent */ }
+    } catch (err) {
+        console.warn(`[global-macro] Finnhub failed for ${sym} (${cfg.finnhubSymbol}):`, err instanceof Error ? err.message : err);
+      }
   }));
 
   return results;
@@ -89,10 +94,16 @@ async function fetchStooq(symbols: string[]): Promise<Record<string, any>> {
         },
         signal: AbortSignal.timeout(8000),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.warn(`[global-macro] Stooq HTTP ${res.status} for ${sym} (${stooqSym})`);
+        return;
+      }
       const data = await res.json();
       const item = data?.symbols?.[0];
-      if (!item?.close) return;
+      if (!item?.close) {
+        console.warn(`[global-macro] Stooq no close data for ${sym} (${stooqSym}):`, JSON.stringify(item).slice(0, 200));
+        return;
+      }
 
       const close = parseFloat(item.close);
       const prevClose = parseFloat(item.previous_close) || parseFloat(item.open) || close;
@@ -107,7 +118,9 @@ async function fetchStooq(symbols: string[]): Promise<Record<string, any>> {
           source: 'stooq',
         };
       }
-    } catch { /* silent */ }
+    } catch (err) {
+        console.warn(`[global-macro] Stooq failed for ${sym} (${stooqSym}):`, err instanceof Error ? err.message : err);
+      }
   }));
 
   return results;
@@ -131,7 +144,9 @@ export async function GET() {
       fetchStooq(symbols),
     ]);
 
-    // Finnhub takes priority for US, stooq fills the rest
+    console.log(`[global-macro] Finnhub: ${Object.keys(finnhubQuotes).length} hits, Stooq: ${Object.keys(stooqQuotes).length} hits`);
+
+    // Finnhub takes priority (more reliable from Vercel US), stooq fills the rest
     const quotes: Record<string, any> = { ...stooqQuotes, ...finnhubQuotes };
 
     const liveCount = Object.values(quotes).filter((q: any) =>

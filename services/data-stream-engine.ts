@@ -11,6 +11,7 @@ import {
   type SituationalEntity,
   type DataStreamState,
 } from "./types";
+import { DeltaEngine } from "./delta-engine";
 
 type Listener = (state: DataStreamState) => void;
 
@@ -20,6 +21,7 @@ export class DataStreamEngine {
   private state: DataStreamState;
   private listeners: Set<Listener> = new Set();
   private running = false;
+  private deltaEngine = new DeltaEngine();
 
   constructor() {
     this.state = {
@@ -27,6 +29,7 @@ export class DataStreamEngine {
       lastUpdate: {} as Record<EntityType, number>,
       errors: {},
       adapterHealth: {},
+      deltaEvents: [],
     };
   }
 
@@ -124,6 +127,13 @@ export class DataStreamEngine {
       this.state.lastUpdate[adapter.type] = Date.now();
       this.state.adapterHealth[name] = true;
       delete this.state.errors[name];
+
+      // Run delta detection
+      const allEntities = Array.from(this.state.entities.values());
+      const newDeltas = this.deltaEngine.detect(allEntities);
+      if (newDeltas.length > 0) {
+        this.state.deltaEvents = [...newDeltas, ...this.state.deltaEvents].slice(0, 100);
+      }
 
       this.notify();
     } catch (err) {

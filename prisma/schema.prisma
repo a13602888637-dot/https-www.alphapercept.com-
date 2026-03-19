@@ -43,6 +43,22 @@ model Watchlist {
   stopLossPrice Decimal?
   targetPrice   Decimal?
   notes         String?
+
+  // Stop-loss method and params
+  stopLossMethod  String?   // "atr" | "chandelier" | "ma" | "fixed"
+  stopLossParams  Json?     // { atrMultiplier: 3, atrPeriod: 14, maPeriod: 20 }
+
+  // Take-profit method and params
+  takeProfitMethod String?  // "trailing" | "atr_multiple" | "fixed"
+  takeProfitParams Json?    // { trailPercent: 5, atrMultiple: 3 }
+
+  // Dynamic tracking
+  highWaterMark    Decimal? // highest price since buy (for trailing stop)
+  lastComputedAt   DateTime? // when SL/TP was last computed
+  computeStatus    String?  // "live" | "low_freq" | "cached" | "awaiting_data"
+  cachedAtr        Decimal? // cached ATR value for fallback
+  dataFrequency    String?  // "daily" | "weekly" | "monthly"
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)

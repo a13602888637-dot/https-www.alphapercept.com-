@@ -83,6 +83,8 @@ export async function GET(req: Request) {
         buyPrice: item.buyPrice ? item.buyPrice.toNumber() : null,
         stopLossPrice: item.stopLossPrice ? item.stopLossPrice.toNumber() : null,
         targetPrice: item.targetPrice ? item.targetPrice.toNumber() : null,
+        highWaterMark: item.highWaterMark ? item.highWaterMark.toNumber() : null,
+        cachedAtr: item.cachedAtr ? item.cachedAtr.toNumber() : null,
       })),
     });
   } catch (error) {
@@ -164,7 +166,11 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { stockCode, stockName, buyPrice, stopLossPrice, targetPrice, notes } = body;
+    const {
+      stockCode, stockName, buyPrice, stopLossPrice, targetPrice, notes,
+      stopLossMethod, stopLossParams, takeProfitMethod, takeProfitParams,
+      highWaterMark,
+    } = body;
 
     if (!stockCode || !stockName) {
       return NextResponse.json(
@@ -200,6 +206,11 @@ export async function POST(req: Request) {
         stopLossPrice: stopLossPrice ? parseFloat(stopLossPrice) : null,
         targetPrice: targetPrice ? parseFloat(targetPrice) : null,
         notes: notes || null,
+        stopLossMethod: stopLossMethod || null,
+        stopLossParams: stopLossParams || null,
+        takeProfitMethod: takeProfitMethod || null,
+        takeProfitParams: takeProfitParams || null,
+        highWaterMark: highWaterMark ? parseFloat(highWaterMark) : null,
       },
     });
 
@@ -210,6 +221,8 @@ export async function POST(req: Request) {
         buyPrice: watchlistItem.buyPrice ? watchlistItem.buyPrice.toNumber() : null,
         stopLossPrice: watchlistItem.stopLossPrice ? watchlistItem.stopLossPrice.toNumber() : null,
         targetPrice: watchlistItem.targetPrice ? watchlistItem.targetPrice.toNumber() : null,
+        highWaterMark: watchlistItem.highWaterMark ? watchlistItem.highWaterMark.toNumber() : null,
+        cachedAtr: watchlistItem.cachedAtr ? watchlistItem.cachedAtr.toNumber() : null,
       },
     });
   } catch (error) {
@@ -288,7 +301,11 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json();
-    const { id, buyPrice, stopLossPrice, targetPrice, notes } = body;
+    const {
+      id, buyPrice, stopLossPrice, targetPrice, notes,
+      stopLossMethod, stopLossParams, takeProfitMethod, takeProfitParams,
+      highWaterMark, computeStatus, cachedAtr, dataFrequency, lastComputedAt,
+    } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -320,6 +337,15 @@ export async function PUT(req: Request) {
         stopLossPrice: stopLossPrice !== undefined ? parseFloat(stopLossPrice) : existingItem.stopLossPrice,
         targetPrice: targetPrice !== undefined ? parseFloat(targetPrice) : existingItem.targetPrice,
         notes: notes !== undefined ? notes : existingItem.notes,
+        stopLossMethod: stopLossMethod !== undefined ? stopLossMethod : existingItem.stopLossMethod,
+        stopLossParams: stopLossParams !== undefined ? stopLossParams : existingItem.stopLossParams,
+        takeProfitMethod: takeProfitMethod !== undefined ? takeProfitMethod : existingItem.takeProfitMethod,
+        takeProfitParams: takeProfitParams !== undefined ? takeProfitParams : existingItem.takeProfitParams,
+        highWaterMark: highWaterMark !== undefined ? parseFloat(highWaterMark) : existingItem.highWaterMark,
+        computeStatus: computeStatus !== undefined ? computeStatus : existingItem.computeStatus,
+        cachedAtr: cachedAtr !== undefined ? parseFloat(cachedAtr) : existingItem.cachedAtr,
+        dataFrequency: dataFrequency !== undefined ? dataFrequency : existingItem.dataFrequency,
+        lastComputedAt: lastComputedAt !== undefined ? new Date(lastComputedAt) : existingItem.lastComputedAt,
         updatedAt: new Date(),
       },
     });
@@ -331,6 +357,8 @@ export async function PUT(req: Request) {
         buyPrice: updatedItem.buyPrice ? updatedItem.buyPrice.toNumber() : null,
         stopLossPrice: updatedItem.stopLossPrice ? updatedItem.stopLossPrice.toNumber() : null,
         targetPrice: updatedItem.targetPrice ? updatedItem.targetPrice.toNumber() : null,
+        highWaterMark: updatedItem.highWaterMark ? updatedItem.highWaterMark.toNumber() : null,
+        cachedAtr: updatedItem.cachedAtr ? updatedItem.cachedAtr.toNumber() : null,
       },
     });
   } catch (error) {

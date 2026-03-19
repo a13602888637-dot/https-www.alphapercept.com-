@@ -14,6 +14,10 @@ const ADAPTER_LABELS: Record<string, string> = {
   maritime: "MAR",
   geoconflict: "GEO",
   news: "NEWS",
+  economic: "ECON",
+  humanitarian: "HUM",
+  weather: "WX",
+  social: "SOC",
 };
 
 function formatTime(ms: number): string {

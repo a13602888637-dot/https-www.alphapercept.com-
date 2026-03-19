@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 interface SituationAnalysis {
   assessment: string;
   risks: string[];
+  portfolioImpact?: string[];
   confidence: "high" | "medium" | "low";
   timestamp: string;
 }
@@ -14,6 +15,10 @@ interface AISituationBrainProps {
   conflictCount: number;
   marketSummary: string;
   vesselCount: number;
+  economicSummary?: string;
+  deltaEventCount?: number;
+  weatherAlertCount?: number;
+  watchlistSummary?: string;
 }
 
 const CONFIDENCE_STYLES: Record<string, { dot: string; label: string; text: string }> = {
@@ -29,6 +34,10 @@ export function AISituationBrain({
   conflictCount,
   marketSummary,
   vesselCount,
+  economicSummary = "",
+  deltaEventCount = 0,
+  weatherAlertCount = 0,
+  watchlistSummary = "",
 }: AISituationBrainProps) {
   const [analysis, setAnalysis] = useState<SituationAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +56,10 @@ export function AISituationBrain({
           conflictCount,
           marketSummary,
           vesselCount,
+          economicSummary: economicSummary || "",
+          deltaEventCount: deltaEventCount || 0,
+          weatherAlertCount: weatherAlertCount || 0,
+          watchlistSummary: watchlistSummary || "",
         }),
       });
       if (!res.ok) throw new Error("API error");
@@ -57,7 +70,7 @@ export function AISituationBrain({
     } finally {
       setIsLoading(false);
     }
-  }, [newsHeadlines, conflictCount, marketSummary, vesselCount]);
+  }, [newsHeadlines, conflictCount, marketSummary, vesselCount, economicSummary, deltaEventCount, weatherAlertCount, watchlistSummary]);
 
   // Initial fetch + auto-refresh every 5 minutes
   useEffect(() => {
@@ -66,7 +79,7 @@ export function AISituationBrain({
     return () => clearInterval(interval);
     // Only re-trigger on meaningful data changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conflictCount, vesselCount]);
+  }, [conflictCount, vesselCount, weatherAlertCount, watchlistSummary]);
 
   const confStyle = analysis
     ? CONFIDENCE_STYLES[analysis.confidence] ?? CONFIDENCE_STYLES.low
@@ -138,6 +151,33 @@ export function AISituationBrain({
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* Portfolio impact */}
+              {analysis.portfolioImpact && analysis.portfolioImpact.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[9px] text-[#5a6580] font-semibold tracking-wide">
+                    持仓影响
+                  </span>
+                  <ul className="space-y-0.5">
+                    {analysis.portfolioImpact.map((impact, i) => (
+                      <li
+                        key={i}
+                        className="text-[9px] text-[#8890a0] flex items-start gap-1"
+                      >
+                        <span className="text-cyan-500 mt-px shrink-0">*</span>
+                        <span>{impact}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {weatherAlertCount > 0 && (
+                <div className="flex items-center gap-1.5 text-[9px]">
+                  <span className="text-amber-500">⚠</span>
+                  <span className="text-[#8890a0]">{weatherAlertCount} active weather alerts</span>
                 </div>
               )}
 

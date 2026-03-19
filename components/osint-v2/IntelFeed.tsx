@@ -65,6 +65,46 @@ function entityToFeedItem(e: SituationalEntity): FeedItem | null {
     };
   }
 
+  if (e.type === ("economic" as EntityType)) {
+    const meta = e.metadata as any;
+    const changePct = Math.abs(e.deltaPercent ?? 0);
+    if (changePct < 2) return null; // Only show significant moves
+    return {
+      id: `econ-${e.id}`,
+      timestamp: e.timestamp,
+      severity: changePct > 5 ? "high" : "medium",
+      icon: "ECON",
+      headline: `${e.label} ${(e.deltaPercent ?? 0) >= 0 ? "▲" : "▼"} ${e.deltaPercent?.toFixed(2)}%`,
+      body: `${meta?.name || e.label}: ${e.value?.toFixed(2)} (${meta?.tradingSignal || "neutral"})`,
+      source: e.source,
+    };
+  }
+
+  if (e.type === ("weather" as EntityType)) {
+    const meta = e.metadata as any;
+    return {
+      id: `wx-${e.id}`,
+      timestamp: e.timestamp,
+      severity: meta?.severity === "Extreme" ? "critical" : "high",
+      icon: "WX",
+      headline: `${meta?.event || e.label}`,
+      body: `${meta?.headline || ""} — ${meta?.areaDesc || ""}`.slice(0, 120),
+      source: "NOAA",
+    };
+  }
+
+  if (e.type === ("humanitarian" as EntityType)) {
+    return {
+      id: `hum-${e.id}`,
+      timestamp: e.timestamp,
+      severity: "medium",
+      icon: "HUM",
+      headline: e.label,
+      body: `${(e.metadata as any)?.country || ""} — ${(e.metadata as any)?.disasterType || ""}`,
+      source: "ReliefWeb",
+    };
+  }
+
   return null;
 }
 
@@ -142,10 +182,8 @@ export function IntelFeed({ entities, conflicts, errors }: IntelFeedProps) {
   }
 
   for (const e of entities) {
-    if (e.type === EntityType.FINANCIAL) {
-      const item = entityToFeedItem(e);
-      if (item) propFeedItems.push(item);
-    }
+    const item = entityToFeedItem(e);
+    if (item) propFeedItems.push(item);
   }
 
   for (const [name, msg] of Object.entries(errors)) {

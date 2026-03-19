@@ -20,30 +20,78 @@ interface SituationRequest {
   conflictCount: number;
   marketSummary: string;
   vesselCount: number;
+  economicSummary?: string;
+  deltaEventCount?: number;
+  weatherAlertCount?: number;
+  watchlistSummary?: string;
 }
 
 interface SituationResponse {
   assessment: string;
+  macroRegime?: string;
   risks: string[];
+  portfolioImpact?: string[];
+  actionableSignals?: string[];
   confidence: "high" | "medium" | "low";
   timestamp: string;
 }
 
-// Simple in-memory cache
+// Simple in-memory cache (macro-only; personalized requests bypass cache)
 let cachedResponse: SituationResponse | null = null;
 let cacheTimestamp = 0;
 
-const SYSTEM_PROMPT = `你是一位全球宏观态势分析师。基于以下实时数据，输出简洁的态势评估。
-输出JSON格式：{"assessment":"2-3句话的宏观态势判断","risks":["风险信号1","风险信号2"],"confidence":"high/medium/low","timestamp":"ISO"}
+const SYSTEM_PROMPT_BASE = `你是一位全球宏观态势分析师。基于以下实时OSINT数据，输出结构化态势评估。
+
+输出JSON格式：
+{
+  "assessment": "2-3句话的全局态势判断（SITUATION OVERVIEW）",
+  "macroRegime": "expansion|peak|contraction|trough",
+  "risks": ["按严重度排序的风险信号，每条带交易方向(bullish/bearish)"],
+  "actionableSignals": ["明确的看多/看空建议，如'VIX飙升+冲突升级=risk-off，建议减仓'"],
+  "confidence": "high/medium/low",
+  "timestamp": "ISO"
+}
+
+分析维度：
+1. 宏观周期：GDP/CPI/失业率/Fed利率→经济周期判断
+2. 流动性：收益率曲线/VIX→资金流向
+3. 地缘黑天鹅：冲突事件/人道危机→避险情绪
+4. 极端气象：飓风/极寒→能源/农产品供应链
+5. 综合风险方向：VIX+冲突+高收益利差同时上升=risk-off(bearish)
+
+只输出JSON，不要输出其他内容。`;
+
+const SYSTEM_PROMPT_WITH_PORTFOLIO = `你是一位全球宏观态势分析师。基于以下实时OSINT数据和用户持仓信息，输出结构化态势评估。
+
+输出JSON格式：
+{
+  "assessment": "2-3句话的全局态势判断（SITUATION OVERVIEW）",
+  "macroRegime": "expansion|peak|contraction|trough",
+  "risks": ["按严重度排序的风险信号，每条带交易方向(bullish/bearish)"],
+  "portfolioImpact": ["针对用户具体持仓的影响分析，如'中东冲突升级利好中国石油(601857)，但需警惕全球衰退预期压制需求'"],
+  "actionableSignals": ["明确的看多/看空建议，如'VIX飙升+冲突升级=risk-off，建议减仓'"],
+  "confidence": "high/medium/low",
+  "timestamp": "ISO"
+}
+
+分析维度：
+1. 宏观周期：GDP/CPI/失业率/Fed利率→经济周期判断
+2. 流动性：收益率曲线/VIX→资金流向
+3. 地缘黑天鹅：冲突事件/人道危机→避险情绪
+4. 极端气象：飓风/极寒→能源/农产品供应链
+5. 综合风险方向：VIX+冲突+高收益利差同时上升=risk-off(bearish)
+6. 对用户持仓的影响：结合当前OSINT信号，逐一分析用户自选股/持仓面临的具体风险与机会
+
 只输出JSON，不要输出其他内容。`;
 
 export async function POST(request: NextRequest) {
   try {
     const body: SituationRequest = await request.json();
+    const hasWatchlist = !!(body.watchlistSummary && body.watchlistSummary.trim());
 
-    // Return cached response if still fresh
+    // Return cached response if still fresh (only for non-personalized requests)
     const now = Date.now();
-    if (cachedResponse && now - cacheTimestamp < CACHE_TTL_MS) {
+    if (!hasWatchlist && cachedResponse && now - cacheTimestamp < CACHE_TTL_MS) {
       return Response.json(cachedResponse);
     }
 
@@ -54,6 +102,9 @@ export async function POST(request: NextRequest) {
       const mockResponse: SituationResponse = {
         assessment: "AI引擎未配置，无法生成态势分析",
         risks: [],
+        portfolioImpact: hasWatchlist
+          ? ["持仓影响分析需要AI引擎支持，请配置DEEPSEEK_API_KEY"]
+          : undefined,
         confidence: "low",
         timestamp: new Date().toISOString(),
       };
@@ -69,7 +120,15 @@ export async function POST(request: NextRequest) {
       `追踪船舶数量: ${body.vesselCount}艘`,
       "",
       `市场概况: ${body.marketSummary || "暂无数据"}`,
-    ].join("\n");
+      "",
+      body.economicSummary ? `宏观经济指标: ${body.economicSummary}` : "",
+      body.deltaEventCount ? `数据变化事件: ${body.deltaEventCount}个` : "",
+      body.weatherAlertCount ? `极端气象警报: ${body.weatherAlertCount}个` : "",
+      "",
+      hasWatchlist ? `用户持仓/自选股: ${body.watchlistSummary}` : "",
+    ].filter(Boolean).join("\n");
+
+    const systemPrompt = hasWatchlist ? SYSTEM_PROMPT_WITH_PORTFOLIO : SYSTEM_PROMPT_BASE;
 
     // Call DeepSeek (non-streaming)
     const deepseekRes = await fetch(DEEPSEEK_API_URL, {
@@ -81,12 +140,12 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
         stream: false,
         temperature: 0.5,
-        max_tokens: 500,
+        max_tokens: hasWatchlist ? 800 : 500,
       }),
     });
 
@@ -121,9 +180,11 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Cache the response
-    cachedResponse = parsed;
-    cacheTimestamp = Date.now();
+    // Cache only non-personalized (macro-only) responses
+    if (!hasWatchlist) {
+      cachedResponse = parsed;
+      cacheTimestamp = Date.now();
+    }
 
     return Response.json(parsed);
   } catch (error) {

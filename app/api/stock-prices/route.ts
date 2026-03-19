@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import iconv from "iconv-lite";
 import { fetchMultipleStocks, MarketData } from "../../../skills/data_crawler";
 import { prisma } from "../../../lib/db";
 
@@ -63,7 +64,9 @@ async function fetchFromTencent(symbols: string[]): Promise<MarketData[]> {
 
     if (!response.ok) throw new Error(`Tencent API error: ${response.status}`);
 
-    const text = await response.text();
+    // Tencent API returns GBK-encoded text; decode properly for Chinese stock names
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const text = iconv.decode(buffer, 'gbk');
     const results: MarketData[] = [];
 
     // 解析腾讯API响应: v_sh600519="1~贵州茅台~600519~1800.00~1790.00~...";

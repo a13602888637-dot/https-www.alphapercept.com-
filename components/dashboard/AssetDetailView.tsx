@@ -15,7 +15,9 @@ import {
   type MouseEventParams,
 } from "lightweight-charts";
 import { MACD, Stochastic } from "technicalindicators";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Shield, Save, Pencil, Check, X } from "lucide-react";
+import { StopLossConfig, type StopLossMethod, SL_DEFAULT_PARAMS } from "@/components/portfolio/StopLossConfig";
+import { TakeProfitConfig, type TakeProfitMethod, TP_DEFAULT_PARAMS } from "@/components/portfolio/TakeProfitConfig";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -403,6 +405,36 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
   const [rtPrice, setRtPrice] = useState<RealtimePrice | null>(null);
   const [hoverData, setHoverData] = useState<HoverData | null>(null);
 
+  // Watchlist / SL-TP state
+  interface WatchlistItem {
+    id: string;
+    stockCode: string;
+    buyPrice: number | null;
+    stopLossPrice: number | null;
+    targetPrice: number | null;
+    stopLossMethod: string | null;
+    stopLossParams: Record<string, number> | null;
+    takeProfitMethod: string | null;
+    takeProfitParams: Record<string, number> | null;
+    highWaterMark: number | null;
+    computeStatus: string | null;
+    dataFrequency: string | null;
+  }
+  const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null);
+  const [slTpOpen, setSlTpOpen] = useState(false);
+  const [slMethod, setSlMethod] = useState<StopLossMethod>("atr");
+  const [slParams, setSlParams] = useState<Record<string, number>>(SL_DEFAULT_PARAMS.atr);
+  const [tpMethod, setTpMethod] = useState<TakeProfitMethod>("trailing");
+  const [tpParams, setTpParams] = useState<Record<string, number>>(TP_DEFAULT_PARAMS.trailing);
+  const [slTpSaving, setSlTpSaving] = useState(false);
+  const [slTpSaved, setSlTpSaved] = useState(false);
+
+  // Inline price editors
+  const [editingBuyPrice, setEditingBuyPrice] = useState(false);
+  const [editingStopPrice, setEditingStopPrice] = useState(false);
+  const [editBuyVal, setEditBuyVal] = useState("");
+  const [editStopVal, setEditStopVal] = useState("");
+
   // Container refs
   const wrapperRef = useRef<HTMLDivElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
@@ -538,6 +570,87 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
     const id = setInterval(fetchRealtime, 15_000);
     return () => clearInterval(id);
   }, [fetchRealtime]);
+
+  // -------------------------------------------------------------------
+  // Fetch watchlist to check if symbol is tracked (graceful — no error UI)
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/watchlist", { credentials: "include" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        const items: WatchlistItem[] = json.watchlist ?? [];
+        const match = items.find((w) => w.stockCode === symbol);
+        if (match) {
+          setWatchlistItem(match);
+          // Hydrate SL/TP state from saved data
+          if (match.stopLossMethod) {
+            setSlMethod(match.stopLossMethod as StopLossMethod);
+            setSlParams(match.stopLossParams ?? SL_DEFAULT_PARAMS[match.stopLossMethod as StopLossMethod] ?? SL_DEFAULT_PARAMS.atr);
+          }
+          if (match.takeProfitMethod) {
+            setTpMethod(match.takeProfitMethod as TakeProfitMethod);
+            setTpParams(match.takeProfitParams ?? TP_DEFAULT_PARAMS[match.takeProfitMethod as TakeProfitMethod] ?? TP_DEFAULT_PARAMS.trailing);
+          }
+        } else {
+          setWatchlistItem(null);
+        }
+      } catch {
+        // best-effort — user may not be logged in
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [symbol]);
+
+  // Save SL/TP config to watchlist API
+  const handleSaveSlTp = useCallback(async () => {
+    if (!watchlistItem) return;
+    setSlTpSaving(true);
+    setSlTpSaved(false);
+    try {
+      const res = await fetch("/api/watchlist", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: watchlistItem.id,
+          stopLossMethod: slMethod,
+          stopLossParams: slParams,
+          takeProfitMethod: tpMethod,
+          takeProfitParams: tpParams,
+        }),
+      });
+      if (res.ok) {
+        setSlTpSaved(true);
+        setTimeout(() => setSlTpSaved(false), 2000);
+      }
+    } catch {
+      // silent
+    } finally {
+      setSlTpSaving(false);
+    }
+  }, [watchlistItem, slMethod, slParams, tpMethod, tpParams]);
+
+  // Save inline price edits (buy price / stop price)
+  const handleSavePrice = useCallback(async (field: "buyPrice" | "stopLossPrice", value: string) => {
+    if (!watchlistItem) return;
+    const num = parseFloat(value);
+    if (isNaN(num) || num <= 0) return;
+    try {
+      const res = await fetch("/api/watchlist", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: watchlistItem.id, [field]: num }),
+      });
+      if (res.ok) {
+        setWatchlistItem(prev => prev ? { ...prev, [field]: num } : prev);
+      }
+    } catch { /* silent */ }
+  }, [watchlistItem]);
 
   // -------------------------------------------------------------------
   // Build charts
@@ -913,6 +1026,176 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
           ))}
         </div>
 
+        {/* ── Trading Controls Bar (buy price, stop price, SL/TP toggle) ── */}
+        {watchlistItem && (
+          <div
+            className="mb-2 rounded flex flex-wrap items-center gap-3 px-3 py-2"
+            style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${BORDER_COLOR}` }}
+          >
+            {/* Buy Price */}
+            <div className="flex items-center gap-1.5 text-[10px] font-mono">
+              <span className="text-gray-500">买入价</span>
+              {editingBuyPrice ? (
+                <span className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editBuyVal}
+                    onChange={(e) => setEditBuyVal(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { handleSavePrice("buyPrice", editBuyVal); setEditingBuyPrice(false); }
+                      if (e.key === "Escape") setEditingBuyPrice(false);
+                    }}
+                    autoFocus
+                    className="w-20 px-1.5 py-0.5 rounded bg-white/5 border border-blue-500/40 text-gray-200 text-[10px] font-mono outline-none focus:border-blue-400"
+                  />
+                  <button onClick={() => { handleSavePrice("buyPrice", editBuyVal); setEditingBuyPrice(false); }} className="text-emerald-400 hover:text-emerald-300"><Check className="h-3 w-3" /></button>
+                  <button onClick={() => setEditingBuyPrice(false)} className="text-gray-500 hover:text-gray-300"><X className="h-3 w-3" /></button>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <span className="text-amber-400 tabular-nums">{watchlistItem.buyPrice ? fmtNum(watchlistItem.buyPrice) : "--"}</span>
+                  <button
+                    onClick={() => { setEditBuyVal(watchlistItem.buyPrice?.toString() ?? ""); setEditingBuyPrice(true); }}
+                    className="text-gray-600 hover:text-gray-400"
+                  ><Pencil className="h-2.5 w-2.5" /></button>
+                </span>
+              )}
+            </div>
+
+            {/* Stop Price */}
+            <div className="flex items-center gap-1.5 text-[10px] font-mono">
+              <span className="text-gray-500">止损价</span>
+              {editingStopPrice ? (
+                <span className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editStopVal}
+                    onChange={(e) => setEditStopVal(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { handleSavePrice("stopLossPrice", editStopVal); setEditingStopPrice(false); }
+                      if (e.key === "Escape") setEditingStopPrice(false);
+                    }}
+                    autoFocus
+                    className="w-20 px-1.5 py-0.5 rounded bg-white/5 border border-red-500/40 text-gray-200 text-[10px] font-mono outline-none focus:border-red-400"
+                  />
+                  <button onClick={() => { handleSavePrice("stopLossPrice", editStopVal); setEditingStopPrice(false); }} className="text-emerald-400 hover:text-emerald-300"><Check className="h-3 w-3" /></button>
+                  <button onClick={() => setEditingStopPrice(false)} className="text-gray-500 hover:text-gray-300"><X className="h-3 w-3" /></button>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <span className="text-red-400 tabular-nums">{watchlistItem.stopLossPrice ? fmtNum(watchlistItem.stopLossPrice) : "--"}</span>
+                  <button
+                    onClick={() => { setEditStopVal(watchlistItem.stopLossPrice?.toString() ?? ""); setEditingStopPrice(true); }}
+                    className="text-gray-600 hover:text-gray-400"
+                  ><Pencil className="h-2.5 w-2.5" /></button>
+                </span>
+              )}
+            </div>
+
+            {/* Target Price (read-only display) */}
+            <div className="flex items-center gap-1.5 text-[10px] font-mono">
+              <span className="text-gray-500">目标价</span>
+              <span className="text-emerald-400 tabular-nums">{watchlistItem.targetPrice ? fmtNum(watchlistItem.targetPrice) : "--"}</span>
+            </div>
+
+            {/* P&L */}
+            {watchlistItem.buyPrice && displayPrice != null && (
+              <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                <span className="text-gray-500">盈亏</span>
+                {(() => {
+                  const pnl = displayPrice - watchlistItem.buyPrice;
+                  const pnlPct = (pnl / watchlistItem.buyPrice) * 100;
+                  const color = pnl >= 0 ? "text-red-400" : "text-emerald-400";
+                  const sign = pnl >= 0 ? "+" : "";
+                  return <span className={`${color} tabular-nums`}>{sign}{fmtNum(pnl)} ({sign}{fmtNum(pnlPct)}%)</span>;
+                })()}
+              </div>
+            )}
+
+            {/* SL/TP toggle */}
+            <button
+              onClick={() => setSlTpOpen(v => !v)}
+              className="ml-auto flex items-center gap-1 px-2 py-1 rounded text-[9px] font-mono text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] transition-colors"
+            >
+              <Shield className="h-3 w-3 text-blue-400/60" />
+              <span>止盈止损</span>
+              {slTpOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          </div>
+        )}
+
+        {/* ── Expanded SL/TP Config (shown when toggled) ── */}
+        {watchlistItem && slTpOpen && (
+          <div
+            className="mb-2 rounded px-3 pb-4 pt-2 space-y-4"
+            style={{ background: "rgba(255,255,255,0.015)", border: `1px solid ${BORDER_COLOR}` }}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Stop-Loss */}
+              <div className="rounded-lg p-3" style={{ background: "rgba(239,68,68,0.03)", border: "1px solid rgba(239,68,68,0.08)" }}>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div className="w-1 h-3 rounded-full bg-red-500/60" />
+                  <span className="text-[10px] font-mono text-red-400/80 uppercase tracking-wider">Stop Loss</span>
+                </div>
+                <div className="[&_label]:text-gray-400 [&_button]:border-gray-700 [&_button]:text-gray-400 [&_button:hover]:border-gray-500 [&_button.border-blue-500]:border-blue-500 [&_button.border-blue-500]:text-blue-400 [&_input]:bg-white/5 [&_input]:border-gray-700 [&_input]:text-gray-200 [&_.bg-red-50]:bg-red-500/10 [&_.border-red-100]:border-red-500/20 [&_.text-red-600]:text-red-400 [&_.text-red-400]:text-red-400/80">
+                  <StopLossConfig
+                    method={slMethod}
+                    params={slParams}
+                    buyPrice={watchlistItem.buyPrice}
+                    currentPrice={displayPrice}
+                    computedPrice={watchlistItem.stopLossPrice}
+                    computeStatus={watchlistItem.computeStatus}
+                    dataFrequency={watchlistItem.dataFrequency}
+                    onMethodChange={setSlMethod}
+                    onParamsChange={setSlParams}
+                  />
+                </div>
+              </div>
+              {/* Take-Profit */}
+              <div className="rounded-lg p-3" style={{ background: "rgba(34,197,94,0.03)", border: "1px solid rgba(34,197,94,0.08)" }}>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div className="w-1 h-3 rounded-full bg-emerald-500/60" />
+                  <span className="text-[10px] font-mono text-emerald-400/80 uppercase tracking-wider">Take Profit</span>
+                </div>
+                <div className="[&_label]:text-gray-400 [&_button]:border-gray-700 [&_button]:text-gray-400 [&_button:hover]:border-gray-500 [&_button.border-emerald-500]:border-emerald-500 [&_button.border-emerald-500]:text-emerald-400 [&_input]:bg-white/5 [&_input]:border-gray-700 [&_input]:text-gray-200 [&_.bg-emerald-50]:bg-emerald-500/10 [&_.border-emerald-100]:border-emerald-500/20 [&_.text-emerald-600]:text-emerald-400 [&_.text-emerald-400]:text-emerald-400/80">
+                  <TakeProfitConfig
+                    method={tpMethod}
+                    params={tpParams}
+                    buyPrice={watchlistItem.buyPrice}
+                    currentPrice={displayPrice}
+                    computedPrice={watchlistItem.targetPrice}
+                    computeStatus={watchlistItem.computeStatus}
+                    highWaterMark={watchlistItem.highWaterMark}
+                    onMethodChange={setTpMethod}
+                    onParamsChange={setTpParams}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleSaveSlTp}
+                disabled={slTpSaving}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-mono font-medium transition-all ${
+                  slTpSaved
+                    ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/30"
+                    : "bg-blue-600/80 hover:bg-blue-600 text-white border border-blue-500/30"
+                } disabled:opacity-50`}
+              >
+                {slTpSaving ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : slTpSaved ? (
+                  <span>已保存</span>
+                ) : (
+                  <><Save className="h-3 w-3" /><span>保存设置</span></>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Global asset placeholder */}
         {global ? (
           <div className="flex items-center justify-center h-[600px]">
@@ -1089,6 +1372,7 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
