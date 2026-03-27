@@ -73,6 +73,7 @@ export default function DabanPage() {
       const res = await fetch("/api/portfolio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           stockCode: signal.symbol,
           stockName: signal.name,
@@ -86,7 +87,9 @@ export default function DabanPage() {
         toast.success(`已接受: ${signal.name} (${signal.symbol})`)
         setAccepted((prev) => [...prev, signal])
       } else {
-        toast.error("添加失败，请重试")
+        const errData = await res.json().catch(() => ({}))
+        const msg = errData.error || `HTTP ${res.status}`
+        toast.error(`添加失败: ${msg}`)
       }
     } catch {
       toast.error("网络错误，请重试")
