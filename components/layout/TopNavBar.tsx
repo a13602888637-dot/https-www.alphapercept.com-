@@ -7,7 +7,7 @@ import { ArrowLeft, Brain, Globe, LayoutDashboard, LogIn, Zap } from "lucide-rea
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "交易台", icon: LayoutDashboard },
-  { href: "/portfolio", label: "打板", icon: Zap },
+  { href: "/daban", label: "打板", icon: Zap },
   { href: "/osint", label: "OSINT 雷达", icon: Globe },
 ];
 
