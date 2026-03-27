@@ -37,7 +37,7 @@ export default function DabanPage() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const { getToken, isSignedIn } = useAuth()
+  const { isSignedIn } = useAuth()
 
   const fetchSignals = useCallback(async () => {
     try {
@@ -70,13 +70,9 @@ export default function DabanPage() {
       return
     }
     try {
-      const token = await getToken()
       const res = await fetch("/api/portfolio", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           stockCode: signal.symbol,
           stockName: signal.name,
@@ -168,22 +164,30 @@ export default function DabanPage() {
                 连板高度
               </div>
               <div className="text-2xl font-bold text-white">
-                {sentiment.chainHeight}
+                {sentiment.chainHeight || "--"}
+              </div>
+              <div className="text-[10px] text-gray-600 mt-1">
+                当前最高连板天数
               </div>
             </div>
             <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg p-4">
               <div className="flex items-center gap-1.5 text-gray-500 text-xs mb-1">
                 <BarChart3 className="h-3.5 w-3.5" />
-                溢价率
+                昨日涨停溢价率
               </div>
               <div
                 className={`text-2xl font-bold ${
-                  sentiment.premiumRate >= 0
+                  sentiment.premiumRate > 0
                     ? "text-emerald-400"
-                    : "text-red-400"
+                    : sentiment.premiumRate < 0
+                      ? "text-red-400"
+                      : "text-gray-400"
                 }`}
               >
-                {sentiment.premiumRate.toFixed(1)}%
+                {sentiment.premiumRate !== 0 ? `${sentiment.premiumRate.toFixed(1)}%` : "--"}
+              </div>
+              <div className="text-[10px] text-gray-600 mt-1">
+                昨涨停股今开均价偏离
               </div>
             </div>
             <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg p-4">
@@ -197,6 +201,9 @@ export default function DabanPage() {
                 }`}
               >
                 {isLockdown ? "冰点" : "正常"}
+              </div>
+              <div className="text-[10px] text-gray-600 mt-1">
+                {isLockdown ? "溢价率为负，空仓防守" : "溢价率正常，可操作"}
               </div>
             </div>
           </div>
@@ -277,14 +284,16 @@ export default function DabanPage() {
                   </div>
 
                   {/* Metrics row */}
-                  <div className="flex gap-4 text-xs text-gray-400 mb-3">
-                    <span>
-                      量比:{" "}
-                      <span className="text-amber-400">
-                        {signal.volumeRatio.toFixed(1)}
+                  {signal.volumeRatio > 0 && (
+                    <div className="flex gap-4 text-xs text-gray-400 mb-3">
+                      <span>
+                        量比:{" "}
+                        <span className="text-amber-400">
+                          {signal.volumeRatio.toFixed(1)}
+                        </span>
                       </span>
-                    </span>
-                  </div>
+                    </div>
+                  )}
 
                   {/* Reason */}
                   <p className="text-xs text-gray-500 mb-4 leading-relaxed">
