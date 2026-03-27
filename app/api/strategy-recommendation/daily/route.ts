@@ -140,17 +140,20 @@ async function scanSignals(): Promise<AlphaSignal[]> {
       const changePercent = md.changePercent ?? 0;
       const volumeRatio = md.volumeRatio ?? 0;
 
-      // Filter: changePercent >= 8.5%
-      if (changePercent < 8.5) continue;
+      // Filter: changePercent >= 3% (candidates for board trading)
+      if (changePercent < 3) continue;
 
-      // Filter: volumeRatio >= 3 (if available)
-      if (md.volumeRatio !== undefined && volumeRatio < 3) continue;
-
-      // Filter: not locked at limit-up
+      // Filter: not locked at limit-up (skip if already at 涨停)
       if (md.prevClose && md.prevClose > 0) {
         const limitUp = Math.round(md.prevClose * 1.1 * 100) / 100;
         if (md.currentPrice >= limitUp) continue;
       }
+
+      // Classify signal strength
+      const isHot = changePercent >= 8.5;
+      const isWarm = changePercent >= 5;
+      const tag = isHot ? "强势冲板" : isWarm ? "加速上攻" : "异动关注";
+      const vrText = volumeRatio > 0 ? `量比${volumeRatio.toFixed(1)}，` : "";
 
       signals.push({
         symbol: md.symbol,
@@ -158,9 +161,12 @@ async function scanSignals(): Promise<AlphaSignal[]> {
         currentPrice: md.currentPrice,
         changePercent: Math.round(changePercent * 100) / 100,
         volumeRatio: Math.round(volumeRatio * 100) / 100,
-        reason: `量比${volumeRatio.toFixed(1)}，涨幅${changePercent.toFixed(1)}%未封板`,
+        reason: `${tag} — ${vrText}涨幅${changePercent.toFixed(1)}%`,
       });
     }
+
+    // Sort by changePercent descending
+    signals.sort((a, b) => b.changePercent - a.changePercent);
 
     return signals;
   } catch {

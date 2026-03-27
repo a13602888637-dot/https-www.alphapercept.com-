@@ -109,20 +109,7 @@ stock-analysis/
 
 ## Key Technologies
 
-| Layer | Technology | Version | Purpose |
-|-------|-----------|---------|---------|
-| **Frontend** | Next.js | 15.2.3 | App Router, SSR, API routes |
-| | React | 19.0.0 | UI components |
-| | TypeScript | 5.0 | Type safety |
-| | Tailwind CSS | 3.4 | Styling |
-| | Radix UI | Latest | Accessible components |
-| **Backend** | Next.js API Routes | 15.2.3 | HTTP endpoints |
-| | Node.js | 20.19.0+ | Runtime |
-| **Database** | Supabase PostgreSQL | 15+ | Data storage |
-| | Prisma | 7.4.1 | ORM & migrations |
-| **Auth** | Clerk | 6.38.1 | User authentication |
-| **AI** | DeepSeek API | Latest | Market analysis |
-| **Deployment** | Vercel | Latest | CI/CD & hosting |
+Next.js 15 (App Router) · React 19 · TypeScript · Tailwind 3.4 · Prisma 7 + Supabase PostgreSQL · Clerk auth · DeepSeek AI · Vercel deploy
 
 ---
 
@@ -180,6 +167,7 @@ npm run build            # Pre-flight check
 | `/api/ai/stream` | Streaming AI responses |
 | `/api/unified-search` | A-stock + US stock search |
 | `/api/users/sync` | Sync Clerk user to DB |
+| `/api/watchlist/recalculate` | POST with `{ids}`, computes SL/TP from K-line data (East Money) |
 
 ---
 
@@ -207,44 +195,16 @@ Core entities in `prisma/schema.prisma`:
 - Keep server components for data fetching, reducing JS bundle
 - Example: `components/portfolio/AddPositionDialog.tsx` uses `"use client"` for form interactivity
 
-### API Route Structure
-```typescript
-// app/api/example/route.ts
-import { auth } from "@clerk/nextjs/server";
+### API Route Auth Patterns
+Two auth patterns coexist:
+- **Clerk middleware** (`auth()` from `@clerk/nextjs/server`) — used by `/api/intelligence-feed`, `/api/strategy-recommendation`, `/api/users/sync`
+- **Bearer token** (`getUserIdFromRequest` from `lib/auth-helpers.ts`) — used by `/api/watchlist`, `/api/watchlist/recalculate`
 
-export async function GET(request: Request) {
-  try {
-    const { userId } = await auth();
-    if (!userId) return new Response("Unauthorized", { status: 401 });
-
-    // Fetch data
-    const data = await prisma.watchlist.findMany({ where: { userId } });
-
-    return Response.json({ data });
-  } catch (error) {
-    console.error("API error:", error);
-    return new Response("Internal Server Error", { status: 500 });
-  }
-}
-```
+For Bearer-token routes, frontend must send `Authorization: Bearer ${token}` via `useAuth().getToken()`. Do NOT use `credentials: "include"`.
 
 ### Database Queries
-```typescript
-// Always filter by userId for user-specific data
-const watchlist = await prisma.watchlist.findMany({
-  where: { userId: currentUserId },
-  orderBy: { createdAt: 'desc' },
-});
-
-// Use Prisma migrations for schema changes
-// DO NOT modify schema.prisma without running: npx prisma migrate dev
-```
-
-### Error Handling
-- Catch errors at API boundary
-- Log to console for debugging
-- Return appropriate HTTP status codes
-- Never expose sensitive error details to frontend
+- Always filter by `userId` for user-specific data
+- Run `npx prisma migrate dev` after any schema.prisma change
 
 ---
 
@@ -334,9 +294,13 @@ git reset --hard HEAD~1
 - **NEVER** edit `.env` files directly - use `vercel env`
 - **Always** run `npx prisma migrate dev` after schema changes
 - Direct URL required for migrations, pooled URL for queries
+- `prisma migrate dev` 需要 shadow database，从本地连 Supabase 常失败 — 替代：`prisma db push` 或 Supabase SQL Editor 手动 ALTER TABLE
+- 新增字段后必须 `npx prisma generate` 更新 client 类型
 
 ### ⚠️ Authentication
-- All API routes must check `auth()` and verify `userId`
+- User-data API routes use two auth patterns — see "API Route Auth Patterns" above
+- `lib/auth-helpers.ts` — `getUserIdFromRequest()` decodes JWT from Authorization header
+- `lib/trading.ts` — `calculateStopLoss()` / `calculateTakeProfit()` used by `/api/watchlist/recalculate`
 - Clerk webhook must be configured for user sync
 - Test auth in staging before production deploy
 
@@ -425,6 +389,30 @@ git reset --hard HEAD~1
 ### ⚠️ CLAUDE.md 双文件说明
 - `CLAUDE.md` 与 `claude.md` 是同一文件的硬链接（相同 inode）— 编辑任意一个即可，两者始终同步
 
+### ⚠️ Clerk useAuth + getToken 时序
+- `getToken()` 在 Clerk 未加载完时返回 `null`（不报错）— 必须在 useEffect 中守卫 `isSignedIn !== undefined`
+- useEffect deps 必须包含 `isSignedIn` 和 `getToken`，否则 Clerk 加载完后不会重新触发 fetch
+- 参考 `TradingCommandCenter.tsx` 的 `const { getToken, isSignedIn } = useAuth()` 模式
+
+### ⚠️ 止盈止损计算流程（两步）
+- `PUT /api/watchlist` 只保存 method + params，不触发计算
+- 必须再调 `POST /api/watchlist/recalculate` 传 `{ ids: [itemId] }` 才会用 K 线数据算出实际价格
+- 前端需用 recalculate 返回的 `results[].stopLossPrice / targetPrice` 更新 UI 状态
+
+### ⚠️ DeepSeek API 响应解析
+- 提取 JSON 用 `indexOf('{')` + `lastIndexOf('}')` 而非纯 regex — DeepSeek 常加前言/后语
+- 字段类型不可信：`risks` 可能是字符串而非数组 — 必须用归一化函数（尝试 `JSON.parse` 再 fallback）
+- fallback 文本要清除 `{}[]"\\` 等 JSON 语法字符，避免原始 JSON 碎片暴露给用户
+
+### ⚠️ Vercel 部署流程
+- `vercel deploy --prod` 上传本地文件，但 GitHub 自动部署会覆盖 — 必须先 `git push` 再 `vercel deploy --prod`
+- Vercel Hobby cron 限制：仅支持每天一次的 schedule，总数 ~2 个；超频 cron 需外部服务（cron-job.org）或升级 Pro
+
+### ⚠️ 导航结构
+- 顶部导航栏：`components/layout/TopNavBar.tsx` — `NAV_LINKS` 数组控制菜单项
+- 侧边栏：`components/layout/sidebar.tsx` — 存在但未在主 layout 使用
+- 新功能页面应创建独立路由（如 `/daban`），不嵌入已有大页面
+
 ### ⚠️ Claude Code Configuration
 - `.claude/` directory is gitignored (personal tool config)
 - `.mcp.json` is committed (team shares MCP server list)
@@ -460,24 +448,12 @@ vercel env list
 
 ---
 
-## Useful Resources
-
-- **Clerk**: https://dashboard.clerk.com
-- **Supabase**: https://app.supabase.com
-- **Prisma**: https://www.prisma.io/docs
-- **Next.js**: https://nextjs.org/docs
-- **DeepSeek**: https://platform.deepseek.com
-
----
-
 ## Trading Strategy
 
 For trading logic & decision rules, see `TRADING_STRATEGY.md`.
 
 ---
 
-
 **Project Version**: 0.1.0
-**Last Updated**: 2026-03-18
+**Last Updated**: 2026-03-19
 **Node.js Required**: 20.19.0+
-**Maintained By**: Alpha-Quant-Copilot Team
