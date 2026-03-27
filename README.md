@@ -1,378 +1,294 @@
 # Alpha-Quant-Copilot
 
-AI驱动的量化投资分析系统，融合五大投资流派的智能决策引擎。
+AI 驱动的量化交易助手，集成实时全球行情、OSINT 态势感知、智能选股与 AI 持仓分析。
 
-## 项目概述
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
+![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-Alpha-Quant-Copilot 是一个集成了桥水宏观对冲、巴菲特价值投资、索罗斯反身性理论、佩洛西政策前瞻、中国游资情绪接力五大投资流派的AI量化分析系统。系统提供实时市场监控、智能信号识别、风险预警和投资决策支持。
+---
+
+## 核心功能
+
+### 行情与分析
+- **全球宏观总览** — A 股、美股、港股、加密货币、大宗商品、外汇实时行情
+- **个股详情页** — 专业 K 线图（lightweight-charts）、技术指标联动、盘口数据
+- **智能选股** — AI 驱动的策略推荐与情报 Feed
+- **止盈止损计算** — 基于 K 线数据的动态 SL/TP 引擎
+
+### OSINT 态势感知
+- **全球地图** — Leaflet 驱动，集成金融、海运（AISStream）、航空（OpenSky）、地缘冲突（GDELT）四大数据源
+- **AI 态势大脑** — DeepSeek 实时分析全球宏观局势
+- **多面板仪表盘** — 金融面板、经济面板、社交面板、情报 Feed、Delta 面板
+
+### 投资组合
+- **持仓管理** — 实时盈亏计算、仓位分析
+- **AI 持仓分析** — 智能诊断持仓风险与优化建议
+- **Watchlist** — 关注列表 + 自动止盈止损监控
+
+### 实时数据推送
+- **SSE (Server-Sent Events)** — 单向服务器推送，自动重连
+- **WebSocket** — 双向实时通信，支持订阅/取消订阅
+
+---
 
 ## 技术架构
 
-### 前端技术栈
-- **Next.js 15** - React框架，App Router
-- **TypeScript** - 类型安全
-- **Tailwind CSS** - 实用优先的CSS框架
-- **shadcn/ui** - 可复用的UI组件库
-- **Clerk** - 用户认证和授权
-- **React 19** - 前端UI库
+```
++--------------------------------------------------+
+|                   Frontend                        |
+|  Next.js 15 App Router  -  React 19  -  Tailwind |
+|  lightweight-charts  -  Leaflet  -  Framer Motion |
++--------------------------------------------------+
+|                API Layer (30+ routes)              |
+|  行情: East Money / Stooq / Finnhub / Sina        |
+|  OSINT: AISStream / OpenSky / GDELT / ReliefWeb   |
+|  宏观: FRED / EIA / BLS / Treasury                |
+|  AI:   DeepSeek (Streaming)                       |
++--------------------------------------------------+
+|                  Data Layer                        |
+|  Prisma 7  -  Supabase PostgreSQL  -  Clerk Auth  |
++--------------------------------------------------+
+```
 
-### 后端技术栈
-- **Node.js** - 运行时环境
-- **TypeScript** - 类型安全
-- **Tushare API** - 金融数据接口
-- **DeepSeek API** - AI推理引擎
-- **Cron Jobs** - 自动化调度
+---
+
+## 快速开始
+
+### 环境要求
+
+- Node.js >= 20.19.0
+- npm
+- Supabase 项目（PostgreSQL）
+- Clerk 账户（认证）
+
+### 1. 克隆 & 安装
+
+```bash
+git clone https://github.com/your-org/alpha-quant-copilot.git
+cd stock-analysis
+npm install
+```
+
+### 2. 环境变量
+
+```bash
+cp .env.example .env.local
+```
+
+在 `.env.local` 中填入：
+
+| 变量 | 说明 | 必需 |
+|------|------|:----:|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk 公钥 | Yes |
+| `CLERK_SECRET_KEY` | Clerk 密钥 | Yes |
+| `CLERK_WEBHOOK_SECRET` | Webhook 签名验证 | Yes |
+| `DATABASE_URL` | Supabase 连接池 URL | Yes |
+| `DIRECT_URL` | Supabase 直连 URL（迁移用） | Yes |
+| `DEEPSEEK_API_KEY` | DeepSeek AI 分析引擎 | No |
+| `NEXT_PUBLIC_API_BASE_URL` | 后端 API 基础 URL | No |
+
+### 3. 数据库初始化
+
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
+
+### 4. 启动开发服务器
+
+```bash
+npm run dev
+```
+
+访问 http://localhost:3000
+
+---
 
 ## 项目结构
 
 ```
-/Users/guangyu/stock-analysis/
-├── app/                    # Next.js App Router
-│   ├── (auth)/            # 认证相关页面
-│   │   ├── sign-in/       # 登录页面
-│   │   └── sign-up/       # 注册页面
-│   ├── api/               # API路由
-│   │   ├── webhooks/      # Webhook处理
-│   │   └── route.ts       # API根路由
-│   ├── dashboard/         # 主仪表板
-│   ├── globals.css        # 全局样式
-│   ├── layout.tsx         # 根布局
-│   └── page.tsx           # 首页
-├── components/            # React组件
-│   ├── ui/               # shadcn/ui组件
-│   ├── dashboard-header.tsx
-│   ├── dashboard-shell.tsx
-│   └── theme-provider.tsx
-├── hooks/                # 自定义Hooks
-│   └── use-toast.ts
-├── lib/                  # 工具函数
-│   └── utils.ts
-├── skills/               # 核心业务逻辑
-│   ├── data_crawler.ts   # 新浪/腾讯财经数据抓取
-│   └── deepseek_agent.ts # AI推理引擎
-├── components/           # React组件
-│   └── live-feed/        # 实时数据推送组件
-├── scripts/              # 构建脚本
-│   └── start-realtime.sh # 实时系统启动脚本
-├── docs/                 # 项目文档
-│   └── realtime-system-architecture.md # 实时系统架构文档
-├── middleware.ts         # Clerk中间件
-├── next.config.ts       # Next.js配置
-├── tailwind.config.ts   # Tailwind配置
-├── postcss.config.js    # PostCSS配置
-├── tsconfig.json        # TypeScript配置
-├── package.json         # 项目依赖
-└── .env.local           # 环境变量
+app/
+├── api/                        # 30+ API 路由
+│   ├── market-data/            # 行情数据
+│   ├── stock-price-history/    # K 线历史（East Money）
+│   ├── global-macro/           # 全球宏观指数
+│   ├── intelligence-feed/      # AI 情报流
+│   ├── ai/                     # AI 分析 & 流式响应
+│   │   ├── situation-analysis/ # DeepSeek 态势分析
+│   │   └── stream/             # 流式 AI 响应
+│   ├── maritime/               # AISStream 海运追踪
+│   ├── aviation/               # OpenSky 航空追踪
+│   ├── geoconflict/            # GDELT 地缘冲突
+│   ├── watchlist/              # 关注列表 & 止盈止损
+│   │   └── recalculate/        # SL/TP 重新计算
+│   ├── portfolio/              # 投资组合
+│   ├── fred/                   # 美联储经济数据
+│   ├── eia/                    # 能源信息署
+│   ├── bls/                    # 劳工统计局
+│   ├── treasury/               # 美国国债
+│   ├── news-feed/              # 新闻聚合
+│   ├── unified-search/         # A 股 + 美股统一搜索
+│   ├── sse/                    # Server-Sent Events
+│   ├── websocket/              # WebSocket 推送
+│   └── ...
+├── (auth)/                     # 认证页面 (sign-in, sign-up)
+├── dashboard/
+│   ├── macro/                  # 宏观行情页
+│   ├── osint/                  # OSINT 态势感知入口
+│   ├── stock/[symbol]/         # 个股详情
+│   └── asset/[symbol]/         # 全球资产详情
+├── osint/                      # 全屏 OSINT 雷达（独立 layout）
+├── portfolio/                  # 持仓管理
+├── live-feed/                  # 实时情报
+└── strategy-recommendation/    # 策略推荐
+
+components/
+├── osint-v2/                   # OSINT 核心组件
+│   ├── SituationScreen.tsx     # 主控屏幕
+│   ├── GeoMapInner.tsx         # Leaflet 全球地图
+│   ├── AISituationBrain.tsx    # AI 态势大脑
+│   ├── IntelFeed.tsx           # 情报 Feed
+│   ├── FinancePanel.tsx        # 金融面板
+│   ├── EconomicPanel.tsx       # 经济面板
+│   ├── SocialPanel.tsx         # 社交面板
+│   ├── DeltaPanel.tsx          # Delta 面板
+│   ├── TickerBar.tsx           # 行情滚动条
+│   └── StatusBar.tsx           # 状态栏
+├── dashboard/                  # 仪表盘组件
+├── charts/                     # 图表组件
+├── portfolio/                  # 持仓 UI
+├── intelligence-feed/          # Feed 组件
+├── global-search/              # 搜索结果
+└── ui/                         # shadcn/ui 基础组件
+
+services/adapters/              # 数据适配器（标准化为 SituationalEntity）
+├── finance-adapter.ts          # 金融市场
+├── maritime-adapter.ts         # 海运 AIS
+├── aviation-adapter.ts         # 航空 OpenSky
+└── geoconflict-adapter.ts      # 地缘冲突 GDELT
+
+lib/                            # 工具函数
+├── api/                        # API 客户端
+├── data/                       # 数据获取 & 缓存
+├── search-proxy/               # 搜索服务抽象
+├── prisma.ts                   # Prisma 客户端单例
+└── auth-helpers.ts             # 认证工具
+
+prisma/                         # Schema & 迁移历史
 ```
 
-## 核心功能
+---
 
-### 1. 五大投资流派融合分析
-- **桥水宏观对冲**：经济周期定位，风险平价配置
-- **巴菲特价值投资**：安全边际计算，护城河评估
-- **索罗斯反身性**：市场情绪监控，趋势加速识别
-- **佩洛西政策前瞻**：政策敏感度分析，产业图谱
-- **中国游资情绪接力**：题材热度指数，情绪周期判断
+## 常用命令
 
-### 2. 硬性交易纪律
-- **MA60破位止损**：严格执行60日移动平均线风控
-- **MD60趋势跟踪**：60日动量方向判断与跟踪
+### 开发
 
-### 3. 实时数据推送系统
-- **SSE (Server-Sent Events)**：单向服务器推送，自动重连，低延迟
-- **WebSocket**：双向实时通信，支持订阅/取消订阅
-- **MA60实时破位检测**：基于60日移动平均线的实时警告
-- **MD60动量跟踪**：60日动量方向实时计算
-- **多股票同时监控**：支持最多20只股票实时监控
-- **AI交易推荐推送**：基于DeepSeek的实时交易建议
-
-### 4. 实时监控系统
-- 市场信号实时推送
-- 风险预警即时通知
-- 持仓动态监控
-
-### 5. AI智能分析
-- DeepSeek驱动的策略推荐
-- 多因子模型评估
-- 自动化复盘学习
-
-## 快速开始
-
-### 环境准备
-1. 确保已安装 Node.js 18+ 和 npm
-2. 克隆项目到本地
-
-### 安装依赖
 ```bash
-npm install
+npm run dev                  # 启动开发服务器 (port 3000)
+npm run build                # 生产构建
+npm run next:lint            # ESLint 检查
 ```
 
-### 环境配置
-复制 `.env.local.example` 到 `.env.local` 并配置以下变量：
+### 数据库
+
 ```bash
-# Tushare API Token
-TUSHARE_TOKEN=your_tushare_token_here
-
-# DeepSeek API Key
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
-
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key_here
-CLERK_SECRET_KEY=sk_test_your_clerk_secret_key_here
-
-# Next.js Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+npx prisma migrate dev       # 创建 & 应用迁移
+npx prisma studio            # 数据库 GUI
+npx prisma generate          # 重新生成 Prisma Client
 ```
 
-### 启动开发服务器
+### 验证 & 测试
+
 ```bash
-npm run next:dev
+npm run verify               # 里程碑快速验证
+npm run verify:uat-quick     # 快速 UAT
+npm run verify:uat-full      # 完整 UAT
+npm run test:smart-selector  # 数据源选择测试
 ```
-访问 http://localhost:3000
 
-### 启动实时数据推送系统
+### 部署
+
 ```bash
-# 使用启动脚本
-./scripts/start-realtime.sh
-
-# 或直接启动
-npm run next:dev
+vercel link                  # 关联 Vercel 项目
+vercel deploy                # 部署到预览环境
+vercel --prod                # 部署到生产环境
 ```
 
-访问实时数据推送页面：http://localhost:3000/live-feed
+---
 
-### 实时系统API接口
-- **SSE API**: `GET /api/sse?symbols=000001,600000`
-- **WebSocket API**: `ws://localhost:3000/api/websocket?symbols=000001,600000`
-- **连接统计**: `POST /api/sse` (action: "stats")
+## 数据源一览
 
-### 构建生产版本
-```bash
-npm run next:build
-npm run next:start
-```
+| 类别 | 数据源 | 用途 |
+|------|--------|------|
+| A 股行情 | East Money K-line API | K 线、实时报价 |
+| 全球指数 | Stooq / Finnhub (ETF proxy) | 恒指、日经、大宗商品、外汇 |
+| A 股实时 | Sina hq.sinajs.cn | A 股实时行情 |
+| 海运 | AISStream (WebSocket) | 全球船舶位置追踪 |
+| 航空 | OpenSky Network (API proxy) | 航班实时追踪 |
+| 地缘冲突 | GDELT GeoJSON | 全球冲突事件热力图 |
+| 宏观经济 | FRED / EIA / BLS / Treasury | 美国核心经济指标 |
+| AI 分析 | DeepSeek | 态势分析、持仓诊断、策略推荐 |
+| 社交舆情 | Bluesky | 社交情绪监测 |
+| 灾害预警 | NOAA / ReliefWeb | 自然灾害 & 人道主义事件 |
 
-## 开发指南
+---
 
-### 添加新的shadcn/ui组件
-```bash
-npx shadcn-ui@latest add [component-name]
-```
+## API 路由速查
 
-### 创建新的API路由
-在 `app/api/` 目录下创建新的路由文件，例如：
-```typescript
-// app/api/market/data/route.ts
-export async function GET() {
-  return Response.json({ data: 'market data' });
-}
-```
+| 路由 | 方法 | 说明 |
+|------|------|------|
+| `/api/stock-price-history` | GET | K 线数据（East Money） |
+| `/api/global-macro` | GET | 全球宏观指数行情 |
+| `/api/stock-prices` | GET | A 股实时价格 |
+| `/api/unified-search` | GET | A 股 + 美股统一搜索 |
+| `/api/intelligence-feed` | GET | AI 情报 Feed |
+| `/api/news-feed` | GET | 新闻聚合 |
+| `/api/ai/situation-analysis` | POST | DeepSeek 态势分析（3min 缓存） |
+| `/api/ai/stream` | POST | 流式 AI 响应 |
+| `/api/maritime` | GET | AISStream 船舶数据 |
+| `/api/aviation` | GET | OpenSky 航空数据 |
+| `/api/geoconflict` | GET | GDELT 冲突数据 |
+| `/api/watchlist` | GET/PUT | 关注列表 CRUD |
+| `/api/watchlist/recalculate` | POST | 止盈止损重算 |
+| `/api/portfolio` | GET/POST | 投资组合管理 |
+| `/api/analyze-watchlist` | POST | AI 持仓分析 |
+| `/api/sse` | GET | Server-Sent Events |
+| `/api/websocket` | GET | WebSocket 连接 |
 
-### 创建新的页面
-在 `app/` 目录下创建新的页面目录，例如：
-```typescript
-// app/portfolio/page.tsx
-export default function PortfolioPage() {
-  return <div>Portfolio Management</div>;
-}
-```
-
-## Git 版本管理与回滚操作指南
-
-### 核心Git工作流
-Alpha-Quant-Copilot 采用严格的Git版本管理流程，确保代码稳定性和可追溯性。
-
-### 1. 日常开发流程
-```bash
-# 1. 开始新功能前创建分支
-git checkout -b feature/your-feature-name
-
-# 2. 开发完成后提交
-git add .
-git commit -m "feat: 添加新功能描述"
-
-# 3. 推送到远程
-git push origin feature/your-feature-name
-
-# 4. 创建Pull Request进行代码审查
-```
-
-### 2. 紧急回滚操作指南
-当遇到严重问题需要回滚时，请按以下步骤操作：
-
-#### 2.1 回滚到上一个提交
-```bash
-# 查看提交历史，确认要回滚到的提交哈希
-git log --oneline -10
-
-# 回滚到指定提交（保留工作区修改）
-git reset --soft <commit-hash>
-
-# 强制回滚到指定提交（丢弃所有修改）
-git reset --hard <commit-hash>
-
-# 回滚到上一个提交（最常用）
-git reset --hard HEAD~1
-```
-
-#### 2.2 回滚特定文件
-```bash
-# 查看文件修改历史
-git log --oneline -- path/to/file.ts
-
-# 回滚文件到指定版本
-git checkout <commit-hash> -- path/to/file.ts
-
-# 回滚文件到上一个版本
-git checkout HEAD~1 -- path/to/file.ts
-```
-
-#### 2.3 撤销已推送的提交
-```bash
-# 创建反向提交（推荐）
-git revert <commit-hash>
-
-# 强制推送（谨慎使用）
-git push origin main --force
-```
-
-### 3. 故障恢复协议
-根据《Vibe Coding 协作协议》，当连续3次修复失败时，必须执行以下操作：
-
-#### 3.1 立即回滚
-```bash
-# 停止所有开发活动
-# 执行紧急回滚
-git reset --hard HEAD~1
-
-# 确认回滚成功
-git status
-git log --oneline -5
-```
-
-#### 3.2 问题分析
-1. 创建故障分析文档
-2. 记录失败原因和修复尝试
-3. 制定新的修复方案
-
-#### 3.3 重新开始
-```bash
-# 基于稳定版本重新开发
-git checkout -b fix/issue-description
-
-# 小步提交，频繁验证
-git add .
-git commit -m "fix: 逐步修复问题"
-```
-
-### 4. 分支管理策略
-- **main**: 生产环境分支，仅接受通过测试的代码
-- **develop**: 开发分支，集成所有功能
-- **feature/***: 功能开发分支
-- **hotfix/***: 紧急修复分支
-- **release/***: 发布准备分支
-
-### 5. 提交消息规范
-```
-<类型>: <简短描述>
-
-<详细描述（可选）>
-
-- 修复了什么问题
-- 实现了什么功能
-- 需要注意什么
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-```
-
-**类型说明**:
-- `feat`: 新功能
-- `fix`: 修复bug
-- `docs`: 文档更新
-- `style`: 代码格式调整
-- `refactor`: 代码重构
-- `test`: 测试相关
-- `chore`: 构建过程或辅助工具变动
-
-### 6. 重要提醒
-1. **跨文件重构前必须提交**: 在进行任何跨文件重构前，务必执行 `git commit -m "chore: 重构前基线"`
-2. **连续失败必须回滚**: 连续3次修复失败后，立即执行 `git reset --hard HEAD~1`
-3. **定期备份**: 重要修改前创建备份分支
-4. **小步提交**: 频繁提交，每次提交解决一个问题
+---
 
 ## 部署
 
-### Vercel部署（推荐）
-
-#### 自动部署脚本
-我们提供了完整的Vercel部署脚本和指南：
+### Vercel（推荐）
 
 ```bash
-# 1. 安装Vercel CLI
-npm install -g vercel
-
-# 2. 登录Vercel (使用以下凭据)
-vercel login
-# 邮箱: a13602888637@gmail.com
-# 密码: Dicky.666
-
-# 3. 使用部署脚本
-chmod +x scripts/deploy-vercel.sh
-./scripts/deploy-vercel.sh
-
-# 4. 或按步骤手动部署
-# 链接项目
 vercel link
-# 选择: Link to existing project
-# 项目名: alpha-quant-copilot
-# 框架: Next.js
-# 输出目录: .next
-
-# 设置环境变量
-./scripts/setup-vercel-env.sh
-
-# 预览部署
-vercel
-
-# 生产部署
-vercel --prod
+npm run build              # 预检
+vercel deploy              # 预览部署
+vercel --prod              # 生产部署
 ```
 
-#### 详细部署指南
-完整的部署步骤请参考：[Vercel部署指南](./docs/vercel-deployment-guide.md)
+管理环境变量：
 
-#### 部署检查清单
-部署前请检查：[部署检查清单](./DEPLOYMENT_CHECKLIST.md)
-
-#### 生产环境URL
-- 主站: https://alpha-quant-copilot.vercel.app
-- 预览环境: 每次推送自动生成
-
-#### 必需环境变量
 ```bash
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-CLERK_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-DATABASE_URL=postgresql://username:password@host:6543/database?pgbouncer=true
-DIRECT_URL=postgresql://username:password@host:5432/database
-DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TUSHARE_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-NEXT_PUBLIC_APP_URL=https://alpha-quant-copilot.vercel.app
+# 使用 printf 避免尾部换行导致 API Key 鉴权失败
+printf '%s' "$VALUE" | vercel env add KEY production
+vercel env list
 ```
 
-### 自托管部署
-1. 构建项目：`npm run next:build`
-2. 启动生产服务器：`npm run next:start`
-3. 配置反向代理（如Nginx）
+### 部署前检查
+
+- [ ] `npm run build` 成功
+- [ ] `npm run verify:uat-full` 通过
+- [ ] Clerk 生产密钥已配置
+- [ ] Supabase 数据库迁移已执行
+- [ ] 所有环境变量已设置
+
+---
 
 ## 许可证
 
 MIT License
-
-## 贡献
-
-欢迎提交Issue和Pull Request来改进项目。
-
-## 联系方式
-
-项目维护团队：Alpha-Quant-Copilot Team

@@ -89,7 +89,13 @@ export default function DabanPage() {
       } else {
         const errData = await res.json().catch(() => ({}))
         const msg = errData.error || `HTTP ${res.status}`
-        toast.error(`添加失败: ${msg}`)
+        if (res.status === 401) {
+          toast.error("请先登录后再操作")
+        } else if (res.status === 404) {
+          toast.error("用户未同步，请重新登录")
+        } else {
+          toast.error(`添加失败: ${msg}`)
+        }
       }
     } catch {
       toast.error("网络错误，请重试")

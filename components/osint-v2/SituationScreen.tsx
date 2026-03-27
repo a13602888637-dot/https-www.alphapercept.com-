@@ -15,6 +15,7 @@
  */
 
 import { useMemo, useState, useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { useDataStream } from "@/services/use-data-stream";
 import { EntityType } from "@/services/types";
 import { FinancePanel } from "./FinancePanel";
@@ -55,6 +56,7 @@ function TabButton({
 
 export function SituationScreen() {
   const stream = useDataStream();
+  const { getToken, isSignedIn } = useAuth();
   const [leftTab, setLeftTab] = useState<LeftTab>("market");
   const [rightTab, setRightTab] = useState<RightTab>("intel");
 
@@ -84,10 +86,17 @@ export function SituationScreen() {
   const [watchlistSummary, setWatchlistSummary] = useState<string>("");
 
   useEffect(() => {
+    // Wait until Clerk auth state is resolved
+    if (isSignedIn === undefined) return;
+    if (!isSignedIn) { setWatchlistSummary(""); return; }
+
     let cancelled = false;
     async function loadWatchlist() {
       try {
-        const res = await fetch("/api/watchlist", { credentials: "include" });
+        const token = await getToken();
+        const res = await fetch("/api/watchlist", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) return;
         const data = await res.json();
         const items = data.watchlist ?? [];
@@ -110,7 +119,7 @@ export function SituationScreen() {
     loadWatchlist();
     const iv = setInterval(loadWatchlist, 5 * 60 * 1000);
     return () => { cancelled = true; clearInterval(iv); };
-  }, []);
+  }, [isSignedIn, getToken]);
 
   // Derive AI brain props from stream data (fallback when real news not yet loaded)
   const newsHeadlines = useMemo(() => {

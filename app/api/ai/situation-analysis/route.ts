@@ -164,16 +164,39 @@ export async function POST(request: NextRequest) {
     // Parse JSON from response (handle potential markdown wrapping)
     let parsed: SituationResponse;
     try {
-      const jsonStr = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-      parsed = JSON.parse(jsonStr);
-      // Ensure timestamp is present
-      if (!parsed.timestamp) {
-        parsed.timestamp = new Date().toISOString();
-      }
-    } catch {
+      // Strip markdown fences first
+      const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      // Extract JSON object — DeepSeek sometimes adds preamble text before the JSON
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace === -1 || lastBrace === -1) throw new Error("No JSON object found");
+      const jsonStr = cleaned.slice(firstBrace, lastBrace + 1);
+      const raw = JSON.parse(jsonStr);
+
+      // Normalize fields — DeepSeek sometimes returns strings instead of arrays
+      const toStringArray = (v: unknown): string[] => {
+        if (Array.isArray(v)) return v.map(String);
+        if (typeof v === "string") {
+          try { const arr = JSON.parse(v); if (Array.isArray(arr)) return arr.map(String); } catch {}
+          return v.trim() ? [v] : [];
+        }
+        return [];
+      };
+
+      parsed = {
+        assessment: typeof raw.assessment === "string" ? raw.assessment : JSON.stringify(raw.assessment ?? "态势分析解析失败"),
+        macroRegime: raw.macroRegime,
+        risks: toStringArray(raw.risks),
+        portfolioImpact: raw.portfolioImpact ? toStringArray(raw.portfolioImpact) : undefined,
+        actionableSignals: raw.actionableSignals ? toStringArray(raw.actionableSignals) : undefined,
+        confidence: ["high", "medium", "low"].includes(raw.confidence) ? raw.confidence : "low",
+        timestamp: raw.timestamp || new Date().toISOString(),
+      };
+    } catch (e) {
+      console.error("[situation-analysis] JSON parse failed:", e instanceof Error ? e.message : e, "raw:", content.slice(0, 300));
       // If parsing fails, construct a response from raw text
       parsed = {
-        assessment: content.slice(0, 200) || "态势分析解析失败",
+        assessment: content.replace(/[{}\[\]"\\]/g, "").replace(/\s+/g, " ").trim().slice(0, 200) || "态势分析解析失败",
         risks: [],
         confidence: "low",
         timestamp: new Date().toISOString(),

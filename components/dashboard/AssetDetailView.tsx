@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import {
   createChart,
   type IChartApi,
@@ -394,6 +395,7 @@ function TechDataStrip({ symbol, stockName, rtPrice, lastKline, onBack }: TechDa
 
 export function AssetDetailView({ symbol }: { symbol: string }) {
   const router = useRouter();
+  const { getToken, isSignedIn } = useAuth();
   const global = useMemo(() => isGlobalAsset(symbol), [symbol]);
 
   // State
@@ -484,10 +486,6 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
   // -------------------------------------------------------------------
   const fetchKline = useCallback(
     async (p: Period) => {
-      if (global) {
-        setIsLoading(false);
-        return;
-      }
       setIsLoading(true);
       setError(null);
       try {
@@ -575,10 +573,17 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
   // Fetch watchlist to check if symbol is tracked (graceful — no error UI)
   // -------------------------------------------------------------------
   useEffect(() => {
+    // Wait until Clerk auth state is resolved
+    if (isSignedIn === undefined) return;
+    if (!isSignedIn) { setWatchlistItem(null); return; }
+
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/watchlist", { credentials: "include" });
+        const token = await getToken();
+        const res = await fetch("/api/watchlist", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) return;
         const json = await res.json();
         if (cancelled) return;
@@ -603,18 +608,24 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [symbol]);
+  }, [symbol, isSignedIn, getToken]);
 
-  // Save SL/TP config to watchlist API
+  // Save SL/TP config to watchlist API, then trigger server-side recalculation
   const handleSaveSlTp = useCallback(async () => {
     if (!watchlistItem) return;
     setSlTpSaving(true);
     setSlTpSaved(false);
     try {
+      const token = await getToken();
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      // 1. Save method + params
       const res = await fetch("/api/watchlist", {
         method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           id: watchlistItem.id,
           stopLossMethod: slMethod,
@@ -623,16 +634,37 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
           takeProfitParams: tpParams,
         }),
       });
-      if (res.ok) {
-        setSlTpSaved(true);
-        setTimeout(() => setSlTpSaved(false), 2000);
+      if (!res.ok) return;
+
+      // 2. Trigger recalculation to compute actual SL/TP prices from market data
+      const recalcRes = await fetch("/api/watchlist/recalculate", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ids: [watchlistItem.id] }),
+      });
+      if (recalcRes.ok) {
+        const recalcData = await recalcRes.json();
+        const updated = recalcData.results?.find((r: { id: string }) => r.id === watchlistItem.id);
+        if (updated) {
+          setWatchlistItem(prev => prev ? {
+            ...prev,
+            stopLossPrice: updated.stopLossPrice ?? prev.stopLossPrice,
+            targetPrice: updated.targetPrice ?? prev.targetPrice,
+            computeStatus: updated.computeStatus ?? prev.computeStatus,
+            dataFrequency: updated.dataFrequency ?? prev.dataFrequency,
+            highWaterMark: updated.highWaterMark ?? prev.highWaterMark,
+          } : prev);
+        }
       }
+
+      setSlTpSaved(true);
+      setTimeout(() => setSlTpSaved(false), 2000);
     } catch {
       // silent
     } finally {
       setSlTpSaving(false);
     }
-  }, [watchlistItem, slMethod, slParams, tpMethod, tpParams]);
+  }, [watchlistItem, slMethod, slParams, tpMethod, tpParams, getToken]);
 
   // Save inline price edits (buy price / stop price)
   const handleSavePrice = useCallback(async (field: "buyPrice" | "stopLossPrice", value: string) => {
@@ -640,17 +672,20 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
     const num = parseFloat(value);
     if (isNaN(num) || num <= 0) return;
     try {
+      const token = await getToken();
       const res = await fetch("/api/watchlist", {
         method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ id: watchlistItem.id, [field]: num }),
       });
       if (res.ok) {
         setWatchlistItem(prev => prev ? { ...prev, [field]: num } : prev);
       }
     } catch { /* silent */ }
-  }, [watchlistItem]);
+  }, [watchlistItem, getToken]);
 
   // -------------------------------------------------------------------
   // Build charts
@@ -1196,19 +1231,7 @@ export function AssetDetailView({ symbol }: { symbol: string }) {
           </div>
         )}
 
-        {/* Global asset placeholder */}
-        {global ? (
-          <div className="flex items-center justify-center h-[600px]">
-            <div className="text-center space-y-2">
-              <p className="text-gray-500 text-sm font-mono">
-                全球资产K线数据开发中
-              </p>
-              <p className="text-gray-600 text-[10px]">
-                实时报价已显示于顶部数据条
-              </p>
-            </div>
-          </div>
-        ) : isLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-[600px]">
             <div className="text-center space-y-2">
               <Loader2 className="h-6 w-6 animate-spin text-blue-500 mx-auto" />

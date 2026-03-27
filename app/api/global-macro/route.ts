@@ -11,6 +11,7 @@ interface SymbolConfig {
   finnhubSymbol?: string; // ETF proxy (Finnhub free tier)
   finnhubScale?: number;  // multiply ETF price → index level
   stooqSymbol?: string;   // stooq.com direct symbol
+  stooqScale?: number;    // divide stooq price (e.g. cents → dollars)
 }
 
 const GLOBAL_SYMBOLS: Record<string, SymbolConfig> = {
@@ -21,19 +22,19 @@ const GLOBAL_SYMBOLS: Record<string, SymbolConfig> = {
   // Non-US Indices: stooq.com (free, no key, works from Vercel)
   "^HSI":     { name: "恒生指数", category: "index", region: "hk", stooqSymbol: "^hsi" },
   "^N225":    { name: "日经225", category: "index", region: "jp", stooqSymbol: "^nkx" },
-  "^FTSE":    { name: "富时100", category: "index", region: "uk", stooqSymbol: "^ftx" },
+  "^FTSE":    { name: "富时100", category: "index", region: "uk", stooqSymbol: "^ukx" },
   "^DAX":     { name: "德国DAX", category: "index", region: "eu", stooqSymbol: "^dax" },
   // Commodities: Finnhub primary, stooq fallback
   "GC=F":     { name: "黄金", category: "commodity", region: "global", finnhubSymbol: "OANDA:XAU_USD", stooqSymbol: "gc.f" },
   "CL=F":     { name: "原油WTI", category: "commodity", region: "global", finnhubSymbol: "OANDA:BCO_USD", stooqSymbol: "cl.f" },
-  "SI=F":     { name: "白银", category: "commodity", region: "global", stooqSymbol: "si.f" },
-  "HG=F":     { name: "铜", category: "commodity", region: "global", stooqSymbol: "hg.f" },
+  "SI=F":     { name: "白银", category: "commodity", region: "global", stooqSymbol: "si.f", stooqScale: 0.01 },
+  "HG=F":     { name: "铜", category: "commodity", region: "global", stooqSymbol: "hg.f", stooqScale: 0.01 },
   // FX: Finnhub primary, stooq fallback
   "USDCNY=X": { name: "美元/人民币", category: "fx", region: "global", finnhubSymbol: "OANDA:USD_CNH", stooqSymbol: "usdcny" },
   "USDJPY=X": { name: "美元/日元", category: "fx", region: "global", finnhubSymbol: "OANDA:USD_JPY", stooqSymbol: "usdjpy" },
   // Rates: stooq only (no reliable Finnhub symbols for VIX/bonds)
-  "^VIX":     { name: "VIX恐慌", category: "rate", region: "us", stooqSymbol: "vix.us" },
-  "^TNX":     { name: "美10Y国债", category: "rate", region: "us", stooqSymbol: "tnx.us" },
+  "^VIX":     { name: "VIX恐慌", category: "rate", region: "us", finnhubSymbol: "VIXY", stooqSymbol: "^vix" },
+  "^TNX":     { name: "美10Y国债", category: "rate", region: "us", stooqSymbol: "zn.f" },
 };
 
 const UNAVAILABLE_QUOTE = { price: null, change: null, changePercent: null, source: 'unavailable' as const };
@@ -87,7 +88,8 @@ async function fetchStooq(symbols: string[]): Promise<Record<string, any>> {
   await Promise.allSettled(targets.map(async (sym) => {
     const stooqSym = GLOBAL_SYMBOLS[sym].stooqSymbol!;
     try {
-      const url = `https://stooq.com/q/l/?s=${encodeURIComponent(stooqSym)}&f=sd2t2ohlcpvn&e=json`;
+      // Exclude volume (v) — Stooq returns empty `"volume":,` which is invalid JSON
+      const url = `https://stooq.com/q/l/?s=${encodeURIComponent(stooqSym)}&f=sd2t2ohlcpn&e=json`;
       const res = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; StockAnalysis/1.0)',
@@ -105,15 +107,16 @@ async function fetchStooq(symbols: string[]): Promise<Record<string, any>> {
         return;
       }
 
-      const close = parseFloat(item.close);
-      const prevClose = parseFloat(item.previous_close) || parseFloat(item.open) || close;
+      const scale = GLOBAL_SYMBOLS[sym].stooqScale ?? 1;
+      const close = parseFloat(item.close) * scale;
+      const prevClose = (parseFloat(item.previous_close ?? item.previous) || parseFloat(item.open) || parseFloat(item.close)) * scale;
       const change = Number((close - prevClose).toFixed(4));
       const changePercent = prevClose > 0 ? Number(((change / prevClose) * 100).toFixed(2)) : 0;
 
       if (close > 0) {
         results[sym] = {
-          price: close,
-          change,
+          price: Number(close.toFixed(2)),
+          change: Number(change.toFixed(2)),
           changePercent,
           source: 'stooq',
         };

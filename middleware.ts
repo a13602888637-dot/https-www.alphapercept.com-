@@ -1,27 +1,34 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-export default clerkMiddleware({
-  publicRoutes: [
-    "/",
-    "/api/webhooks/clerk",
-    "/api/stock-prices(.*)",
-    "/api/stock-price-history(.*)",
-    "/api/stocks/search(.*)",
-    "/api/intelligence-feed(.*)",
-    "/api/analyze-watchlist(.*)",
-    // "/api/watchlist(.*)",  // 移除 - 需要认证才能操作自选股
-    // "/api/users/sync(.*)",  // 移除 - 需要认证才能同步用户数据
-    "/sign-in(.*)",
-    "/sign-up(.*)",
-    "/ai-inference-demo",
-    "/market-pulse-test",
-    "/ai-inference-test",
-    "/watchlist",  // 页面保持公开，但API需要认证
-    "/test",
-  ],
-  ignoredRoutes: [
-    "/api/webhooks/clerk",
-  ],
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/api/webhooks/clerk",
+  "/api/stock-prices(.*)",
+  "/api/stock-price-history(.*)",
+  "/api/stocks/search(.*)",
+  "/api/intelligence-feed(.*)",
+  "/api/analyze-watchlist(.*)",
+  "/api/strategy-recommendation(.*)",
+  "/api/global-macro(.*)",
+  "/api/news-feed(.*)",
+  "/api/geoconflict(.*)",
+  "/api/maritime(.*)",
+  "/api/aviation(.*)",
+  "/api/ai/situation-analysis(.*)",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/ai-inference-demo",
+  "/market-pulse-test",
+  "/ai-inference-test",
+  "/watchlist",
+  "/test",
+  "/daban",
+]);
+
+export default clerkMiddleware(async (auth, request) => {
+  if (!isPublicRoute(request)) {
+    await auth.protect();
+  }
 });
 
 export const config = {
