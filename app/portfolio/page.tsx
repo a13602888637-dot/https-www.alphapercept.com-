@@ -11,6 +11,7 @@ import { SearchResults, StockResult } from "@/components/portfolio/search-result
 import { SignInButton, useAuth } from "@clerk/nextjs"
 import { useToast } from "@/hooks/use-toast"
 import { AddPositionDialog } from "@/components/portfolio/AddPositionDialog"
+import { AlphaFeedContainer } from "@/components/portfolio/AlphaFeedContainer"
 import { StopLossConfig, type StopLossMethod, SL_DEFAULT_PARAMS } from "@/components/portfolio/StopLossConfig"
 import { TakeProfitConfig, type TakeProfitMethod, TP_DEFAULT_PARAMS } from "@/components/portfolio/TakeProfitConfig"
 import {
@@ -77,6 +78,8 @@ interface PortfolioItem {
   changePercent: number
   status: string
   notes: string | null
+  tradeType?: string
+  tradeStatus?: string
 }
 
 interface PortfolioSummary {
@@ -1353,7 +1356,19 @@ export default function PortfolioPage() {
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center gap-3">
                                     <div>
-                                      <h3 className="font-semibold">{item.stockName}</h3>
+                                      <h3 className="font-semibold">
+                                        {item.stockName}
+                                        {item.tradeType === "LIMIT_UP_PAPER" && (
+                                          <Badge variant="outline" className="ml-2 text-orange-400 border-orange-400/50 text-xs">
+                                            打板
+                                          </Badge>
+                                        )}
+                                        {item.tradeStatus === "T_LOCKED" && (
+                                          <Badge variant="outline" className="ml-2 text-yellow-400 border-yellow-400/50 text-xs">
+                                            T+1
+                                          </Badge>
+                                        )}
+                                      </h3>
                                       <div className="text-sm text-muted-foreground">
                                         {item.stockCode}{item.industry ? ` · ${item.industry}` : ''}
                                       </div>
@@ -1426,6 +1441,11 @@ export default function PortfolioPage() {
           </Card>
         </div>
       )}
+
+      {/* Alpha Feed - 打板决策流 */}
+      <div className="mt-8">
+        <AlphaFeedContainer onPositionAdded={() => loadPortfolio()} />
+      </div>
     </div>
   )
 }

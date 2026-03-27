@@ -79,6 +79,8 @@ export async function GET(req: Request) {
         change: prices?.change || 0,
         changePercent: prices?.changePercent || 0,
         status: item.status,
+        tradeType: item.tradeType,
+        tradeStatus: item.tradeStatus,
         notes: item.notes,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
@@ -124,7 +126,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { stockCode, stockName, quantity, avgCost, industry, notes } = body
+    const { stockCode, stockName, quantity, avgCost, industry, notes, tradeType, tradeStatus } = body
 
     if (!stockCode || !stockName || !quantity || !avgCost) {
       return NextResponse.json({ error: '股票代码、名称、数量和成本价为必填项' }, { status: 400 })
@@ -167,6 +169,8 @@ export async function POST(req: Request) {
         avgCost,
         industry: industry || null,
         notes: notes || null,
+        tradeType: tradeType || "NORMAL",
+        tradeStatus: tradeStatus || "TRADABLE",
       },
     })
 
@@ -196,7 +200,7 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json()
-    const { id, quantity, avgCost, industry, notes, status } = body
+    const { id, quantity, avgCost, industry, notes, status, tradeType, tradeStatus } = body
 
     if (!id) {
       return NextResponse.json({ error: 'Position ID required' }, { status: 400 })
@@ -217,6 +221,8 @@ export async function PUT(req: Request) {
         ...(industry !== undefined && { industry }),
         ...(notes !== undefined && { notes }),
         ...(status !== undefined && { status }),
+        ...(tradeType !== undefined && { tradeType }),
+        ...(tradeStatus !== undefined && { tradeStatus }),
       },
     })
 

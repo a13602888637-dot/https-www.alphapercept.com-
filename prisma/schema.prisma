@@ -118,7 +118,9 @@ model Portfolio {
   avgCost   Decimal
   industry  String?
   notes     String?
-  status    String   @default("HOLD")
+  status       String   @default("HOLD")
+  tradeType    String   @default("NORMAL")    // "NORMAL" | "LIMIT_UP_PAPER"
+  tradeStatus  String   @default("TRADABLE")  // "TRADABLE" | "T_LOCKED"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
