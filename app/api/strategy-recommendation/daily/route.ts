@@ -128,32 +128,56 @@ async function calculateSentiment(): Promise<{
 
 /**
  * Scan stocks and filter for alpha signals.
+ * During trading hours: use real-time data with changePercent >= 3% filter
+ * Outside trading hours: show top movers from last session as reference signals
  */
 async function scanSignals(): Promise<AlphaSignal[]> {
   try {
     const marketDataArr = await fetchMultipleStocks(SCAN_STOCKS);
     const signals: AlphaSignal[] = [];
 
+    // Check how many stocks have valid real-time data
+    const validStocks = marketDataArr.filter(
+      (md) => md && md.currentPrice > 0
+    );
+
+    // If very few stocks have data, we're likely outside trading hours
+    // Show top movers by absolute changePercent as reference
+    const isOffHours = validStocks.length < 5 || validStocks.every(
+      (md) => md.changePercent === 0 || md.changePercent === undefined
+    );
+
     for (const md of marketDataArr) {
       if (!md || !md.currentPrice) continue;
 
       const changePercent = md.changePercent ?? 0;
       const volumeRatio = md.volumeRatio ?? 0;
+      const absChange = Math.abs(changePercent);
 
-      // Filter: changePercent >= 3% (candidates for board trading)
-      if (changePercent < 3) continue;
+      if (isOffHours) {
+        // Off-hours: show all stocks with any price data as reference
+        if (md.currentPrice <= 0) continue;
+      } else {
+        // Trading hours: filter for candidates >= 3%
+        if (changePercent < 3) continue;
 
-      // Filter: not locked at limit-up (skip if already at 涨停)
-      if (md.prevClose && md.prevClose > 0) {
-        const limitUp = Math.round(md.prevClose * 1.1 * 100) / 100;
-        if (md.currentPrice >= limitUp) continue;
+        // Skip if locked at limit-up
+        if (md.prevClose && md.prevClose > 0) {
+          const limitUp = Math.round(md.prevClose * 1.1 * 100) / 100;
+          if (md.currentPrice >= limitUp) continue;
+        }
       }
 
       // Classify signal strength
-      const isHot = changePercent >= 8.5;
-      const isWarm = changePercent >= 5;
-      const tag = isHot ? "强势冲板" : isWarm ? "加速上攻" : "异动关注";
+      const tag = isOffHours
+        ? "盘后回顾"
+        : absChange >= 8.5
+          ? "强势冲板"
+          : absChange >= 5
+            ? "加速上攻"
+            : "异动关注";
       const vrText = volumeRatio > 0 ? `量比${volumeRatio.toFixed(1)}，` : "";
+      const changeDir = changePercent >= 0 ? "涨" : "跌";
 
       signals.push({
         symbol: md.symbol,
@@ -161,14 +185,17 @@ async function scanSignals(): Promise<AlphaSignal[]> {
         currentPrice: md.currentPrice,
         changePercent: Math.round(changePercent * 100) / 100,
         volumeRatio: Math.round(volumeRatio * 100) / 100,
-        reason: `${tag} — ${vrText}涨幅${changePercent.toFixed(1)}%`,
+        reason: isOffHours
+          ? `盘后回顾 — ${vrText}${changeDir}幅${absChange.toFixed(1)}%`
+          : `${tag} — ${vrText}涨幅${changePercent.toFixed(1)}%`,
       });
     }
 
-    // Sort by changePercent descending
-    signals.sort((a, b) => b.changePercent - a.changePercent);
+    // Sort by changePercent descending (absolute for off-hours)
+    signals.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
 
-    return signals;
+    // Cap at 12 signals
+    return signals.slice(0, 12);
   } catch {
     return [];
   }

@@ -253,18 +253,26 @@ export default function DabanPage() {
                         {signal.symbol}
                       </div>
                     </div>
-                    <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-xs">
-                      首板信号
+                    <Badge className={`text-xs ${
+                      signal.changePercent >= 8.5
+                        ? "bg-red-500/10 text-red-400 border-red-500/20"
+                        : signal.changePercent >= 5
+                          ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                          : signal.changePercent >= 3
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                            : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                    }`}>
+                      {signal.changePercent >= 8.5 ? "强势冲板" : signal.changePercent >= 5 ? "加速上攻" : signal.changePercent >= 3 ? "异动关注" : "盘后回顾"}
                     </Badge>
                   </div>
 
                   {/* Price */}
                   <div className="mb-3">
-                    <span className="text-2xl font-bold text-emerald-400">
+                    <span className={`text-2xl font-bold ${signal.changePercent >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                       {signal.currentPrice.toFixed(2)}
                     </span>
-                    <span className="text-emerald-400 text-sm ml-2">
-                      +{signal.changePercent.toFixed(2)}%
+                    <span className={`text-sm ml-2 ${signal.changePercent >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {signal.changePercent >= 0 ? "+" : ""}{signal.changePercent.toFixed(2)}%
                     </span>
                   </div>
 
