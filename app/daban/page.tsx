@@ -104,7 +104,7 @@ export default function DabanPage() {
   // Unauthenticated state
   if (isSignedIn === false) {
     return (
-      <div className="min-h-screen bg-[#0a0e17] flex items-center justify-center">
+      <div className="min-h-full bg-[#0a0e17] flex items-center justify-center">
         <div className="text-center">
           <LogIn className="h-10 w-10 text-gray-500 mx-auto mb-4" />
           <p className="text-gray-400 text-sm mb-2">请先登录以使用打板决策流</p>
@@ -122,7 +122,7 @@ export default function DabanPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0e17] flex items-center justify-center">
+      <div className="min-h-full bg-[#0a0e17] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
       </div>
     )
@@ -136,7 +136,7 @@ export default function DabanPage() {
   const allProcessed = visibleSignals.length === 0 && signals.length > 0
 
   return (
-    <div className="min-h-screen bg-[#0a0e17] text-gray-100">
+    <div className="min-h-full bg-[#0a0e17] text-gray-100">
       <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
