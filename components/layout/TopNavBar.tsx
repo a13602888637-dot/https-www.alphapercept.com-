@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
-import { ArrowLeft, Brain, Globe, LayoutDashboard, LogIn } from "lucide-react";
+import { ArrowLeft, Brain, Globe, LayoutDashboard, LogIn, Zap } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "交易台", icon: LayoutDashboard },
+  { href: "/portfolio", label: "打板", icon: Zap },
   { href: "/osint", label: "OSINT 雷达", icon: Globe },
 ];
 
