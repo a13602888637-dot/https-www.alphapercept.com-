@@ -18,6 +18,14 @@ import {
   Target,
 } from "lucide-react"
 
+interface PositionAdvice {
+  suggestedPosition: number
+  stopLoss: number
+  takeProfitStrategy: string
+  drawdownExit: number
+  strategyLabel: string
+}
+
 interface AlphaSignal {
   symbol: string
   name: string
@@ -29,6 +37,7 @@ interface AlphaSignal {
   reason: string
   riskTag?: string
   signalScore?: number
+  advice?: PositionAdvice
 }
 
 interface SentimentData {
@@ -258,7 +267,7 @@ export default function DabanPage() {
 
   const currentSignals = activeTab === "alpha" ? signals : screenSignals
   const visibleSignals = currentSignals.filter(
-    (s) => !dismissed.has(s.symbol) && !acceptedSymbols.has(s.symbol)
+    (s) => !dismissed.has(s.symbol)
   )
   const allProcessed = visibleSignals.length === 0 && currentSignals.length > 0
 
@@ -487,6 +496,33 @@ export default function DabanPage() {
                 <span>开盘强度 0~15分</span>
                 <span>均线多头排列 0~15分</span>
                 <span>走势平稳度 0~10分</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-cyan-400/80 font-medium">八、仓位管理</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>基础仓位: 🔥强烈推荐15% / ⚡爆发打板10% / ✅确认上攻8% / 高风险5%</div>
+                <div>情绪系数: 溢价率&gt;3%→×1.2 / 0~3%→×1.0 / -2~0%→×0.5 / &lt;-2%→×0</div>
+                <div>胜率系数: &gt;60%→×1.2 / 50-60%→×1.0 / 40-50%→×0.7 / &lt;40%或样本&lt;10→×0.5</div>
+                <div>硬上限: 单股不超过总资金20%</div>
+                <div className="text-gray-600">公式: 仓位 = 基础 × 情绪系数 × 胜率系数（cap 20%）</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-pink-400/80 font-medium">九、止盈止损（按市场环境动态调整）</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-gray-400">市场判定: 溢价率&gt;2%+连板≥4=牛市 / 溢价率&lt;-1%或连板≤1=熊市 / 其他=震荡</div>
+                <div>止损线（牛/震荡/熊）: 🔥-7/-5/-3% · ⚡-5/-3/-2% · ✅-6/-4/-3% · 高风险-3/-2/-1.5%</div>
+                <div>高点回撤离场: 🔥-5/-3/-2% · ⚡-3/-2/-1.5% · ✅-4/-3/-2%</div>
+                <div className="text-gray-400">不设硬性最大持有天数，未触发止损/回撤线可继续持有</div>
+              </div>
+              <div className="space-y-1 text-gray-500 pl-3 border-l-2 border-[#1a2035] ml-1">
+                <div>🔥连板预期: 高开&gt;3%持有追踪 / 0~3%卖半仓 / 低开止损</div>
+                <div>⚡快进快出: 高开&gt;5%竞价卖 / 0~5%半小时内卖 / 低开止损</div>
+                <div>✅趋势跟踪: 持有追踪回撤离场 / 跌破MA5次日卖 / 破止损线止损</div>
+                <div>高风险: 30分钟内卖 / 再封涨停例外持有 / 严格止损</div>
               </div>
             </div>
 
@@ -720,31 +756,71 @@ export default function DabanPage() {
                   </div>
 
                   {/* Reason */}
-                  <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
                     {signal.reason}
                   </p>
 
+                  {/* Position & Strategy Advice */}
+                  {signal.advice && signal.advice.suggestedPosition > 0 && (
+                    <div className="bg-[#0a0e17] rounded-md px-3 py-2 mb-3 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">仓位</span>
+                          <span className={`font-bold ${
+                            signal.advice.suggestedPosition >= 12 ? "text-amber-400" :
+                            signal.advice.suggestedPosition >= 8 ? "text-emerald-400" :
+                            "text-gray-300"
+                          }`}>
+                            {signal.advice.suggestedPosition}%
+                          </span>
+                        </div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a2035] text-gray-400">
+                          {signal.advice.strategyLabel}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">止损</span>
+                          <span className="text-red-400 font-mono">{signal.advice.stopLoss}%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">回撤</span>
+                          <span className="text-orange-400 font-mono">{signal.advice.drawdownExit}%</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-gray-600 leading-relaxed">
+                        {signal.advice.takeProfitStrategy}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Action buttons */}
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDismiss(signal.symbol)}
-                      className="flex-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10"
-                    >
-                      忽略
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleAccept(signal)}
-                      className={`flex-1 border ${
-                        isStrongBuy
-                          ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border-amber-500/30"
-                          : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20"
-                      }`}
-                    >
-                      {isStrongBuy ? "🔥 立即接受" : "接受"}
-                    </Button>
+                    {acceptedSymbols.has(signal.symbol) ? (
+                      <div className="flex-1 text-center py-1.5 text-xs text-emerald-400/70 bg-emerald-500/5 border border-emerald-500/15 rounded-md">
+                        ✓ 已接受 · 跟踪中
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDismiss(signal.symbol)}
+                          className="flex-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10"
+                        >
+                          忽略
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAccept(signal)}
+                          className={`flex-1 border ${
+                            isStrongBuy
+                              ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border-amber-500/30"
+                              : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20"
+                          }`}
+                        >
+                          {isStrongBuy ? "🔥 立即接受" : "接受"}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
                 )

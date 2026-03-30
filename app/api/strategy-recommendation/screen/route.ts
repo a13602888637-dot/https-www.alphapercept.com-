@@ -4,6 +4,17 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+// 市场环境: bull(牛市) / sideways(震荡) / bear(熊市)
+type MarketRegime = "bull" | "sideways" | "bear";
+
+interface PositionAdvice {
+  suggestedPosition: number;  // 建议仓位 %
+  stopLoss: number;           // 止损线 %（负数）
+  takeProfitStrategy: string; // 止盈策略描述
+  drawdownExit: number;       // 高点回撤离场线 %（负数）
+  strategyLabel: string;      // 策略标签（如 "连板预期" / "快进快出"）
+}
+
 interface ScreenResult {
   symbol: string;
   name: string;
@@ -18,8 +29,9 @@ interface ScreenResult {
   lowPrice: number;
   amount: number; // 成交额
   reason: string;
-  riskTag?: string; // "强烈推荐" | "确认上攻" | "爆发打板" | "疑似诱多" | "高风险追板" | "大盘股"
-  signalScore?: number; // 0-100 综合评分，越高越值得关注
+  riskTag?: string;
+  signalScore?: number;
+  advice?: PositionAdvice;
 }
 
 interface ScreenResponse {
@@ -28,6 +40,7 @@ interface ScreenResponse {
   screenTime: string;
   totalScanned: number;
   conditions: string[];
+  marketRegime?: MarketRegime;
 }
 
 /**
@@ -138,6 +151,159 @@ async function fetchMA(symbol: string): Promise<{ ma5: number; ma10: number; ma2
   } catch {
     return null;
   }
+}
+
+/**
+ * 检测市场环境：用涨停溢价率 + 连板高度判定牛/震荡/熊
+ */
+async function detectMarketRegime(): Promise<{ regime: MarketRegime; premiumRate: number; chainHeight: number }> {
+  let premiumRate = 0;
+  let chainHeight = 0;
+
+  try {
+    // 从涨停池获取溢价率和连板高度（复用 daily route 的逻辑）
+    const today = new Date();
+    const yyyy = today.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" }).replace(/-/g, "");
+    const poolUrl = `https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9telecast6e7d50064&dpt=wz.ztzt&Ession=board&date=${yyyy}`;
+
+    const res = await fetch(poolUrl, {
+      headers: { "User-Agent": "Mozilla/5.0", Referer: "https://data.eastmoney.com/" },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const pool = json?.data?.pool;
+      if (Array.isArray(pool) && pool.length > 0) {
+        // 连板高度 = max(zb_days)
+        chainHeight = Math.max(...pool.map((s: { zb_days?: number }) => s.zb_days ?? 1));
+        // 溢价率 = 平均(今开/昨收 - 1)
+        const rates = pool
+          .filter((s: { open?: number; yclose?: number }) => s.open && s.yclose && s.yclose > 0)
+          .map((s: { open: number; yclose: number }) => ((s.open - s.yclose) / s.yclose) * 100);
+        if (rates.length > 0) {
+          premiumRate = rates.reduce((a: number, b: number) => a + b, 0) / rates.length;
+        }
+      }
+    }
+  } catch {
+    // 获取失败时默认震荡市
+  }
+
+  // 判定市场环境
+  let regime: MarketRegime = "sideways";
+  if (premiumRate > 2 && chainHeight >= 4) {
+    regime = "bull";
+  } else if (premiumRate < -1 || chainHeight <= 1) {
+    regime = "bear";
+  }
+
+  return { regime, premiumRate, chainHeight };
+}
+
+/**
+ * 根据信号标签 + 市场环境 + 历史胜率 计算仓位和止盈止损建议
+ */
+async function calculateAdvice(
+  signalTag: string,
+  _signalScore: number,
+  regime: MarketRegime,
+  premiumRate: number,
+): Promise<PositionAdvice> {
+  // ─── 基础仓位 ───
+  const basePosition: Record<string, number> = {
+    "强烈推荐": 15,
+    "爆发打板": 10,
+    "确认上攻": 8,
+    "高风险追板": 5,
+    "大盘股": 5,
+    "疑似诱多": 0,
+  };
+  let position = basePosition[signalTag] ?? 5;
+
+  // ─── 情绪系数 ───
+  let sentimentMultiplier = 1.0;
+  if (premiumRate > 3) sentimentMultiplier = 1.2;
+  else if (premiumRate >= 0) sentimentMultiplier = 1.0;
+  else if (premiumRate >= -2) sentimentMultiplier = 0.5;
+  else sentimentMultiplier = 0;
+
+  // ─── 历史胜率系数（从数据库读取） ───
+  let winRateMultiplier = 0.8; // 默认：样本不足时保守
+  try {
+    const records = await prisma.boardTrack.findMany({
+      where: { signalTag, trackStatus: "tracked" },
+      select: { nextDayChange: true },
+    });
+    if (records.length >= 10) {
+      const wins = records.filter((r) => r.nextDayChange && Number(r.nextDayChange) > 0).length;
+      const winRate = wins / records.length;
+      if (winRate > 0.6) winRateMultiplier = 1.2;
+      else if (winRate >= 0.5) winRateMultiplier = 1.0;
+      else if (winRate >= 0.4) winRateMultiplier = 0.7;
+      else winRateMultiplier = 0.5;
+    }
+  } catch {
+    // DB error → keep default
+  }
+
+  position = Math.round(Math.min(20, position * sentimentMultiplier * winRateMultiplier) * 10) / 10;
+
+  // ─── 止损线（根据市场环境调整）───
+  const stopLossTable: Record<string, Record<MarketRegime, number>> = {
+    "强烈推荐":  { bull: -7, sideways: -5, bear: -3 },
+    "爆发打板":  { bull: -5, sideways: -3, bear: -2 },
+    "确认上攻":  { bull: -6, sideways: -4, bear: -3 },
+    "高风险追板": { bull: -3, sideways: -2, bear: -1.5 },
+    "大盘股":    { bull: -4, sideways: -3, bear: -2 },
+    "疑似诱多":  { bull: -2, sideways: -1.5, bear: -1 },
+  };
+  const stopLoss = stopLossTable[signalTag]?.[regime] ?? -3;
+
+  // ─── 高点回撤离场线 ───
+  const drawdownTable: Record<string, Record<MarketRegime, number>> = {
+    "强烈推荐":  { bull: -5, sideways: -3, bear: -2 },
+    "爆发打板":  { bull: -3, sideways: -2, bear: -1.5 },
+    "确认上攻":  { bull: -4, sideways: -3, bear: -2 },
+    "高风险追板": { bull: -2, sideways: -1.5, bear: -1 },
+    "大盘股":    { bull: -3, sideways: -2, bear: -1.5 },
+    "疑似诱多":  { bull: -1.5, sideways: -1, bear: -1 },
+  };
+  const drawdownExit = drawdownTable[signalTag]?.[regime] ?? -2;
+
+  // ─── 止盈策略描述 ───
+  const regimeLabel = regime === "bull" ? "牛市" : regime === "bear" ? "熊市" : "震荡市";
+  const strategies: Record<string, { label: string; desc: string }> = {
+    "强烈推荐": {
+      label: "连板预期",
+      desc: `高开>3%持有追踪，回撤${Math.abs(drawdownExit)}%离场；高开0~3%卖半仓锁利；低开破入场价${Math.abs(stopLoss)}%止损（${regimeLabel}）`,
+    },
+    "爆发打板": {
+      label: "快进快出",
+      desc: `高开>5%竞价卖出吃溢价；高开0~5%开盘30分钟内卖；低开破${Math.abs(stopLoss)}%止损（${regimeLabel}）`,
+    },
+    "确认上攻": {
+      label: "趋势跟踪",
+      desc: `持有追踪，从高点回撤${Math.abs(drawdownExit)}%离场；跌破MA5次日开盘卖；破入场价${Math.abs(stopLoss)}%止损（${regimeLabel}）`,
+    },
+    "高风险追板": {
+      label: "严格止损",
+      desc: `开盘30分钟内卖出；再封涨停可持有到次日开盘卖；破${Math.abs(stopLoss)}%立即止损（${regimeLabel}）`,
+    },
+    "疑似诱多": {
+      label: "不建议参与",
+      desc: "诱多信号，建议观望",
+    },
+  };
+  const strategy = strategies[signalTag] ?? { label: "观望", desc: `止损${Math.abs(stopLoss)}%，回撤${Math.abs(drawdownExit)}%离场` };
+
+  return {
+    suggestedPosition: position,
+    stopLoss,
+    takeProfitStrategy: strategy.desc,
+    drawdownExit,
+    strategyLabel: strategy.label,
+  };
 }
 
 /**
@@ -401,12 +567,27 @@ export async function GET() {
     const now = new Date();
     const screenTime = now.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
 
+    // 检测市场环境 + 为每个信号计算仓位/止盈止损建议
+    const { regime, premiumRate } = await detectMarketRegime();
+    const adviceResults = await Promise.allSettled(
+      finalSignals.map((s) =>
+        calculateAdvice(s.riskTag || "未分类", s.signalScore || 0, regime, premiumRate)
+      )
+    );
+    for (let i = 0; i < finalSignals.length; i++) {
+      const r = adviceResults[i];
+      if (r.status === "fulfilled") {
+        finalSignals[i].advice = r.value;
+      }
+    }
+
     const result: ScreenResponse = {
       success: true,
       signals: finalSignals,
       screenTime,
       totalScanned: total,
       conditions,
+      marketRegime: regime,
     };
 
     // Cache results to DB when we have valid data (trading hours)
