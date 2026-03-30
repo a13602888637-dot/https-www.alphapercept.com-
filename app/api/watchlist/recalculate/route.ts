@@ -115,7 +115,7 @@ async function fetchRealtimeQuotes(codes: string[]): Promise<Map<string, number>
       return secid || `1.${code}`;
     });
     try {
-      const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?secids=${secids.join(",")}&fields=f2,f12`;
+      const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=${secids.join(",")}&fields=f2,f12`;
       const res = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0", Referer: "https://data.eastmoney.com/" },
         signal: AbortSignal.timeout(8000),
