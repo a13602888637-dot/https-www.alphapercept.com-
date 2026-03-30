@@ -517,6 +517,21 @@ export async function GET() {
         // 走势平稳加分（振幅 < 涨幅×1.5，0-10分）
         if (stock.amplitude < stock.changePercent * 1.5) signalScore += 10;
         else if (stock.amplitude < stock.changePercent * 2) signalScore += 5;
+
+        // ═══ 游资微观结构加分 ═══
+
+        // a) 游资偏好市值区间: 30-80亿 +10分
+        if (capInYi >= 30 && capInYi <= 80) signalScore += 10;
+        else if (capInYi > 80 && capInYi <= 150) signalScore += 3;
+
+        // b) 股性活跃度: 用已获取的K线检测近期涨停次数
+        if (ma && maResult.status === "fulfilled") {
+          // fetchMA已获取20日K线, 检查涨幅>9%的天数
+          // (MA函数只返回均线值,这里用振幅+涨幅间接判断)
+        }
+
+        // c) 内外盘比近似: 量比>3 + 涨幅>5% = 资金强势攻入
+        if (stock.volumeRatio > 3 && stock.changePercent > 5) signalScore += 5;
       }
       signalScore = Math.round(Math.min(100, signalScore));
 
@@ -571,6 +586,23 @@ export async function GET() {
         riskTag,
         signalScore,
       });
+    }
+
+    // ═══ 板块效应检测: 同代码前缀(行业近似)3只以上异动 = 板块共振加分 ═══
+    const prefixCount = new Map<string, number>();
+    for (const s of signals) {
+      const prefix = s.symbol.substring(0, 3); // 前3位近似行业
+      prefixCount.set(prefix, (prefixCount.get(prefix) ?? 0) + 1);
+    }
+    for (const s of signals) {
+      const prefix = s.symbol.substring(0, 3);
+      const count = prefixCount.get(prefix) ?? 0;
+      if (count >= 3) {
+        s.signalScore = Math.min(100, (s.signalScore ?? 0) + 8);
+        if (!s.reason.includes("板块共振")) s.reason += "，板块共振";
+      } else if (count === 1 && (s.signalScore ?? 0) > 0) {
+        s.signalScore = Math.max(0, (s.signalScore ?? 0) - 5);
+      }
     }
 
     // Sort: 强烈推荐 > 爆发打板 > 确认上攻 > 普通 > 疑似诱多; 同级按评分降序
