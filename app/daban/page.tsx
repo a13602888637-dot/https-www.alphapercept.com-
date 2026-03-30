@@ -350,9 +350,11 @@ export default function DabanPage() {
                         </span>
                         {signal.riskTag && (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            signal.riskTag === "高风险追板"
-                              ? "bg-red-500/15 text-red-400"
-                              : "bg-blue-500/15 text-blue-400"
+                            signal.riskTag === "疑似诱多"
+                              ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+                              : signal.riskTag === "高风险追板"
+                                ? "bg-red-500/15 text-red-400"
+                                : "bg-blue-500/15 text-blue-400"
                           }`}>
                             <AlertTriangle className="h-2.5 w-2.5 inline mr-0.5" />
                             {signal.riskTag}

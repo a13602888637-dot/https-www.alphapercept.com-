@@ -199,21 +199,54 @@ export async function GET() {
         if (stock.currentPrice <= vwap) continue;
       }
 
+      // Anti-trap: 尾盘诱多检测
+      // 特征1: 开盘弱势但收盘强势 — (收盘涨幅 - 开盘涨幅) > 整体涨幅的60%
+      // 特征2: 最高价接近现价(尾盘拉升) + 最低价远低于开盘(盘中杀跌)
+      // 特征3: 振幅过大(>涨幅的2倍) — 盘中大幅震荡后尾盘拉起
+      let isTrap = false;
+      let trapReason = "";
+      if (stock.prevClose > 0 && stock.openPrice > 0) {
+        const openChangePercent = ((stock.openPrice - stock.prevClose) / stock.prevClose) * 100;
+        const lateGain = stock.changePercent - openChangePercent;
+        // 尾盘拉升贡献超过涨幅的60%，且开盘涨幅不到1%
+        if (lateGain > stock.changePercent * 0.6 && openChangePercent < 1) {
+          isTrap = true;
+          trapReason = `开盘仅涨${openChangePercent.toFixed(1)}%，尾盘贡献${lateGain.toFixed(1)}%`;
+        }
+        // 振幅超过涨幅的2.5倍 — 盘中剧烈震荡
+        if (stock.amplitude > stock.changePercent * 2.5 && stock.amplitude > 5) {
+          isTrap = true;
+          trapReason = `振幅${stock.amplitude.toFixed(1)}%异常(涨幅仅${stock.changePercent.toFixed(1)}%)`;
+        }
+        // 最低价跌破昨收 — 盘中一度为负
+        if (stock.lowPrice < stock.prevClose && stock.changePercent > 3) {
+          isTrap = true;
+          trapReason = `盘中跌破昨收${stock.prevClose.toFixed(2)}，尾盘强拉`;
+        }
+      }
+
+      // Skip trapped stocks or mark them
+      if (isTrap) {
+        // Don't skip — show with warning so user is informed
+      }
+
       const capInYi = stock.circulatingMarketCap / 1e8;
 
       // Risk tagging
       let riskTag: string | undefined;
-      if (stock.changePercent >= 8) riskTag = "高风险追板";
+      if (isTrap) riskTag = "疑似诱多";
+      else if (stock.changePercent >= 8) riskTag = "高风险追板";
       else if (capInYi >= 500) riskTag = "大盘股";
 
       // Build reason
       const parts: string[] = [];
+      if (isTrap) parts.push(`⚠️ ${trapReason}`);
       parts.push(`涨${stock.changePercent.toFixed(1)}%`);
       if (stock.volumeRatio > 0) parts.push(`量比${stock.volumeRatio.toFixed(1)}`);
       parts.push(`换手${stock.turnoverRate.toFixed(1)}%`);
       parts.push(`流通${capInYi.toFixed(0)}亿`);
       if (ma) parts.push("多头排列");
-      parts.push("价>均价");
+      if (!isTrap) parts.push("价>均价");
 
       signals.push({
         symbol: stock.symbol,
@@ -233,8 +266,13 @@ export async function GET() {
       });
     }
 
-    // Sort by changePercent descending
-    signals.sort((a, b) => b.changePercent - a.changePercent);
+    // Sort: non-trap first, then by changePercent descending; trap stocks at the end
+    signals.sort((a, b) => {
+      const aTrap = a.riskTag === "疑似诱多" ? 1 : 0;
+      const bTrap = b.riskTag === "疑似诱多" ? 1 : 0;
+      if (aTrap !== bTrap) return aTrap - bTrap;
+      return b.changePercent - a.changePercent;
+    });
 
     const conditions = [
       "涨跌幅>3%",
@@ -244,6 +282,7 @@ export async function GET() {
       "收盘价>MA5/MA10/MA20",
       "收盘价>均价(VWAP)",
       "排除ST/退市",
+      "尾盘诱多检测",
     ];
 
     return NextResponse.json({
