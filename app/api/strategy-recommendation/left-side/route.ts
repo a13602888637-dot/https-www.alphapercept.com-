@@ -51,8 +51,8 @@ async function fetchLowPEStocks(size: number): Promise<Array<{
   highPrice: number; lowPrice: number; circulatingMarketCap: number;
   volume: number; amount: number;
 }>> {
-  // 按PE升序排列(fid=f9), 只取PE>0的(排除亏损)
-  const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=${size}&po=0&np=1&fltt=2&invt=2&fid=f9&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048&fields=f2,f3,f5,f6,f7,f8,f9,f10,f12,f14,f15,f16,f17,f18,f20,f21,f23`;
+  // 按PE升序排列(fid=f9, po=1=升序), 只取PE>0的(排除亏损)
+  const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=${size}&po=1&np=1&fltt=2&invt=2&fid=f9&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048&fields=f2,f3,f5,f6,f7,f8,f9,f10,f12,f14,f15,f16,f17,f18,f20,f21,f23`;
 
   try {
     const res = await fetch(url, {
