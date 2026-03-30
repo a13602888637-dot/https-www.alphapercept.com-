@@ -48,8 +48,9 @@ export function calculateTakeProfit(input: TakeProfitInput): TakeProfitResult {
   } = input;
 
   try {
-    // Update high water mark
-    const newHWM = Math.max(highWaterMark, currentPrice, buyPrice);
+    // Update high water mark — 脏数据保护: HWM 超过 currentPrice 2倍视为异常，重置
+    const safeHWM = (highWaterMark > currentPrice * 2 && currentPrice > 0) ? currentPrice : highWaterMark;
+    const newHWM = Math.max(safeHWM, currentPrice, buyPrice);
 
     switch (method) {
       case "trailing": {
