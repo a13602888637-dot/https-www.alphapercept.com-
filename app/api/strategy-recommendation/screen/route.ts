@@ -18,7 +18,8 @@ interface ScreenResult {
   lowPrice: number;
   amount: number; // 成交额
   reason: string;
-  riskTag?: string; // "高风险追板" | "大盘股" | null
+  riskTag?: string; // "强烈推荐" | "确认上攻" | "爆发打板" | "疑似诱多" | "高风险追板" | "大盘股"
+  signalScore?: number; // 0-100 综合评分，越高越值得关注
 }
 
 interface ScreenResponse {
@@ -248,22 +249,105 @@ export async function GET() {
       }
 
       const capInYi = stock.circulatingMarketCap / 1e8;
+      const openChangePercent = stock.prevClose > 0
+        ? ((stock.openPrice - stock.prevClose) / stock.prevClose) * 100
+        : 0;
 
-      // Risk tagging
+      // ═══════════════════════════════════════════
+      // 三层信号分类系统
+      // ═══════════════════════════════════════════
+
+      // Layer A: 确认上攻 — 量价共振 + 全天稳步上攻 + 均线多头
+      const isConfirmedAttack = !isTrap && (() => {
+        // 量比放大（>2.0 表示显著放量）
+        if (stock.volumeRatio < 2.0) return false;
+        // 换手率在合理区间（3-8%，活跃但不过度换手）
+        if (stock.turnoverRate < 3 || stock.turnoverRate > 8) return false;
+        // 开盘就强势（开盘涨幅 > 0.5%，不是低开拉升）
+        if (openChangePercent < 0.5) return false;
+        // 全天稳步上攻：最低价不跌破昨收（没有恐慌抛压）
+        if (stock.lowPrice < stock.prevClose) return false;
+        // 振幅合理（< 涨幅的2倍，走势平稳不是过山车）
+        if (stock.amplitude > stock.changePercent * 2) return false;
+        // 均线多头排列（MA数据可用时才检查）
+        if (ma && ma.ma5 > 0 && ma.ma10 > 0 && ma.ma20 > 0) {
+          if (!(stock.currentPrice > ma.ma5 && ma.ma5 > ma.ma10 && ma.ma10 > ma.ma20)) return false;
+        }
+        return true;
+      })();
+
+      // Layer B: 爆发打板 — 涨停级别 + 中盘股 + 量比爆发
+      const isExplosiveBoard = !isTrap && (() => {
+        // 涨幅 >= 9%（接近或达到涨停）
+        if (stock.changePercent < 9) return false;
+        // 流通市值 50-300亿（游资主力偏好的中盘股）
+        if (capInYi < 50 || capInYi > 300) return false;
+        // 量比爆发（>= 2.5，资金集中涌入）
+        if (stock.volumeRatio < 2.5) return false;
+        // 最低价不跌破昨收（封板有力度）
+        if (stock.lowPrice < stock.prevClose) return false;
+        return true;
+      })();
+
+      // Layer C: 强烈推荐 = 确认上攻 ∩ 爆发打板
+      const isStrongBuy = isConfirmedAttack && isExplosiveBoard;
+
+      // 综合评分 0-100
+      let signalScore = 0;
+      if (!isTrap) {
+        // 涨幅贡献（0-25分）
+        signalScore += Math.min(25, stock.changePercent * 2.5);
+        // 量比贡献（0-20分）
+        signalScore += Math.min(20, stock.volumeRatio * 5);
+        // 换手率贡献（3-8%最佳，0-15分）
+        const trIdeal = Math.max(0, 1 - Math.abs(stock.turnoverRate - 5.5) / 4.5);
+        signalScore += trIdeal * 15;
+        // 开盘强度贡献（0-15分）
+        signalScore += Math.min(15, Math.max(0, openChangePercent) * 5);
+        // 均线多头排列（0-15分）
+        if (ma && ma.ma5 > 0 && ma.ma10 > 0 && ma.ma20 > 0) {
+          if (stock.currentPrice > ma.ma5 && ma.ma5 > ma.ma10 && ma.ma10 > ma.ma20) signalScore += 15;
+          else if (stock.currentPrice > ma.ma5 && stock.currentPrice > ma.ma10) signalScore += 8;
+        }
+        // 走势平稳加分（振幅 < 涨幅×1.5，0-10分）
+        if (stock.amplitude < stock.changePercent * 1.5) signalScore += 10;
+        else if (stock.amplitude < stock.changePercent * 2) signalScore += 5;
+      }
+      signalScore = Math.round(Math.min(100, signalScore));
+
+      // 最终标签：强烈推荐 > 爆发打板 > 确认上攻 > 疑似诱多 > 其他
       let riskTag: string | undefined;
-      if (isTrap) riskTag = "疑似诱多";
-      else if (stock.changePercent >= 8) riskTag = "高风险追板";
-      else if (capInYi >= 500) riskTag = "大盘股";
+      if (isTrap) {
+        riskTag = "疑似诱多";
+        signalScore = Math.max(0, signalScore - 30); // 诱多大幅扣分
+      } else if (isStrongBuy) {
+        riskTag = "强烈推荐";
+      } else if (isExplosiveBoard) {
+        riskTag = "爆发打板";
+      } else if (isConfirmedAttack) {
+        riskTag = "确认上攻";
+      } else if (stock.changePercent >= 8) {
+        riskTag = "高风险追板";
+      } else if (capInYi >= 500) {
+        riskTag = "大盘股";
+      }
 
       // Build reason
       const parts: string[] = [];
       if (isTrap) parts.push(`⚠️ ${trapReason}`);
+      if (isStrongBuy) parts.push("🔥 量价齐升+涨停级爆发");
+      else if (isExplosiveBoard) parts.push("⚡ 涨停级放量爆发");
+      else if (isConfirmedAttack) parts.push("✅ 量价共振稳步上攻");
       parts.push(`涨${stock.changePercent.toFixed(1)}%`);
       if (stock.volumeRatio > 0) parts.push(`量比${stock.volumeRatio.toFixed(1)}`);
       parts.push(`换手${stock.turnoverRate.toFixed(1)}%`);
       parts.push(`流通${capInYi.toFixed(0)}亿`);
-      if (ma) parts.push("多头排列");
+      if (ma && ma.ma5 > 0 && ma.ma10 > 0 && ma.ma20 > 0
+        && stock.currentPrice > ma.ma5 && ma.ma5 > ma.ma10 && ma.ma10 > ma.ma20) {
+        parts.push("多头排列");
+      }
       if (!isTrap) parts.push("价>均价");
+      parts.push(`评分${signalScore}`);
 
       signals.push({
         symbol: stock.symbol,
@@ -280,15 +364,24 @@ export async function GET() {
         amount: stock.amount,
         reason: parts.join("，"),
         riskTag,
+        signalScore,
       });
     }
 
-    // Sort: non-trap first, then by changePercent descending; trap stocks at the end
+    // Sort: 强烈推荐 > 爆发打板 > 确认上攻 > 普通 > 疑似诱多; 同级按评分降序
+    const tagPriority: Record<string, number> = {
+      "强烈推荐": 0,
+      "爆发打板": 1,
+      "确认上攻": 2,
+      "高风险追板": 3,
+      "大盘股": 3,
+      "疑似诱多": 9,
+    };
     signals.sort((a, b) => {
-      const aTrap = a.riskTag === "疑似诱多" ? 1 : 0;
-      const bTrap = b.riskTag === "疑似诱多" ? 1 : 0;
-      if (aTrap !== bTrap) return aTrap - bTrap;
-      return b.changePercent - a.changePercent;
+      const pa = tagPriority[a.riskTag || ""] ?? 4;
+      const pb = tagPriority[b.riskTag || ""] ?? 4;
+      if (pa !== pb) return pa - pb;
+      return (b.signalScore ?? 0) - (a.signalScore ?? 0);
     });
 
     const conditions = [
@@ -296,10 +389,12 @@ export async function GET() {
       "流通市值>50亿",
       "量比>1.5",
       "换手率5%~10%",
-      "收盘价>MA5/MA10/MA20",
-      "收盘价>均价(VWAP)",
+      "MA多头排列",
+      "价>VWAP",
       "排除ST/退市",
-      "尾盘诱多检测",
+      "诱多检测",
+      "确认上攻检测",
+      "爆发打板检测",
     ];
 
     const finalSignals = signals.slice(0, 20);

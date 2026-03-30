@@ -14,7 +14,6 @@ import {
   BarChart3,
   LogIn,
   Filter,
-  AlertTriangle,
 } from "lucide-react"
 
 interface AlphaSignal {
@@ -27,6 +26,7 @@ interface AlphaSignal {
   circulatingMarketCap?: number
   reason: string
   riskTag?: string
+  signalScore?: number
 }
 
 interface SentimentData {
@@ -361,10 +361,25 @@ export default function DabanPage() {
                 isLockdown ? "opacity-50 pointer-events-none" : ""
               }`}
             >
-              {visibleSignals.map((signal) => (
+              {visibleSignals.map((signal) => {
+                const isStrongBuy = signal.riskTag === "强烈推荐"
+                const isExplosive = signal.riskTag === "爆发打板"
+                const isConfirmed = signal.riskTag === "确认上攻"
+                const isTrap = signal.riskTag === "疑似诱多"
+                const cardBorder = isStrongBuy
+                  ? "border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                  : isExplosive
+                    ? "border-purple-500/40"
+                    : isConfirmed
+                      ? "border-emerald-500/30"
+                      : isTrap
+                        ? "border-yellow-500/30 opacity-60"
+                        : "border-[#1a2035]"
+
+                return (
                 <div
                   key={signal.symbol}
-                  className="bg-[#0d1117] border border-[#1a2035] rounded-lg p-4 hover:border-[#2a3045] transition-colors"
+                  className={`bg-[#0d1117] border rounded-lg p-4 hover:border-[#2a3045] transition-colors ${cardBorder}`}
                 >
                   {/* Header: name + code + risk tag */}
                   <div className="flex items-center justify-between mb-3">
@@ -374,15 +389,30 @@ export default function DabanPage() {
                           {signal.name}
                         </span>
                         {signal.riskTag && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            signal.riskTag === "疑似诱多"
-                              ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-                              : signal.riskTag === "高风险追板"
-                                ? "bg-red-500/15 text-red-400"
-                                : "bg-blue-500/15 text-blue-400"
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                            isStrongBuy
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                              : isExplosive
+                                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                                : isConfirmed
+                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                  : isTrap
+                                    ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+                                    : signal.riskTag === "高风险追板"
+                                      ? "bg-red-500/15 text-red-400"
+                                      : "bg-blue-500/15 text-blue-400"
                           }`}>
-                            <AlertTriangle className="h-2.5 w-2.5 inline mr-0.5" />
+                            {isStrongBuy ? "🔥" : isExplosive ? "⚡" : isConfirmed ? "✅" : isTrap ? "⚠️" : ""}
                             {signal.riskTag}
+                          </span>
+                        )}
+                        {signal.signalScore != null && signal.signalScore > 0 && (
+                          <span className={`text-[10px] px-1 py-0.5 rounded font-mono ${
+                            signal.signalScore >= 80 ? "text-amber-400" :
+                            signal.signalScore >= 60 ? "text-emerald-400" :
+                            "text-gray-500"
+                          }`}>
+                            {signal.signalScore}分
                           </span>
                         )}
                       </div>
@@ -450,13 +480,18 @@ export default function DabanPage() {
                     <Button
                       size="sm"
                       onClick={() => handleAccept(signal)}
-                      className="flex-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"
+                      className={`flex-1 border ${
+                        isStrongBuy
+                          ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border-amber-500/30"
+                          : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20"
+                      }`}
                     >
-                      接受
+                      {isStrongBuy ? "🔥 立即接受" : "接受"}
                     </Button>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
