@@ -259,9 +259,8 @@ export default function DabanPage() {
             buyPrice: signal.currentPrice,
             stopLossMethod: "atr",
             stopLossParams: { atrMultiplier: 3, atrPeriod: 14 },
-            takeProfitMethod: "trailing",
-            takeProfitParams: { trailPercent: 5 },
-            highWaterMark: signal.currentPrice,
+            takeProfitMethod: "atr_multiple",
+            takeProfitParams: { atrMultiple: 3, atrPeriod: 14 },
           }),
         }).then(async (r) => {
           if (r.ok) {

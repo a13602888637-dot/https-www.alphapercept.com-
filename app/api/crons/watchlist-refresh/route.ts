@@ -178,11 +178,23 @@ export async function POST(req: Request) {
       let slParams = (item.stopLossParams as Record<string, number>) || {};
       let tpParams = (item.takeProfitParams as Record<string, number>) || {};
 
+      // 修正历史 trailing 方法为 atr_multiple（trailing 是追踪止损语义，不适合做 target）
+      if (tpMethod === "trailing") {
+        tpMethod = "atr_multiple";
+        tpParams = { atrMultiple: 3, atrPeriod: 14 };
+        try {
+          await prisma.watchlist.update({
+            where: { id: item.id },
+            data: { takeProfitMethod: tpMethod, takeProfitParams: tpParams },
+          });
+        } catch { /* ignore */ }
+      }
+
       if (!slMethod && !tpMethod) {
         slMethod = "atr";
         slParams = { atrMultiplier: 3, atrPeriod: 14 };
-        tpMethod = "trailing";
-        tpParams = { trailPercent: 5 };
+        tpMethod = "atr_multiple";
+        tpParams = { atrMultiple: 3, atrPeriod: 14 };
         try {
           await prisma.watchlist.update({
             where: { id: item.id },
