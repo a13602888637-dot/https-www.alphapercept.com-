@@ -77,7 +77,7 @@ interface BoardStats {
   pendingCount: number
 }
 
-type TabType = "alpha" | "screen"
+type TabType = "alpha" | "screen" | "leftSide"
 
 export default function DabanPage() {
   const [signals, setSignals] = useState<AlphaSignal[]>([])
@@ -91,6 +91,10 @@ export default function DabanPage() {
   const [activeTab, setActiveTab] = useState<TabType>("screen")
   const [screenTime, setScreenTime] = useState("")
   const [screenConditions, setScreenConditions] = useState<string[]>([])
+  const [leftSignals, setLeftSignals] = useState<AlphaSignal[]>([])
+  const [leftLoading, setLeftLoading] = useState(false)
+  const [leftTime, setLeftTime] = useState("")
+  const [leftConditions, setLeftConditions] = useState<string[]>([])
   const [showLogic, setShowLogic] = useState(false)
   const [boardStats, setBoardStats] = useState<BoardStats | null>(null)
   const [showStats, setShowStats] = useState(false)
@@ -124,6 +128,22 @@ export default function DabanPage() {
       toast.error("选股扫描失败")
     } finally {
       setScreenLoading(false)
+    }
+  }, [])
+
+  const fetchLeftSide = useCallback(async () => {
+    setLeftLoading(true)
+    try {
+      const res = await fetch("/api/strategy-recommendation/left-side")
+      if (!res.ok) throw new Error("Failed")
+      const data = await res.json()
+      setLeftSignals(data.signals ?? [])
+      setLeftTime(data.screenTime ?? "")
+      setLeftConditions(data.conditions ?? [])
+    } catch {
+      toast.error("左侧交易扫描失败")
+    } finally {
+      setLeftLoading(false)
     }
   }, [])
 
@@ -183,10 +203,19 @@ export default function DabanPage() {
     }
   }, [isSignedIn, fetchSignals, fetchScreen, loadAccepted, fetchStats])
 
+  // 左侧交易: 切换到Tab时才加载（较慢的API）
+  useEffect(() => {
+    if (activeTab === "leftSide" && leftSignals.length === 0 && !leftLoading) {
+      fetchLeftSide()
+    }
+  }, [activeTab, leftSignals.length, leftLoading, fetchLeftSide])
+
   const handleRefresh = () => {
     setRefreshing(true)
     if (activeTab === "alpha") {
       fetchSignals()
+    } else if (activeTab === "leftSide") {
+      fetchLeftSide().finally(() => setRefreshing(false))
     } else {
       fetchScreen()
       setRefreshing(false)
@@ -329,7 +358,7 @@ export default function DabanPage() {
   const isLockdown = sentiment?.lockdown === true
   const acceptedSymbols = new Set(accepted.map((s) => s.symbol))
 
-  const currentSignals = activeTab === "alpha" ? signals : screenSignals
+  const currentSignals = activeTab === "alpha" ? signals : activeTab === "leftSide" ? leftSignals : screenSignals
   const visibleSignals = currentSignals.filter(
     (s) => !dismissed.has(s.symbol)
   )
@@ -472,19 +501,33 @@ export default function DabanPage() {
               <span className="text-[10px] ml-0.5 opacity-70">({signals.length})</span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab("leftSide")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+              activeTab === "leftSide"
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            <TrendingUp className="h-3.5 w-3.5" />
+            左侧交易
+            {leftSignals.length > 0 && (
+              <span className="text-[10px] ml-0.5 opacity-70">({leftSignals.length})</span>
+            )}
+          </button>
         </div>
 
-        {/* Screen Conditions Bar */}
-        {activeTab === "screen" && screenConditions.length > 0 && (
+        {/* Conditions Bar */}
+        {((activeTab === "screen" && screenConditions.length > 0) || (activeTab === "leftSide" && leftConditions.length > 0)) && (
           <div className="flex flex-wrap items-center gap-1.5 mb-4">
-            {screenConditions.map((c) => (
+            {(activeTab === "leftSide" ? leftConditions : screenConditions).map((c) => (
               <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a2035] text-gray-400 border border-[#2a3045]">
                 {c}
               </span>
             ))}
-            {screenTime && (
+            {(activeTab === "leftSide" ? leftTime : screenTime) && (
               <span className="text-[10px] text-gray-600 ml-2">
-                扫描时间: {screenTime}
+                扫描时间: {activeTab === "leftSide" ? leftTime : screenTime}
               </span>
             )}
           </div>
@@ -793,10 +836,12 @@ export default function DabanPage() {
 
         {/* Signal Cards Grid */}
         <div className="mb-8">
-          {screenLoading && activeTab === "screen" ? (
+          {((screenLoading && activeTab === "screen") || (leftLoading && activeTab === "leftSide")) ? (
             <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg py-16 text-center">
               <Loader2 className="h-6 w-6 animate-spin text-gray-500 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">正在扫描全A股...</p>
+              <p className="text-gray-500 text-sm">
+                {activeTab === "leftSide" ? "正在扫描低估值超卖股..." : "正在扫描全A股..."}
+              </p>
             </div>
           ) : currentSignals.length === 0 ? (
             <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg py-16 text-center">
