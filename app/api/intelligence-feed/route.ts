@@ -1,18 +1,11 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
+import { getAuthUserId } from "../../../lib/auth-helpers";
 
 // GET: Get user's intelligence feed
 export async function GET(req: Request) {
   try {
-    let clerkUserId = null;
-    try {
-      const authResult = await auth();
-      clerkUserId = authResult.userId;
-    } catch (authError) {
-      console.warn("Clerk auth failed, using public feed:", authError);
-      // Continue with public feed (clerkUserId will be null)
-    }
+    const clerkUserId = await getAuthUserId(req);
 
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "20");
@@ -93,22 +86,7 @@ export async function GET(req: Request) {
 // POST: Create new intelligence feed item
 export async function POST(req: Request) {
   try {
-    let clerkUserId = null;
-    try {
-      const authResult = await auth();
-      clerkUserId = authResult.userId;
-    } catch (authError) {
-      console.warn("Clerk auth failed:", authError);
-      // 对于POST请求，需要认证，返回401错误
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          details: "Clerk authentication failed. Please sign in to create intelligence feed items."
-        },
-        { status: 401 }
-      );
-    }
-
+    const clerkUserId = await getAuthUserId(req);
     if (!clerkUserId) {
       return NextResponse.json(
         {

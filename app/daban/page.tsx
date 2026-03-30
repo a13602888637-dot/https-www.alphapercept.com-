@@ -49,7 +49,7 @@ export default function DabanPage() {
   const [activeTab, setActiveTab] = useState<TabType>("screen")
   const [screenTime, setScreenTime] = useState("")
   const [screenConditions, setScreenConditions] = useState<string[]>([])
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, getToken } = useAuth()
 
   const fetchSignals = useCallback(async () => {
     try {
@@ -104,10 +104,13 @@ export default function DabanPage() {
       return
     }
     try {
+      const token = await getToken()
       const res = await fetch("/api/portfolio", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           stockCode: signal.symbol,
           stockName: signal.name,

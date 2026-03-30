@@ -1,26 +1,10 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
+import { getAuthUserId } from "../../../../lib/auth-helpers";
 
 export async function POST(req: Request) {
   try {
-    let clerkUserId = null;
-    try {
-      const authResult = await auth();
-      clerkUserId = authResult.userId;
-    } catch (authError) {
-      console.warn("Clerk auth failed:", authError);
-      // 对于用户同步POST请求，需要认证，返回401错误
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentication required",
-          details: "Clerk authentication failed. Please sign in to sync user data."
-        },
-        { status: 401 }
-      );
-    }
-
+    const clerkUserId = await getAuthUserId(req);
     if (!clerkUserId) {
       return NextResponse.json(
         {
@@ -86,22 +70,9 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    let clerkUserId = null;
-    try {
-      const authResult = await auth();
-      clerkUserId = authResult.userId;
-    } catch (authError) {
-      console.warn("Clerk auth failed:", authError);
-      // 对于用户信息GET请求，返回空用户信息而不是401错误
-      return NextResponse.json({
-        success: true,
-        message: "未登录，返回空用户信息",
-        user: null
-      });
-    }
-
+    const clerkUserId = await getAuthUserId(req);
     if (!clerkUserId) {
       return NextResponse.json({
         success: true,

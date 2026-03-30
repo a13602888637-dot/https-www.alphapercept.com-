@@ -1,17 +1,17 @@
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getAuthUserId } from "@/lib/auth-helpers"
 
 // GET: Get user's portfolio with real-time prices
 export async function GET(req: Request) {
   try {
-    const authResult = await auth()
-    if (!authResult.userId) {
+    const clerkUserId = await getAuthUserId(req)
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     const user = await prisma.user.findUnique({
-      where: { clerkUserId: authResult.userId },
+      where: { clerkUserId },
     })
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -113,13 +113,13 @@ export async function GET(req: Request) {
 // POST: Add a new position
 export async function POST(req: Request) {
   try {
-    const authResult = await auth()
-    if (!authResult.userId) {
+    const clerkUserId = await getAuthUserId(req)
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     const user = await prisma.user.findUnique({
-      where: { clerkUserId: authResult.userId },
+      where: { clerkUserId },
     })
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -188,13 +188,13 @@ export async function POST(req: Request) {
 // PUT: Update a position
 export async function PUT(req: Request) {
   try {
-    const authResult = await auth()
-    if (!authResult.userId) {
+    const clerkUserId = await getAuthUserId(req)
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     const user = await prisma.user.findUnique({
-      where: { clerkUserId: authResult.userId },
+      where: { clerkUserId },
     })
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -240,13 +240,13 @@ export async function PUT(req: Request) {
 // DELETE: Remove a position
 export async function DELETE(req: Request) {
   try {
-    const authResult = await auth()
-    if (!authResult.userId) {
+    const clerkUserId = await getAuthUserId(req)
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     const user = await prisma.user.findUnique({
-      where: { clerkUserId: authResult.userId },
+      where: { clerkUserId },
     })
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

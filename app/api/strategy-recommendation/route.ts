@@ -1,19 +1,13 @@
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getAuthUserId } from "@/lib/auth-helpers"
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
 
 // GET: Generate AI strategy recommendations based on user's watchlist and market context
 export async function GET(req: Request) {
   try {
-    let clerkUserId: string | null = null
-    try {
-      const authResult = await auth()
-      clerkUserId = authResult.userId
-    } catch {
-      // Continue without auth
-    }
+    const clerkUserId = await getAuthUserId(req)
 
     let watchlistStocks: string[] = []
     let userSettings: any = {}
@@ -142,8 +136,8 @@ export async function GET(req: Request) {
 // POST: Apply a strategy (save to user settings)
 export async function POST(req: Request) {
   try {
-    const authResult = await auth()
-    if (!authResult.userId) {
+    const clerkUserId = await getAuthUserId(req)
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
@@ -151,7 +145,7 @@ export async function POST(req: Request) {
     const { strategyId, strategyName } = body
 
     const user = await prisma.user.findUnique({
-      where: { clerkUserId: authResult.userId },
+      where: { clerkUserId },
     })
 
     if (!user) {

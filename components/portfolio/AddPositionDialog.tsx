@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Plus, Search, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@clerk/nextjs"
 
 interface AddPositionDialogProps {
   onSuccess: () => void
@@ -38,6 +39,7 @@ export function AddPositionDialog({ onSuccess }: AddPositionDialogProps) {
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const { toast } = useToast()
+  const { getToken } = useAuth()
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query)
@@ -81,9 +83,13 @@ export function AddPositionDialog({ onSuccess }: AddPositionDialogProps) {
 
     setSubmitting(true)
     try {
+      const token = await getToken()
       const response = await fetch('/api/portfolio', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           stockCode: selectedStock.code,
           stockName: selectedStock.name,

@@ -120,7 +120,7 @@ export default function PortfolioPage() {
   const [error, setError] = useState<string | null>(null)
   const [addingStock, setAddingStock] = useState<string | null>(null)
   const { toast } = useToast()
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, getToken } = useAuth()
 
   // 自选股相关状态
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
@@ -158,7 +158,10 @@ export default function PortfolioPage() {
   const loadPortfolio = useCallback(async () => {
     setPortfolioLoading(true)
     try {
-      const response = await fetch('/api/portfolio')
+      const token = await getToken()
+      const response = await fetch('/api/portfolio', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
@@ -171,13 +174,17 @@ export default function PortfolioPage() {
     } finally {
       setPortfolioLoading(false)
     }
-  }, [])
+  }, [getToken])
 
   // 删除持仓
   const handleDeletePosition = async (id: string, stockName: string) => {
     if (!window.confirm(`确定要删除 ${stockName} 的持仓吗？`)) return
     try {
-      const response = await fetch(`/api/portfolio?id=${id}`, { method: 'DELETE' })
+      const token = await getToken()
+      const response = await fetch(`/api/portfolio?id=${id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
       if (response.ok) {
         toast({ title: "删除成功", description: `已删除 ${stockName}` })
         loadPortfolio()

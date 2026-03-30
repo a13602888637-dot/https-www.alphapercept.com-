@@ -1,5 +1,25 @@
-import { clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { NextRequest } from "next/server";
+
+/**
+ * 统一鉴权：Bearer Token 优先，auth() 兜底
+ *
+ * auth() 在 Vercel serverless 上可能因 middleware context 丢失而抛异常，
+ * Bearer Token 不依赖 middleware context，更可靠。
+ */
+export async function getAuthUserId(req: Request | NextRequest): Promise<string | null> {
+  // 1. 优先从 Bearer Token 解析
+  const bearerUserId = await getUserIdFromRequest(req);
+  if (bearerUserId) return bearerUserId;
+
+  // 2. 兜底：Clerk auth()（cookie-based，依赖 middleware context）
+  try {
+    const authResult = await auth();
+    return authResult.userId;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 从请求中获取Clerk userId（使用Bearer Token标准鉴权）
