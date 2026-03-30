@@ -108,15 +108,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 查找所有配置了止盈止损方法的自选股
+    // 查找所有有买入价的自选股（不限是否已配止盈止损方法）
     const items = await prisma.watchlist.findMany({
-      where: {
-        OR: [
-          { stopLossMethod: { not: null } },
-          { takeProfitMethod: { not: null } },
-        ],
-        buyPrice: { not: null },
-      },
+      where: { buyPrice: { not: null } },
     });
 
     if (items.length === 0) {
@@ -126,16 +120,11 @@ export async function POST(req: Request) {
     let refreshed = 0;
     let skipped = 0;
     let failed = 0;
+    let autoConfigured = 0;
 
     for (const item of items) {
       const buyPrice = item.buyPrice ? item.buyPrice.toNumber() : null;
-      const slMethod = (item.stopLossMethod as StopLossMethod) || null;
-      const tpMethod = (item.takeProfitMethod as TakeProfitMethod) || null;
-
-      if (!buyPrice || (!slMethod && !tpMethod)) {
-        skipped++;
-        continue;
-      }
+      if (!buyPrice) { skipped++; continue; }
 
       // 跳过美股
       if (/^[A-Za-z]/.test(item.stockCode.trim())) {
@@ -143,8 +132,36 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const slParams = (item.stopLossParams as Record<string, number>) || {};
-      const tpParams = (item.takeProfitParams as Record<string, number>) || {};
+      // 自动为没有止盈止损方法的项目配置默认值
+      let slMethod = (item.stopLossMethod as StopLossMethod) || null;
+      let tpMethod = (item.takeProfitMethod as TakeProfitMethod) || null;
+      let slParams = (item.stopLossParams as Record<string, number>) || {};
+      let tpParams = (item.takeProfitParams as Record<string, number>) || {};
+
+      if (!slMethod && !tpMethod) {
+        slMethod = "atr";
+        slParams = { atrMultiplier: 3, atrPeriod: 14 };
+        tpMethod = "trailing";
+        tpParams = { trailPercent: 5 };
+        // 写入默认方法到 DB
+        try {
+          await prisma.watchlist.update({
+            where: { id: item.id },
+            data: {
+              stopLossMethod: slMethod,
+              stopLossParams: slParams,
+              takeProfitMethod: tpMethod,
+              takeProfitParams: tpParams,
+              highWaterMark: item.highWaterMark ?? buyPrice,
+            },
+          });
+          autoConfigured++;
+        } catch {
+          failed++;
+          continue;
+        }
+      }
+
       const maxPeriod = Math.max(
         slParams.atrPeriod ?? 14, slParams.maPeriod ?? 20,
         slParams.period ?? 22, tpParams.atrPeriod ?? 14, 30
@@ -209,11 +226,12 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log(`[Watchlist Refresh Cron] Refreshed: ${refreshed}, Skipped: ${skipped}, Failed: ${failed}, Total: ${items.length}`);
+    console.log(`[Watchlist Refresh Cron] Refreshed: ${refreshed}, AutoConfigured: ${autoConfigured}, Skipped: ${skipped}, Failed: ${failed}, Total: ${items.length}`);
 
     return NextResponse.json({
       success: true,
       refreshed,
+      autoConfigured,
       skipped,
       failed,
       total: items.length,

@@ -251,33 +251,41 @@ function analyzeLeftSide(klines: Array<{
  */
 export async function GET() {
   try {
-    // Layer 1: 价值底座 — 批量获取低PE股票
-    const allStocks = await fetchLowPEStocks(200);
+    // Layer 1: 价值底座 — 批量获取低PE股票（500只确保覆盖PE 5~25区间）
+    const allStocks = await fetchLowPEStocks(500);
 
     const isOffHours = allStocks.filter((s) => s.currentPrice > 0 && s.changePercent !== 0).length < 10;
 
-    // 硬过滤（非交易时段放宽条件）
-    const layer1Candidates = allStocks.filter((s) => {
+    // 基础排除（ST/920/无价格）
+    const baseFiltered = allStocks.filter((s) => {
       if (s.name.includes("ST") || s.name.includes("*ST") || s.name.includes("退")) return false;
       if (s.symbol.startsWith("920")) return false;
       if (s.currentPrice <= 0) return false;
+      return true;
+    });
 
-      if (isOffHours) {
-        // 非交易时段: 放宽PE/PB/市值，避免数据不完整导致全部被过滤
+    // 严格过滤
+    let layer1Candidates = baseFiltered.filter((s) => {
+      if (s.pe < 5 || s.pe > 25) return false;
+      if (s.pb >= 3.0 || s.pb <= 0) return false;
+      const capYi = s.circulatingMarketCap / 1e8;
+      if (capYi < 100) return false;
+      return true;
+    });
+
+    // 如果严格过滤后为空（非交易时段数据不完整或PE分布偏移），降级到宽松条件
+    let relaxed = false;
+    if (layer1Candidates.length === 0) {
+      relaxed = true;
+      layer1Candidates = baseFiltered.filter((s) => {
         if (s.pe < 3 || s.pe > 40) return false;
-        // PB=999 说明数据缺失("-")，非交易时段允许通过
+        // PB=999 说明数据缺失("-")，允许通过
         if (s.pb !== 999 && (s.pb >= 5.0 || s.pb <= 0)) return false;
         const capYi = s.circulatingMarketCap / 1e8;
         if (capYi < 50) return false;
-      } else {
-        // 交易时段: 严格过滤
-        if (s.pe < 5 || s.pe > 25) return false;
-        if (s.pb >= 3.0 || s.pb <= 0) return false;
-        const capYi = s.circulatingMarketCap / 1e8;
-        if (capYi < 100) return false;
-      }
-      return true;
-    });
+        return true;
+      });
+    }
 
     // 按PE升序取前20只做深度分析
     const toAnalyze = layer1Candidates.slice(0, 20);
@@ -400,11 +408,11 @@ export async function GET() {
       screenTime,
       totalScanned: allStocks.length,
       layer1Count: layer1Candidates.length,
-      conditions: isOffHours
+      conditions: relaxed
         ? [
-            "PE 3~40 (非交易时段放宽)",
-            "PB < 5.0 (非交易时段放宽)",
-            "流通市值>50亿 (非交易时段放宽)",
+            "PE 3~40 (自动放宽)",
+            "PB < 5.0 (自动放宽)",
+            "流通市值>50亿 (自动放宽)",
             "排除ST/退市",
             "RSI(14)超卖检测",
             "地量检测",
