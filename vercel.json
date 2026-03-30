@@ -1,21 +1,5 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ],
+  "framework": "nextjs",
   "crons": [
     {
       "path": "/api/intelligence-feed/generate",
@@ -25,8 +9,5 @@
       "path": "/api/crons/daily-rollover",
       "schedule": "15 1 * * 1-5"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
