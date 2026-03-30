@@ -732,8 +732,72 @@ export default function DabanPage() {
                 <div>计算: 次日收益% = (次日收盘价 - 入场价) / 入场价 × 100</div>
                 <div>状态流转: pending → tracked（获取到数据） / failed（3天无数据）</div>
                 <div>统计维度: 按信号标签分组 → 胜率、平均收益、最大收益、最大亏损</div>
-                <div className="text-green-400/60">闭环: 历史胜率 → 反哺第十二条仓位管理的胜率系数</div>
+                <div className="text-green-400/60">闭环: 历史胜率 → 反哺Kelly公式的胜率和盈亏比</div>
               </div>
+            </div>
+
+            {/* 十七、Kelly公式仓位引擎 */}
+            <div className="space-y-2">
+              <div className="text-orange-400/80 font-medium">十七、Kelly公式仓位引擎（替代固定仓位表）</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>公式: f = (b×p - q) / b</div>
+                <div className="pl-3">p = 胜率, q = 1-p, b = 盈亏比(平均盈利%/平均亏损%)</div>
+                <div>使用半凯利: 建议仓位 = min(20%, f/2 × 100%)</div>
+                <div>Kelly≤0: 建议仓位0%，显示"数学不支持买入"</div>
+                <div>降级: 样本&lt;20条 → 使用固定仓位表(15/10/8/5%)</div>
+                <div>数据源: BoardTrack数据库中该signalTag的已跟踪记录</div>
+                <div className="text-orange-400/60">意义: 胜率40%+盈亏比1.5时Kelly=0，数学告诉你不应该下注</div>
+              </div>
+            </div>
+
+            {/* 十八、游资微观结构加分 */}
+            <div className="space-y-2">
+              <div className="text-violet-400/80 font-medium">十八、游资微观结构加分（打板增强）</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>游资偏好市值: 30~80亿→+10分，80~150亿→+3分（最易拉升区间）</div>
+                <div>资金强势攻入: 量比&gt;3 且 涨幅&gt;5%→+5分</div>
+                <div>板块效应: 同代码前缀≥3只异动→"板块共振"+8分</div>
+                <div>孤军深入: 同前缀仅1只→-5分（无板块呼应）</div>
+              </div>
+              <div className="space-y-1 text-gray-600 pl-3 border-l-2 border-[#1a2035] ml-1">
+                <div>未来迭代（数据源限制暂不可行）:</div>
+                <div>· 基金持仓占比过滤（需天天基金API）</div>
+                <div>· 股性活跃度-60日涨停次数（需扩展K线查询）</div>
+                <div>· 内外盘比精确值（需腾讯L2数据）</div>
+                <div>· NLP新闻词频爆发检测（需DeepSeek+新闻源）</div>
+                <div>· HMM隐马尔可夫状态检测（需Python ML服务）</div>
+              </div>
+            </div>
+
+            {/* 十九、左侧交易引擎 */}
+            <div className="space-y-2">
+              <div className="text-emerald-400/80 font-medium">十九、左侧交易引擎（独立Tab）</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-gray-400">Layer 1 — 价值底座（硬过滤）:</div>
+                <div className="pl-3">PE(TTM) 5~25 + PB &lt; 3.0 + 流通市值 &gt; 100亿 + 排除ST</div>
+                <div className="text-gray-400">Layer 2 — 技术面超卖检测（≥2项确认）:</div>
+                <div className="pl-3">地量: 20日均量 &lt; 120日均量×40%</div>
+                <div className="pl-3">RSI(14) &lt; 30（极度超卖）</div>
+                <div className="pl-3">偏离250日均线 &gt; -20%（绝对超跌）</div>
+                <div className="pl-3">MACD底背离: 价格新低但柱状体缩短</div>
+                <div className="text-gray-400">Layer 3 — 反转触发器（≥2项确认）:</div>
+                <div className="pl-3">RSI拐头: 从&lt;35区域连续2日上升</div>
+                <div className="pl-3">量能回暖: 5日均量 &gt; 10日均量（地量后放量）</div>
+                <div className="pl-3">站上MA5: 收盘价 &gt; 5日均线</div>
+              </div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-gray-400">信号标签:</div>
+                <div className="pl-3">🌱反转萌芽 = L1+L2+L3 / 💎价值洼地 = L1+L2 / 👁观察等待 = 仅L1</div>
+                <div className="text-gray-400">左侧仓位策略（与打板不同）:</div>
+                <div className="pl-3">反转萌芽8% / 价值洼地5% / 止损-12% / 回撤-8%</div>
+                <div className="pl-3">目标: +30% 或 回到250日均线上方</div>
+                <div className="pl-3">DCA: 每跌5%可加仓，单股累计≤15%</div>
+              </div>
+            </div>
+
+            <div className="border-t border-[#1a2035] pt-2 text-[10px] text-gray-600 space-y-1">
+              <div>数据源: 东方财富推送API + K线API + technicalindicators库 + BoardTrack数据库</div>
+              <div>限制: 无Level-2盘口、无财报API(ROE/FCF)、无NLP、无基金持仓 — 用近似指标替代</div>
             </div>
           </div>
         )}
