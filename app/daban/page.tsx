@@ -429,10 +429,23 @@ export default function DabanPage() {
         {/* Logic Whitebox Panel */}
         {showLogic && (
           <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg p-4 mb-5 text-xs space-y-3">
-            <h3 className="text-gray-300 font-medium text-sm mb-2">选股逻辑清单（白盒化）</h3>
+            <h3 className="text-gray-300 font-medium text-sm mb-2">完整逻辑清单（白盒化）</h3>
 
+            {/* 一、数据源 */}
             <div className="space-y-2">
-              <div className="text-gray-400 font-medium">一、基础筛选</div>
+              <div className="text-gray-400 font-medium">一、数据源与扫描范围</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>行情数据: 东方财富推送API（push2.eastmoney.com）</div>
+                <div>扫描范围: 全A股（沪主板+深主板+创业板+科创板+中小板）</div>
+                <div>候选池: 按涨幅降序取前200只 → 过滤后取前30只查MA → 最终输出≤20只</div>
+                <div>K线/均线: 东方财富K线API，取最近20日收盘价计算MA5/MA10/MA20</div>
+                <div>涨停池: 东方财富涨停池API（getTopicZTPool），计算溢价率和连板高度</div>
+              </div>
+            </div>
+
+            {/* 二、基础筛选 */}
+            <div className="space-y-2">
+              <div className="text-gray-400 font-medium">二、基础筛选（交易时段）</div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-gray-500 pl-3">
                 <span>涨跌幅 &gt; 3%</span>
                 <span>流通市值 &gt; 50亿</span>
@@ -440,94 +453,180 @@ export default function DabanPage() {
                 <span>换手率 5%~10%（活跃度）</span>
                 <span>排除 ST / *ST / 退市股</span>
                 <span>排除 920 新股板块</span>
+                <span>排除涨停封死（现价≥昨收×1.1）</span>
+                <span>价格 &gt; 0（有效数据）</span>
               </div>
             </div>
 
+            {/* 三、非交易时段 */}
             <div className="space-y-2">
-              <div className="text-gray-400 font-medium">二、技术面验证</div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-gray-500 pl-3">
-                <span>价格 &gt; MA5 &gt; MA10 &gt; MA20（多头排列）</span>
-                <span>价格 &gt; VWAP（均价线上方）</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-amber-400/80 font-medium">三、疑似诱多检测 ⚠️</div>
+              <div className="text-gray-400 font-medium">三、非交易时段降级规则</div>
               <div className="space-y-1 text-gray-500 pl-3">
-                <div>尾盘急拉：开盘涨幅&lt;1%，但尾盘贡献&gt;60%涨幅</div>
-                <div>振幅异常：振幅&gt;涨幅×2.5 且 &gt;5%</div>
-                <div>盘中破昨收：最低价跌破昨收，但收盘涨&gt;3%</div>
+                <div>判定: 有效股票数 &lt; 10 或涨跌幅全为0 → 进入非交易时段模式</div>
+                <div>放宽: 涨跌幅≥2%（交易时段3%）、市值≥30亿（交易时段50亿）</div>
+                <div>跳过: MA多头排列验证、VWAP验证均跳过</div>
+                <div>兜底: 无信号时自动读取数据库缓存（最近交易日结果）</div>
               </div>
             </div>
 
+            {/* 四、技术面验证 */}
             <div className="space-y-2">
-              <div className="text-emerald-400/80 font-medium">四、确认上攻 ✅</div>
+              <div className="text-gray-400 font-medium">四、技术面验证（仅交易时段）</div>
               <div className="space-y-1 text-gray-500 pl-3">
-                <div>量比≥2.0（显著放量）</div>
-                <div>换手率 3~8%（活跃不过度）</div>
-                <div>开盘涨幅≥0.5%（不是低开拉升）</div>
-                <div>最低价不跌破昨收（无恐慌抛压）</div>
-                <div>振幅&lt;涨幅×2（走势平稳）</div>
-                <div>价格 &gt; MA5 &gt; MA10 &gt; MA20（严格多头排列）</div>
+                <div>多头排列: 价格 &gt; MA5 &gt; MA10 &gt; MA20（MA数据可用时）</div>
+                <div>VWAP: 价格 &gt; 成交额÷成交量÷100（均价线上方 = 买方力量强）</div>
               </div>
             </div>
 
+            {/* 五、诱多检测 */}
             <div className="space-y-2">
-              <div className="text-purple-400/80 font-medium">五、爆发打板 ⚡</div>
+              <div className="text-amber-400/80 font-medium">五、疑似诱多检测 ⚠️</div>
               <div className="space-y-1 text-gray-500 pl-3">
-                <div>涨幅≥9%（涨停级别）</div>
-                <div>流通市值 50~300亿（游资偏好中盘）</div>
-                <div>量比≥2.5（资金集中涌入）</div>
-                <div>最低价不跌破昨收（封板力度强）</div>
+                <div>尾盘急拉: 开盘涨幅&lt;1%，但尾盘贡献&gt;涨幅的60%</div>
+                <div>振幅异常: 振幅 &gt; 涨幅×2.5 且 振幅 &gt; 5%</div>
+                <div>盘中破昨收: 最低价 &lt; 昨收，但收盘涨 &gt; 3%</div>
+                <div className="text-yellow-500/60">触发任一条 → 标记"疑似诱多" + 评分扣30分</div>
               </div>
             </div>
 
+            {/* 六、确认上攻 */}
             <div className="space-y-2">
-              <div className="text-amber-300 font-medium">六、强烈推荐 🔥 = 确认上攻 ∩ 爆发打板</div>
-              <div className="text-gray-500 pl-3">同时满足第四、五条所有条件</div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-gray-400 font-medium">七、综合评分（0-100）</div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-gray-500 pl-3">
-                <span>涨幅贡献 0~25分</span>
-                <span>量比贡献 0~20分</span>
-                <span>换手率适中度 0~15分</span>
-                <span>开盘强度 0~15分</span>
-                <span>均线多头排列 0~15分</span>
-                <span>走势平稳度 0~10分</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-cyan-400/80 font-medium">八、仓位管理</div>
+              <div className="text-emerald-400/80 font-medium">六、确认上攻 ✅（全部满足）</div>
               <div className="space-y-1 text-gray-500 pl-3">
-                <div>基础仓位: 🔥强烈推荐15% / ⚡爆发打板10% / ✅确认上攻8% / 高风险5%</div>
+                <div>非诱多（未触发第五条任何规则）</div>
+                <div>量比 ≥ 2.0（显著放量）</div>
+                <div>换手率 3%~8%（活跃但不过度换手）</div>
+                <div>开盘涨幅 ≥ 0.5%（开盘即强势，非低开拉升）</div>
+                <div>最低价 ≥ 昨收（全天未跌破昨收 = 无恐慌抛压）</div>
+                <div>振幅 &lt; 涨幅×2（走势平稳，非过山车）</div>
+                <div>价格 &gt; MA5 &gt; MA10 &gt; MA20（严格多头排列，MA可用时）</div>
+              </div>
+            </div>
+
+            {/* 七、爆发打板 */}
+            <div className="space-y-2">
+              <div className="text-purple-400/80 font-medium">七、爆发打板 ⚡（全部满足）</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>非诱多（未触发第五条任何规则）</div>
+                <div>涨幅 ≥ 9%（涨停级别）</div>
+                <div>流通市值 50~300亿（游资偏好中盘股）</div>
+                <div>量比 ≥ 2.5（资金集中涌入）</div>
+                <div>最低价 ≥ 昨收（封板力度强）</div>
+              </div>
+            </div>
+
+            {/* 八、强烈推荐 */}
+            <div className="space-y-2">
+              <div className="text-amber-300 font-medium">八、强烈推荐 🔥 = 确认上攻 ∩ 爆发打板</div>
+              <div className="text-gray-500 pl-3">同时满足第六条和第七条的全部条件</div>
+            </div>
+
+            {/* 九、综合评分 */}
+            <div className="space-y-2">
+              <div className="text-gray-400 font-medium">九、综合评分（0-100分）</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>涨幅: min(25, 涨幅% × 2.5) → 0~25分</div>
+                <div>量比: min(20, 量比 × 5) → 0~20分</div>
+                <div>换手率: 以5.5%为最佳，偏离越大扣越多 → 0~15分</div>
+                <div>开盘强度: min(15, 开盘涨幅% × 5) → 0~15分</div>
+                <div>均线排列: 严格多头+15 / 部分多头+8 / 否则+0 → 0~15分</div>
+                <div>走势平稳: 振幅&lt;涨幅×1.5→+10 / &lt;×2→+5 / 否则+0 → 0~10分</div>
+                <div className="text-yellow-500/60">疑似诱多: 总分扣30分（最低0分）</div>
+              </div>
+            </div>
+
+            {/* 十、情绪面板 & 冰点锁定 */}
+            <div className="space-y-2">
+              <div className="text-red-400/80 font-medium">十、情绪面板 & 冰点锁定</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>溢价率 = 昨日涨停股今日开盘均价偏离昨收的百分比</div>
+                <div>连板高度 = 涨停池中最大连续涨停天数</div>
+                <div>冰点锁定: 溢价率 &lt; 0 → 清空全部信号，显示"空仓防守"横幅</div>
+                <div className="text-red-400/60">冰点期间所有信号卡片变灰且不可操作</div>
+              </div>
+            </div>
+
+            {/* 十一、市场环境判定 */}
+            <div className="space-y-2">
+              <div className="text-cyan-400/80 font-medium">十一、市场环境自动判定</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>牛市: 溢价率 &gt; 2% 且 连板高度 ≥ 4</div>
+                <div>熊市: 溢价率 &lt; -1% 或 连板高度 ≤ 1</div>
+                <div>震荡市: 其他情况</div>
+                <div className="text-gray-600">市场环境影响: 止损线宽度、回撤离场线、仓位情绪系数</div>
+              </div>
+            </div>
+
+            {/* 十二、仓位管理 */}
+            <div className="space-y-2">
+              <div className="text-cyan-400/80 font-medium">十二、仓位管理</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>基础仓位: 🔥15% / ⚡10% / ✅8% / 高风险5% / ⚠️诱多0%</div>
                 <div>情绪系数: 溢价率&gt;3%→×1.2 / 0~3%→×1.0 / -2~0%→×0.5 / &lt;-2%→×0</div>
                 <div>胜率系数: &gt;60%→×1.2 / 50-60%→×1.0 / 40-50%→×0.7 / &lt;40%或样本&lt;10→×0.5</div>
-                <div>硬上限: 单股不超过总资金20%</div>
-                <div className="text-gray-600">公式: 仓位 = 基础 × 情绪系数 × 胜率系数（cap 20%）</div>
+                <div>硬上限: 单股不超过总资金20%，结果保留1位小数</div>
+                <div className="text-gray-600">公式: 仓位 = min(20, 基础 × 情绪系数 × 胜率系数)</div>
+                <div className="text-gray-600">胜率数据来源: BoardTrack 数据库中该信号类型的历史跟踪记录</div>
               </div>
             </div>
 
+            {/* 十三、止盈止损 */}
             <div className="space-y-2">
-              <div className="text-pink-400/80 font-medium">九、止盈止损（按市场环境动态调整）</div>
+              <div className="text-pink-400/80 font-medium">十三、止盈止损策略（按市场环境动态调整）</div>
               <div className="space-y-1 text-gray-500 pl-3">
-                <div className="text-gray-400">市场判定: 溢价率&gt;2%+连板≥4=牛市 / 溢价率&lt;-1%或连板≤1=熊市 / 其他=震荡</div>
-                <div>止损线（牛/震荡/熊）: 🔥-7/-5/-3% · ⚡-5/-3/-2% · ✅-6/-4/-3% · 高风险-3/-2/-1.5%</div>
-                <div>高点回撤离场: 🔥-5/-3/-2% · ⚡-3/-2/-1.5% · ✅-4/-3/-2%</div>
+                <div>止损线（牛/震荡/熊）:</div>
+                <div className="pl-3">🔥 -7% / -5% / -3%</div>
+                <div className="pl-3">⚡ -5% / -3% / -2%</div>
+                <div className="pl-3">✅ -6% / -4% / -3%</div>
+                <div className="pl-3">高风险 -3% / -2% / -1.5%</div>
+                <div>高点回撤离场线（牛/震荡/熊）:</div>
+                <div className="pl-3">🔥 -5% / -3% / -2%</div>
+                <div className="pl-3">⚡ -3% / -2% / -1.5%</div>
+                <div className="pl-3">✅ -4% / -3% / -2%</div>
+                <div className="pl-3">高风险 -2% / -1.5% / -1%</div>
                 <div className="text-gray-400">不设硬性最大持有天数，未触发止损/回撤线可继续持有</div>
               </div>
               <div className="space-y-1 text-gray-500 pl-3 border-l-2 border-[#1a2035] ml-1">
-                <div>🔥连板预期: 高开&gt;3%持有追踪 / 0~3%卖半仓 / 低开止损</div>
-                <div>⚡快进快出: 高开&gt;5%竞价卖 / 0~5%半小时内卖 / 低开止损</div>
-                <div>✅趋势跟踪: 持有追踪回撤离场 / 跌破MA5次日卖 / 破止损线止损</div>
-                <div>高风险: 30分钟内卖 / 再封涨停例外持有 / 严格止损</div>
+                <div className="text-gray-400">按信号类型的止盈策略:</div>
+                <div>🔥连板预期: 高开&gt;3%持有追踪 / 0~3%卖半仓锁利 / 低开触发止损线离场</div>
+                <div>⚡快进快出: 高开&gt;5%集合竞价直接卖出 / 0~5%开盘30分钟内卖 / 低开立即止损</div>
+                <div>✅趋势跟踪: 持有追踪回撤离场 / 跌破MA5次日开盘卖 / 破止损线止损</div>
+                <div>高风险: 开盘30分钟内卖出 / 再封涨停例外可持有到次日 / 严格止损</div>
               </div>
             </div>
 
-            <div className="border-t border-[#1a2035] pt-2 text-gray-600">
-              排序：🔥强烈推荐 &gt; ⚡爆发打板 &gt; ✅确认上攻 &gt; 普通 &gt; ⚠️疑似诱多 · 同级按评分降序
+            {/* 十四、排序规则 */}
+            <div className="space-y-2">
+              <div className="text-gray-400 font-medium">十四、排序与输出</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>优先级: 🔥强烈推荐 &gt; ⚡爆发打板 &gt; ✅确认上攻 &gt; 普通 &gt; ⚠️疑似诱多</div>
+                <div>同级排序: 按综合评分降序</div>
+                <div>条件选股Tab: 最多输出20只信号</div>
+                <div>涨幅扫描Tab: 扫描30只蓝筹标的，最多输出12只，标签: 强势冲板(≥8.5%) / 加速上攻(≥5%) / 异动关注(&lt;5%) / 盘后回顾(非交易时段)</div>
+              </div>
+            </div>
+
+            {/* 十五、接受联动 */}
+            <div className="space-y-2">
+              <div className="text-blue-400/80 font-medium">十五、接受操作联动流程</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>1. 写入投资组合: 数量100股，类型LIMIT_UP_PAPER，状态T+1锁定</div>
+                <div>2. 加入自选股: 附带买入价，重复(409)不报错</div>
+                <div>3. 保存跟踪记录: 记录入场价、信号标签、评分 → 等待Cron次日跟踪</div>
+                <div>卡片状态: 接受后显示"✓ 已接受 · 跟踪中"，忽略后本次会话隐藏</div>
+              </div>
+            </div>
+
+            {/* 十六、胜率跟踪闭环 */}
+            <div className="space-y-2">
+              <div className="text-green-400/80 font-medium">十六、胜率跟踪闭环</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>Cron: 每交易日15:30 CST自动执行，批量查询（每50只一批）</div>
+                <div>计算: 次日收益% = (次日收盘价 - 入场价) / 入场价 × 100</div>
+                <div>状态流转: pending → tracked（获取到数据） / failed（3天无数据）</div>
+                <div>统计维度: 按信号标签分组 → 胜率、平均收益、最大收益、最大亏损</div>
+                <div className="text-green-400/60">闭环: 历史胜率 → 反哺第十二条仓位管理的胜率系数</div>
+              </div>
             </div>
           </div>
         )}
