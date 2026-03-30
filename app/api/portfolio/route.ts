@@ -179,8 +179,9 @@ export async function POST(req: Request) {
       item: { ...item, avgCost: Number(item.avgCost) },
     })
   } catch (error) {
-    console.error('Portfolio POST error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error('Portfolio POST error:', errMsg, error)
+    return NextResponse.json({ error: `服务器错误: ${errMsg}` }, { status: 500 })
   }
 }
 

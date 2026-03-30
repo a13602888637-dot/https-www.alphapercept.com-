@@ -13,6 +13,8 @@ import {
   TrendingUp,
   BarChart3,
   LogIn,
+  Filter,
+  AlertTriangle,
 } from "lucide-react"
 
 interface AlphaSignal {
@@ -21,7 +23,10 @@ interface AlphaSignal {
   currentPrice: number
   changePercent: number
   volumeRatio: number
+  turnoverRate?: number
+  circulatingMarketCap?: number
   reason: string
+  riskTag?: string
 }
 
 interface SentimentData {
@@ -30,13 +35,20 @@ interface SentimentData {
   lockdown: boolean
 }
 
+type TabType = "alpha" | "screen"
+
 export default function DabanPage() {
   const [signals, setSignals] = useState<AlphaSignal[]>([])
+  const [screenSignals, setScreenSignals] = useState<AlphaSignal[]>([])
   const [sentiment, setSentiment] = useState<SentimentData | null>(null)
   const [accepted, setAccepted] = useState<AlphaSignal[]>([])
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [screenLoading, setScreenLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabType>("screen")
+  const [screenTime, setScreenTime] = useState("")
+  const [screenConditions, setScreenConditions] = useState<string[]>([])
   const { isSignedIn } = useAuth()
 
   const fetchSignals = useCallback(async () => {
@@ -47,21 +59,43 @@ export default function DabanPage() {
       setSignals(data.signals ?? [])
       setSentiment(data.sentiment ?? null)
     } catch {
-      toast.error("获取打板信号失败，请稍后重试")
+      // silently fail for alpha feed
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
   }, [])
 
+  const fetchScreen = useCallback(async () => {
+    setScreenLoading(true)
+    try {
+      const res = await fetch("/api/strategy-recommendation/screen")
+      if (!res.ok) throw new Error("Failed to fetch screen")
+      const data = await res.json()
+      setScreenSignals(data.signals ?? [])
+      setScreenTime(data.screenTime ?? "")
+      setScreenConditions(data.conditions ?? [])
+    } catch {
+      toast.error("选股扫描失败")
+    } finally {
+      setScreenLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (isSignedIn === undefined) return
     fetchSignals()
-  }, [isSignedIn, fetchSignals])
+    fetchScreen()
+  }, [isSignedIn, fetchSignals, fetchScreen])
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchSignals()
+    if (activeTab === "alpha") {
+      fetchSignals()
+    } else {
+      fetchScreen()
+      setRefreshing(false)
+    }
   }
 
   const handleAccept = async (signal: AlphaSignal) => {
@@ -106,7 +140,7 @@ export default function DabanPage() {
     setDismissed((prev) => new Set(prev).add(symbol))
   }
 
-  // Unauthenticated state
+  // Unauthenticated — still allow viewing, just disable accept
   if (isSignedIn === false) {
     return (
       <div className="min-h-full bg-[#0a0e17] flex items-center justify-center">
@@ -124,7 +158,6 @@ export default function DabanPage() {
     )
   }
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-full bg-[#0a0e17] flex items-center justify-center">
@@ -135,10 +168,12 @@ export default function DabanPage() {
 
   const isLockdown = sentiment?.lockdown === true
   const acceptedSymbols = new Set(accepted.map((s) => s.symbol))
-  const visibleSignals = signals.filter(
+
+  const currentSignals = activeTab === "alpha" ? signals : screenSignals
+  const visibleSignals = currentSignals.filter(
     (s) => !dismissed.has(s.symbol) && !acceptedSymbols.has(s.symbol)
   )
-  const allProcessed = visibleSignals.length === 0 && signals.length > 0
+  const allProcessed = visibleSignals.length === 0 && currentSignals.length > 0
 
   return (
     <div className="min-h-full bg-[#0a0e17] text-gray-100">
@@ -148,17 +183,16 @@ export default function DabanPage() {
           <div className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-amber-400" />
             <h1 className="text-xl font-bold text-white">打板决策流</h1>
-            <span className="text-gray-500 text-sm ml-1">Alpha Feed</span>
           </div>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleRefresh}
-            disabled={refreshing}
+            disabled={refreshing || screenLoading}
             className="text-gray-400 hover:text-white hover:bg-white/[0.06]"
           >
             <RefreshCw
-              className={`h-4 w-4 mr-1.5 ${refreshing ? "animate-spin" : ""}`}
+              className={`h-4 w-4 mr-1.5 ${refreshing || screenLoading ? "animate-spin" : ""}`}
             />
             刷新
           </Button>
@@ -228,20 +262,68 @@ export default function DabanPage() {
           </div>
         )}
 
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-1 mb-4 bg-[#0d1117] border border-[#1a2035] rounded-lg p-1 w-fit">
+          <button
+            onClick={() => setActiveTab("screen")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+              activeTab === "screen"
+                ? "bg-amber-500/15 text-amber-400"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            条件选股
+            {screenSignals.length > 0 && (
+              <span className="text-[10px] ml-0.5 opacity-70">({screenSignals.length})</span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("alpha")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+              activeTab === "alpha"
+                ? "bg-amber-500/15 text-amber-400"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            涨幅扫描
+            {signals.length > 0 && (
+              <span className="text-[10px] ml-0.5 opacity-70">({signals.length})</span>
+            )}
+          </button>
+        </div>
+
+        {/* Screen Conditions Bar */}
+        {activeTab === "screen" && screenConditions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mb-4">
+            {screenConditions.map((c) => (
+              <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a2035] text-gray-400 border border-[#2a3045]">
+                {c}
+              </span>
+            ))}
+            {screenTime && (
+              <span className="text-[10px] text-gray-600 ml-2">
+                扫描时间: {screenTime}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Signal Cards Grid */}
         <div className="mb-8">
-          <h2 className="text-sm font-medium text-gray-400 mb-3">
-            打板信号{" "}
-            {signals.length > 0 && (
-              <span className="text-gray-600">({signals.length})</span>
-            )}
-          </h2>
-
-          {signals.length === 0 ? (
+          {screenLoading && activeTab === "screen" ? (
+            <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg py-16 text-center">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-500 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">正在扫描全A股...</p>
+            </div>
+          ) : currentSignals.length === 0 ? (
             <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg py-16 text-center">
               <Zap className="h-8 w-8 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-500 text-sm">
-                当前暂无打板信号，等待盘中扫描...
+                {activeTab === "screen"
+                  ? "当前无符合条件的股票（非交易时段数据可能不完整）"
+                  : "当前暂无打板信号，等待盘中扫描..."}
               </p>
             </div>
           ) : allProcessed ? (
@@ -259,11 +341,23 @@ export default function DabanPage() {
                   key={signal.symbol}
                   className="bg-[#0d1117] border border-[#1a2035] rounded-lg p-4 hover:border-[#2a3045] transition-colors"
                 >
-                  {/* Header: name + code */}
+                  {/* Header: name + code + risk tag */}
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <div className="text-white font-semibold text-base">
-                        {signal.name}
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-semibold text-base">
+                          {signal.name}
+                        </span>
+                        {signal.riskTag && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            signal.riskTag === "高风险追板"
+                              ? "bg-red-500/15 text-red-400"
+                              : "bg-blue-500/15 text-blue-400"
+                          }`}>
+                            <AlertTriangle className="h-2.5 w-2.5 inline mr-0.5" />
+                            {signal.riskTag}
+                          </span>
+                        )}
                       </div>
                       <div className="text-gray-500 text-xs">
                         {signal.symbol}
@@ -293,16 +387,23 @@ export default function DabanPage() {
                   </div>
 
                   {/* Metrics row */}
-                  {signal.volumeRatio > 0 && (
-                    <div className="flex gap-4 text-xs text-gray-400 mb-3">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-3">
+                    {signal.volumeRatio > 0 && (
                       <span>
-                        量比:{" "}
-                        <span className="text-amber-400">
-                          {signal.volumeRatio.toFixed(1)}
-                        </span>
+                        量比: <span className="text-amber-400">{signal.volumeRatio.toFixed(1)}</span>
                       </span>
-                    </div>
-                  )}
+                    )}
+                    {signal.turnoverRate !== undefined && signal.turnoverRate > 0 && (
+                      <span>
+                        换手: <span className="text-cyan-400">{signal.turnoverRate.toFixed(1)}%</span>
+                      </span>
+                    )}
+                    {signal.circulatingMarketCap !== undefined && signal.circulatingMarketCap > 0 && (
+                      <span>
+                        流通: <span className="text-gray-300">{signal.circulatingMarketCap.toFixed(0)}亿</span>
+                      </span>
+                    )}
+                  </div>
 
                   {/* Reason */}
                   <p className="text-xs text-gray-500 mb-4 leading-relaxed">
