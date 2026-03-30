@@ -396,8 +396,11 @@ export async function GET() {
       return b.signalScore - a.signalScore;
     });
 
-    // 只返回非"观察等待"的信号（观察等待太多噪音）
-    const finalSignals = signals.filter((s) => s.signalTag !== "观察等待").slice(0, 15);
+    // 优先返回有信号的（反转萌芽/价值洼地），若全是"观察等待"则保留评分前5
+    const strongSignals = signals.filter((s) => s.signalTag !== "观察等待");
+    const finalSignals = strongSignals.length > 0
+      ? strongSignals.slice(0, 15)
+      : signals.slice(0, 5); // 无强信号时展示评分最高的5只观察标的
 
     const now = new Date();
     const screenTime = now.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
