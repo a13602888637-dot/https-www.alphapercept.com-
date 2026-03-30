@@ -24,6 +24,11 @@ interface PositionAdvice {
   takeProfitStrategy: string
   drawdownExit: number
   strategyLabel: string
+  kellyRaw?: number
+  winRate?: number
+  profitLossRatio?: number
+  sampleSize?: number
+  positionSource: "kelly" | "fixed"
 }
 
 interface AlphaSignal {
@@ -122,6 +127,37 @@ export default function DabanPage() {
     }
   }, [])
 
+  // 从数据库加载已接受的跟踪记录（持久化）
+  const loadAccepted = useCallback(async () => {
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/board-track?limit=50", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.records) {
+          const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" })
+          // 只加载今天和pending状态的记录为"已接受"
+          const todayRecords = data.records.filter(
+            (r: { entryDate: string; trackStatus: string }) =>
+              r.entryDate === today || r.trackStatus === "pending"
+          )
+          setAccepted(todayRecords.map((r: { stockCode: string; stockName: string; entryPrice: number; signalScore?: number }) => ({
+            symbol: r.stockCode,
+            name: r.stockName,
+            currentPrice: r.entryPrice,
+            changePercent: 0,
+            volumeRatio: 0,
+            reason: "",
+          })))
+        }
+      }
+    } catch {
+      // silently fail
+    }
+  }, [getToken])
+
   const fetchStats = useCallback(async () => {
     try {
       const token = await getToken()
@@ -141,8 +177,11 @@ export default function DabanPage() {
     if (isSignedIn === undefined) return
     fetchSignals()
     fetchScreen()
-    if (isSignedIn) fetchStats()
-  }, [isSignedIn, fetchSignals, fetchScreen, fetchStats])
+    if (isSignedIn) {
+      loadAccepted()
+      fetchStats()
+    }
+  }, [isSignedIn, fetchSignals, fetchScreen, loadAccepted, fetchStats])
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -229,6 +268,31 @@ export default function DabanPage() {
       }
     } catch {
       toast.error("网络错误，请重试")
+    }
+  }
+
+  const handleCancelTrack = async (symbol: string) => {
+    try {
+      const token = await getToken()
+      // 从accepted列表中找到并移除
+      setAccepted((prev) => prev.filter((s) => s.symbol !== symbol))
+      // 删除BoardTrack记录（按stockCode查最近的pending记录）
+      const res = await fetch("/api/board-track?" + new URLSearchParams({ limit: "50" }), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const record = data.records?.find((r: { stockCode: string }) => r.stockCode === symbol)
+        if (record) {
+          await fetch(`/api/board-track?id=${record.id}`, {
+            method: "DELETE",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+        }
+      }
+      toast.success("已取消跟踪")
+    } catch {
+      toast.error("取消失败")
     }
   }
 
@@ -860,42 +924,65 @@ export default function DabanPage() {
                   </p>
 
                   {/* Position & Strategy Advice */}
-                  {signal.advice && signal.advice.suggestedPosition > 0 && (
+                  {signal.advice && (
                     <div className="bg-[#0a0e17] rounded-md px-3 py-2 mb-3 space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-500">仓位</span>
-                          <span className={`font-bold ${
-                            signal.advice.suggestedPosition >= 12 ? "text-amber-400" :
-                            signal.advice.suggestedPosition >= 8 ? "text-emerald-400" :
-                            "text-gray-300"
-                          }`}>
-                            {signal.advice.suggestedPosition}%
-                          </span>
+                      {signal.advice.suggestedPosition > 0 ? (
+                        <>
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500">仓位</span>
+                              <span className={`font-bold ${
+                                signal.advice.suggestedPosition >= 12 ? "text-amber-400" :
+                                signal.advice.suggestedPosition >= 8 ? "text-emerald-400" :
+                                "text-gray-300"
+                              }`}>
+                                {signal.advice.suggestedPosition}%
+                              </span>
+                              <span className="text-[9px] text-gray-600">
+                                ({signal.advice.positionSource === "kelly" ? "Kelly" : "固定"})
+                              </span>
+                            </div>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a2035] text-gray-400">
+                              {signal.advice.strategyLabel}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-red-400 font-mono text-[10px]">损{signal.advice.stopLoss}%</span>
+                              <span className="text-orange-400 font-mono text-[10px]">撤{signal.advice.drawdownExit}%</span>
+                            </div>
+                          </div>
+                          {signal.advice.positionSource === "kelly" && signal.advice.winRate != null && (
+                            <div className="flex items-center gap-3 text-[10px] text-gray-600">
+                              <span>胜率{signal.advice.winRate}%</span>
+                              <span>盈亏比{signal.advice.profitLossRatio}</span>
+                              <span>Kelly={signal.advice.kellyRaw}</span>
+                              <span>样本{signal.advice.sampleSize}</span>
+                            </div>
+                          )}
+                          <p className="text-[10px] text-gray-600 leading-relaxed">
+                            {signal.advice.takeProfitStrategy}
+                          </p>
+                        </>
+                      ) : (
+                        <div className="text-[10px] text-red-400/70 text-center py-1">
+                          {signal.advice.positionSource === "kelly"
+                            ? `Kelly≤0 (胜率${signal.advice.winRate ?? "?"}% 盈亏比${signal.advice.profitLossRatio ?? "?"}) — 数学不支持买入`
+                            : "不建议参与"}
                         </div>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a2035] text-gray-400">
-                          {signal.advice.strategyLabel}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-500">止损</span>
-                          <span className="text-red-400 font-mono">{signal.advice.stopLoss}%</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-500">回撤</span>
-                          <span className="text-orange-400 font-mono">{signal.advice.drawdownExit}%</span>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-gray-600 leading-relaxed">
-                        {signal.advice.takeProfitStrategy}
-                      </p>
+                      )}
                     </div>
                   )}
 
                   {/* Action buttons */}
                   <div className="flex gap-2">
                     {acceptedSymbols.has(signal.symbol) ? (
-                      <div className="flex-1 text-center py-1.5 text-xs text-emerald-400/70 bg-emerald-500/5 border border-emerald-500/15 rounded-md">
-                        ✓ 已接受 · 跟踪中
+                      <div className="flex-1 flex items-center justify-center gap-3 py-1.5 text-xs bg-emerald-500/5 border border-emerald-500/15 rounded-md">
+                        <span className="text-emerald-400/70">✓ 已接受 · 跟踪中</span>
+                        <button
+                          onClick={() => handleCancelTrack(signal.symbol)}
+                          className="text-gray-500 hover:text-red-400 transition-colors underline"
+                        >
+                          取消
+                        </button>
                       </div>
                     ) : (
                       <>

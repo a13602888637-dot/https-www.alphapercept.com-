@@ -74,3 +74,34 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+// DELETE: 取消跟踪（删除记录）
+export async function DELETE(req: Request) {
+  try {
+    const clerkUserId = await getAuthUserId(req);
+    if (!clerkUserId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    // 验证记录属于当前用户
+    const record = await prisma.boardTrack.findFirst({
+      where: { id, userId: clerkUserId },
+    });
+    if (!record) {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
+    await prisma.boardTrack.delete({ where: { id } });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("BoardTrack DELETE error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

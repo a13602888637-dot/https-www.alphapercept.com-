@@ -12,7 +12,12 @@ interface PositionAdvice {
   stopLoss: number;           // 止损线 %（负数）
   takeProfitStrategy: string; // 止盈策略描述
   drawdownExit: number;       // 高点回撤离场线 %（负数）
-  strategyLabel: string;      // 策略标签（如 "连板预期" / "快进快出"）
+  strategyLabel: string;      // 策略标签
+  kellyRaw?: number;          // 原始Kelly值（可为负）
+  winRate?: number;            // 胜率 %
+  profitLossRatio?: number;    // 盈亏比
+  sampleSize?: number;         // 样本数
+  positionSource: "kelly" | "fixed"; // 仓位来源
 }
 
 interface ScreenResult {
@@ -202,7 +207,12 @@ async function detectMarketRegime(): Promise<{ regime: MarketRegime; premiumRate
 }
 
 /**
- * 根据信号标签 + 市场环境 + 历史胜率 计算仓位和止盈止损建议
+ * 根据信号标签 + 市场环境 + Kelly公式 计算仓位和止盈止损建议
+ *
+ * Kelly Criterion: f = (b*p - q) / b
+ *   p = 胜率, q = 1-p, b = 盈亏比(avgWin/avgLoss)
+ *   使用半凯利(f/2)降低波动风险
+ *   样本 < 20 时降级为固定仓位表
  */
 async function calculateAdvice(
   signalTag: string,
@@ -210,16 +220,11 @@ async function calculateAdvice(
   regime: MarketRegime,
   premiumRate: number,
 ): Promise<PositionAdvice> {
-  // ─── 基础仓位 ───
+  // ─── 固定仓位表（Kelly降级时使用）───
   const basePosition: Record<string, number> = {
-    "强烈推荐": 15,
-    "爆发打板": 10,
-    "确认上攻": 8,
-    "高风险追板": 5,
-    "大盘股": 5,
-    "疑似诱多": 0,
+    "强烈推荐": 15, "爆发打板": 10, "确认上攻": 8,
+    "高风险追板": 5, "大盘股": 5, "疑似诱多": 0,
   };
-  let position = basePosition[signalTag] ?? 5;
 
   // ─── 情绪系数 ───
   let sentimentMultiplier = 1.0;
@@ -228,26 +233,55 @@ async function calculateAdvice(
   else if (premiumRate >= -2) sentimentMultiplier = 0.5;
   else sentimentMultiplier = 0;
 
-  // ─── 历史胜率系数（从数据库读取） ───
-  let winRateMultiplier = 0.8; // 默认：样本不足时保守
+  // ─── Kelly Criterion 从 BoardTrack 计算 ───
+  let position = basePosition[signalTag] ?? 5;
+  let positionSource: "kelly" | "fixed" = "fixed";
+  let kellyRaw: number | undefined;
+  let winRate: number | undefined;
+  let profitLossRatio: number | undefined;
+  let sampleSize: number | undefined;
+
   try {
     const records = await prisma.boardTrack.findMany({
       where: { signalTag, trackStatus: "tracked" },
       select: { nextDayChange: true },
     });
-    if (records.length >= 10) {
-      const wins = records.filter((r) => r.nextDayChange && Number(r.nextDayChange) > 0).length;
-      const winRate = wins / records.length;
-      if (winRate > 0.6) winRateMultiplier = 1.2;
-      else if (winRate >= 0.5) winRateMultiplier = 1.0;
-      else if (winRate >= 0.4) winRateMultiplier = 0.7;
-      else winRateMultiplier = 0.5;
+    sampleSize = records.length;
+
+    if (records.length >= 20) {
+      const changes = records.map((r) => Number(r.nextDayChange ?? 0));
+      const wins = changes.filter((c) => c > 0);
+      const losses = changes.filter((c) => c < 0);
+
+      const p = wins.length / changes.length;
+      const q = 1 - p;
+      const avgWin = wins.length > 0 ? wins.reduce((a, b) => a + b, 0) / wins.length : 0;
+      const avgLoss = losses.length > 0 ? Math.abs(losses.reduce((a, b) => a + b, 0) / losses.length) : 1;
+      const b = avgLoss > 0 ? avgWin / avgLoss : 0;
+
+      // Kelly: f* = (b*p - q) / b
+      const kelly = b > 0 ? (b * p - q) / b : -1;
+      const halfKelly = kelly / 2;
+
+      kellyRaw = Math.round(kelly * 1000) / 1000;
+      winRate = Math.round(p * 1000) / 10;
+      profitLossRatio = Math.round(b * 100) / 100;
+
+      if (kelly <= 0) {
+        // 数学告诉你：别买
+        position = 0;
+        positionSource = "kelly";
+      } else {
+        position = Math.round(Math.min(20, halfKelly * 100) * 10) / 10;
+        positionSource = "kelly";
+      }
     }
   } catch {
-    // DB error → keep default
+    // DB error → keep fixed table
   }
 
-  position = Math.round(Math.min(20, position * sentimentMultiplier * winRateMultiplier) * 10) / 10;
+  // 应用情绪系数
+  position = Math.round(Math.min(20, position * sentimentMultiplier) * 10) / 10;
 
   // ─── 止损线（根据市场环境调整）───
   const stopLossTable: Record<string, Record<MarketRegime, number>> = {
@@ -303,6 +337,11 @@ async function calculateAdvice(
     takeProfitStrategy: strategy.desc,
     drawdownExit,
     strategyLabel: strategy.label,
+    kellyRaw,
+    winRate,
+    profitLossRatio,
+    sampleSize,
+    positionSource,
   };
 }
 
