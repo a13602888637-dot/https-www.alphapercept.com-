@@ -14,6 +14,10 @@ import {
   BarChart3,
   LogIn,
   Filter,
+  ChevronDown,
+  ChevronUp,
+  Target,
+  Activity,
 } from "lucide-react"
 
 interface AlphaSignal {
@@ -35,6 +39,32 @@ interface SentimentData {
   lockdown: boolean
 }
 
+interface TagStats {
+  tag: string
+  total: number
+  tracked: number
+  wins: number
+  losses: number
+  winRate: number
+  avgReturn: number
+  maxReturn: number
+  maxLoss: number
+}
+
+interface BoardStats {
+  overall: TagStats
+  byTag: TagStats[]
+  recentTracked: Array<{
+    stockCode: string
+    stockName: string
+    signalTag: string
+    entryPrice: number
+    nextDayChange: number
+    entryDate: string
+  }>
+  pendingCount: number
+}
+
 type TabType = "alpha" | "screen"
 
 export default function DabanPage() {
@@ -49,6 +79,9 @@ export default function DabanPage() {
   const [activeTab, setActiveTab] = useState<TabType>("screen")
   const [screenTime, setScreenTime] = useState("")
   const [screenConditions, setScreenConditions] = useState<string[]>([])
+  const [showLogic, setShowLogic] = useState(false)
+  const [boardStats, setBoardStats] = useState<BoardStats | null>(null)
+  const [showStats, setShowStats] = useState(false)
   const { isSignedIn, getToken } = useAuth()
 
   const fetchSignals = useCallback(async () => {
@@ -82,11 +115,27 @@ export default function DabanPage() {
     }
   }, [])
 
+  const fetchStats = useCallback(async () => {
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/board-track/stats", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) setBoardStats(data)
+      }
+    } catch {
+      // silently fail
+    }
+  }, [getToken])
+
   useEffect(() => {
     if (isSignedIn === undefined) return
     fetchSignals()
     fetchScreen()
-  }, [isSignedIn, fetchSignals, fetchScreen])
+    if (isSignedIn) fetchStats()
+  }, [isSignedIn, fetchSignals, fetchScreen, fetchStats])
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -145,6 +194,21 @@ export default function DabanPage() {
         }).catch(() => {
           toast.success(`已接受: ${signal.name}`)
         })
+        // 保存打板跟踪记录
+        fetch("/api/board-track", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            stockCode: signal.symbol,
+            stockName: signal.name,
+            entryPrice: signal.currentPrice,
+            signalTag: signal.riskTag || "未分类",
+            signalScore: signal.signalScore || 0,
+          }),
+        }).catch(() => {})
       } else {
         const errData = await res.json().catch(() => ({}))
         const msg = errData.error || `HTTP ${res.status}`
@@ -331,6 +395,200 @@ export default function DabanPage() {
               <span className="text-[10px] text-gray-600 ml-2">
                 扫描时间: {screenTime}
               </span>
+            )}
+          </div>
+        )}
+
+        {/* Logic Whitebox + Stats Toggle */}
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            onClick={() => setShowLogic(!showLogic)}
+            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            {showLogic ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            逻辑白盒
+          </button>
+          <span className="text-gray-700">|</span>
+          <button
+            onClick={() => { setShowStats(!showStats); if (!boardStats) fetchStats() }}
+            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            <Activity className="h-3 w-3" />
+            胜率跟踪{boardStats?.overall.tracked ? ` (${boardStats.overall.tracked})` : ""}
+          </button>
+        </div>
+
+        {/* Logic Whitebox Panel */}
+        {showLogic && (
+          <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg p-4 mb-5 text-xs space-y-3">
+            <h3 className="text-gray-300 font-medium text-sm mb-2">选股逻辑清单（白盒化）</h3>
+
+            <div className="space-y-2">
+              <div className="text-gray-400 font-medium">一、基础筛选</div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-gray-500 pl-3">
+                <span>涨跌幅 &gt; 3%</span>
+                <span>流通市值 &gt; 50亿</span>
+                <span>量比 &gt; 1.5（放量确认）</span>
+                <span>换手率 5%~10%（活跃度）</span>
+                <span>排除 ST / *ST / 退市股</span>
+                <span>排除 920 新股板块</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-gray-400 font-medium">二、技术面验证</div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-gray-500 pl-3">
+                <span>价格 &gt; MA5 &gt; MA10 &gt; MA20（多头排列）</span>
+                <span>价格 &gt; VWAP（均价线上方）</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-amber-400/80 font-medium">三、疑似诱多检测 ⚠️</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>尾盘急拉：开盘涨幅&lt;1%，但尾盘贡献&gt;60%涨幅</div>
+                <div>振幅异常：振幅&gt;涨幅×2.5 且 &gt;5%</div>
+                <div>盘中破昨收：最低价跌破昨收，但收盘涨&gt;3%</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-emerald-400/80 font-medium">四、确认上攻 ✅</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>量比≥2.0（显著放量）</div>
+                <div>换手率 3~8%（活跃不过度）</div>
+                <div>开盘涨幅≥0.5%（不是低开拉升）</div>
+                <div>最低价不跌破昨收（无恐慌抛压）</div>
+                <div>振幅&lt;涨幅×2（走势平稳）</div>
+                <div>价格 &gt; MA5 &gt; MA10 &gt; MA20（严格多头排列）</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-purple-400/80 font-medium">五、爆发打板 ⚡</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div>涨幅≥9%（涨停级别）</div>
+                <div>流通市值 50~300亿（游资偏好中盘）</div>
+                <div>量比≥2.5（资金集中涌入）</div>
+                <div>最低价不跌破昨收（封板力度强）</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-amber-300 font-medium">六、强烈推荐 🔥 = 确认上攻 ∩ 爆发打板</div>
+              <div className="text-gray-500 pl-3">同时满足第四、五条所有条件</div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-gray-400 font-medium">七、综合评分（0-100）</div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-gray-500 pl-3">
+                <span>涨幅贡献 0~25分</span>
+                <span>量比贡献 0~20分</span>
+                <span>换手率适中度 0~15分</span>
+                <span>开盘强度 0~15分</span>
+                <span>均线多头排列 0~15分</span>
+                <span>走势平稳度 0~10分</span>
+              </div>
+            </div>
+
+            <div className="border-t border-[#1a2035] pt-2 text-gray-600">
+              排序：🔥强烈推荐 &gt; ⚡爆发打板 &gt; ✅确认上攻 &gt; 普通 &gt; ⚠️疑似诱多 · 同级按评分降序
+            </div>
+          </div>
+        )}
+
+        {/* Win Rate Stats Panel */}
+        {showStats && boardStats && (
+          <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg p-4 mb-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-gray-300 font-medium text-sm flex items-center gap-1.5">
+                <Target className="h-4 w-4 text-amber-400" />
+                打板胜率跟踪
+              </h3>
+              {boardStats.pendingCount > 0 && (
+                <span className="text-[10px] text-gray-500">
+                  {boardStats.pendingCount} 只待跟踪
+                </span>
+              )}
+            </div>
+
+            {/* Overall stats */}
+            <div className="grid grid-cols-4 gap-3">
+              <div className="text-center">
+                <div className="text-xl font-bold text-white">{boardStats.overall.tracked}</div>
+                <div className="text-[10px] text-gray-500">已跟踪</div>
+              </div>
+              <div className="text-center">
+                <div className={`text-xl font-bold ${boardStats.overall.winRate >= 50 ? "text-emerald-400" : "text-red-400"}`}>
+                  {boardStats.overall.winRate}%
+                </div>
+                <div className="text-[10px] text-gray-500">总胜率</div>
+              </div>
+              <div className="text-center">
+                <div className={`text-xl font-bold ${boardStats.overall.avgReturn >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {boardStats.overall.avgReturn >= 0 ? "+" : ""}{boardStats.overall.avgReturn}%
+                </div>
+                <div className="text-[10px] text-gray-500">平均收益</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-white">
+                  {boardStats.overall.wins}<span className="text-gray-600">/</span>{boardStats.overall.losses}
+                </div>
+                <div className="text-[10px] text-gray-500">胜/负</div>
+              </div>
+            </div>
+
+            {/* By tag breakdown */}
+            {boardStats.byTag.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">按信号类型</div>
+                {boardStats.byTag.map((t) => (
+                  <div key={t.tag} className="flex items-center justify-between text-xs py-1.5 border-b border-[#1a2035] last:border-0">
+                    <span className={`font-medium ${
+                      t.tag === "强烈推荐" ? "text-amber-300" :
+                      t.tag === "爆发打板" ? "text-purple-300" :
+                      t.tag === "确认上攻" ? "text-emerald-300" :
+                      t.tag === "疑似诱多" ? "text-yellow-400" :
+                      "text-gray-400"
+                    }`}>
+                      {t.tag}
+                    </span>
+                    <div className="flex items-center gap-4 text-gray-400">
+                      <span>{t.tracked}次</span>
+                      <span className={t.winRate >= 50 ? "text-emerald-400" : "text-red-400"}>
+                        胜率{t.winRate}%
+                      </span>
+                      <span className={t.avgReturn >= 0 ? "text-emerald-400" : "text-red-400"}>
+                        均收{t.avgReturn >= 0 ? "+" : ""}{t.avgReturn}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Recent tracked */}
+            {boardStats.recentTracked.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">最近跟踪</div>
+                {boardStats.recentTracked.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs py-1 text-gray-400">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-300">{r.stockName}</span>
+                      <span className="text-gray-600">{r.entryDate}</span>
+                    </div>
+                    <span className={r.nextDayChange >= 0 ? "text-emerald-400" : "text-red-400"}>
+                      {r.nextDayChange >= 0 ? "+" : ""}{r.nextDayChange.toFixed(2)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {boardStats.overall.tracked === 0 && (
+              <div className="text-center py-4 text-gray-500 text-xs">
+                暂无跟踪数据，接受打板信号后次日自动跟踪
+              </div>
             )}
           </div>
         )}

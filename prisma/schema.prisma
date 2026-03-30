@@ -202,6 +202,33 @@ model PostLike {
   @@unique([userId, postId])
 }
 
+// 打板跟踪：记录每次接受的打板信号 + 次日表现
+model BoardTrack {
+  id            String   @id @default(cuid())
+  userId        String
+  stockCode     String
+  stockName     String
+  signalTag     String   // "强烈推荐" | "爆发打板" | "确认上攻" | "高风险追板" | etc.
+  signalScore   Int      @default(0)
+  entryPrice    Decimal  // 接受时的价格
+  entryDate     String   // YYYY-MM-DD 接受日期
+
+  // 次日跟踪结果 (cron填充)
+  nextDayPrice    Decimal? // 次日收盘价
+  nextDayChange   Decimal? // 次日涨跌幅%
+  nextDayHigh     Decimal? // 次日最高价
+  nextDayLow      Decimal? // 次日最低价
+  trackStatus     String   @default("pending") // "pending" | "tracked" | "failed"
+  trackedAt       DateTime?
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([trackStatus])
+  @@index([entryDate])
+  @@index([signalTag])
+}
+
 model ScreenCache {
   id        String   @id @default("latest_screen")
   data      Json     // { signals, sentiment, screenTime, conditions }
