@@ -121,8 +121,30 @@ export default function DabanPage() {
         }),
       })
       if (res.ok) {
-        toast.success(`已接受: ${signal.name} (${signal.symbol})`)
         setAccepted((prev) => [...prev, signal])
+        // 同时加入自选股（忽略 409 重复）
+        fetch("/api/watchlist", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            stockCode: signal.symbol,
+            stockName: signal.name,
+            buyPrice: signal.currentPrice,
+          }),
+        }).then((r) => {
+          if (r.ok) {
+            toast.success(`已接受并加入自选股: ${signal.name}`)
+          } else if (r.status === 409) {
+            toast.success(`已接受: ${signal.name}（自选股中已存在）`)
+          } else {
+            toast.success(`已接受: ${signal.name}`)
+          }
+        }).catch(() => {
+          toast.success(`已接受: ${signal.name}`)
+        })
       } else {
         const errData = await res.json().catch(() => ({}))
         const msg = errData.error || `HTTP ${res.status}`
