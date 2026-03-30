@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchMultipleStocks, MarketData } from "@/skills/data_crawler";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -210,12 +211,53 @@ async function handleRequest(): Promise<NextResponse<AlphaFeedResponse>> {
 
     const finalSignals = sentiment.lockdown ? [] : signals;
 
-    return NextResponse.json({
+    const result: AlphaFeedResponse = {
       success: true,
       signals: finalSignals,
       sentiment,
-    });
+    };
+
+    // Cache when we have real signals
+    if (finalSignals.length > 0) {
+      const tradeDate = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+      try {
+        await prisma.screenCache.upsert({
+          where: { id: "latest_daily" },
+          update: { data: result as unknown as Record<string, unknown>, tradeDate },
+          create: { id: "latest_daily", data: result as unknown as Record<string, unknown>, tradeDate },
+        });
+      } catch {
+        // Ignore cache errors
+      }
+    }
+
+    // If no signals, try cache
+    if (finalSignals.length === 0) {
+      try {
+        const cached = await prisma.screenCache.findUnique({ where: { id: "latest_daily" } });
+        if (cached?.data) {
+          const cachedData = cached.data as unknown as AlphaFeedResponse;
+          return NextResponse.json({
+            ...cachedData,
+            success: true,
+          });
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    return NextResponse.json(result);
   } catch {
+    // On error, try cache
+    try {
+      const cached = await prisma.screenCache.findUnique({ where: { id: "latest_daily" } });
+      if (cached?.data) {
+        return NextResponse.json(cached.data as unknown as AlphaFeedResponse);
+      }
+    } catch {
+      // Ignore
+    }
     return NextResponse.json({
       success: false,
       signals: [],

@@ -201,3 +201,11 @@ model PostLike {
 
   @@unique([userId, postId])
 }
+
+model ScreenCache {
+  id        String   @id @default("latest_screen")
+  data      Json     // { signals, sentiment, screenTime, conditions }
+  tradeDate String   // YYYY-MM-DD
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

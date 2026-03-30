@@ -1,35 +1,10 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-const isPublicRoute = createRouteMatcher([
-  "/",
-  "/api/webhooks/clerk",
-  "/api/stock-prices(.*)",
-  "/api/stock-price-history(.*)",
-  "/api/stocks/search(.*)",
-  "/api/intelligence-feed(.*)",
-  "/api/analyze-watchlist(.*)",
-  "/api/strategy-recommendation(.*)",
-  "/api/global-macro(.*)",
-  "/api/news-feed(.*)",
-  "/api/geoconflict(.*)",
-  "/api/maritime(.*)",
-  "/api/aviation(.*)",
-  "/api/ai/situation-analysis(.*)",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/ai-inference-demo",
-  "/market-pulse-test",
-  "/ai-inference-test",
-  "/watchlist",
-  "/test",
-  "/daban",
-]);
-
-export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
-  }
-});
+// Use clerkMiddleware() without callback — it injects auth context for all routes.
+// Each API route handler checks auth() itself and returns proper 401 errors.
+// This avoids the "auth() can't detect clerkMiddleware()" issue that occurs
+// with the callback pattern on Vercel serverless.
+export default clerkMiddleware();
 
 export const config = {
   matcher: [

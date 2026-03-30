@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -154,21 +155,35 @@ export async function GET() {
     // Get first 200 stocks with positive change to have a good candidate pool
     const { stocks, total } = await fetchEastMoneyStockList(1, 200);
 
-    // Step 2: Apply basic filters (server-side)
+    // Detect off-hours: if most stocks have 0 change or no valid data
+    const validStocks = stocks.filter(
+      (s) => s.currentPrice > 0 && s.changePercent !== 0 && !s.symbol.startsWith("920")
+    );
+    const isOffHours = validStocks.length < 10;
+
+    // Step 2: Apply filters — relaxed during off-hours to show last session data
     const candidates = stocks.filter((s) => {
       // Exclude ST stocks
       if (s.name.includes("ST") || s.name.includes("*ST") || s.name.includes("退")) return false;
-      // Exclude new stocks (code starting with 920 etc.)
+      // Exclude new board stocks
       if (s.symbol.startsWith("920")) return false;
-      // changePercent > 3%
-      if (s.changePercent < 3) return false;
-      // circulatingMarketCap > 50亿 (API returns in yuan)
-      const capInYi = s.circulatingMarketCap / 1e8;
-      if (capInYi < 50) return false;
-      // volumeRatio > 1.5
-      if (s.volumeRatio < 1.5) return false;
-      // turnoverRate > 5% and < 10%
-      if (s.turnoverRate < 5 || s.turnoverRate > 10) return false;
+      // Must have valid price data
+      if (s.currentPrice <= 0) return false;
+
+      if (isOffHours) {
+        // Off-hours: show stocks with changePercent >= 2% as reference
+        if (Math.abs(s.changePercent) < 2) return false;
+        // Still require reasonable market cap
+        const capInYi = s.circulatingMarketCap / 1e8;
+        if (capInYi < 30) return false;
+      } else {
+        // Trading hours: full conditions
+        if (s.changePercent < 3) return false;
+        const capInYi = s.circulatingMarketCap / 1e8;
+        if (capInYi < 50) return false;
+        if (s.volumeRatio < 1.5) return false;
+        if (s.turnoverRate < 5 || s.turnoverRate > 10) return false;
+      }
 
       return true;
     });
@@ -186,15 +201,17 @@ export async function GET() {
       const maResult = maResults[i];
       const ma = maResult.status === "fulfilled" ? maResult.value : null;
 
-      // MA check: price must be above all 3 MAs (if available)
-      if (ma) {
-        if (ma.ma5 > 0 && stock.currentPrice <= ma.ma5) continue;
-        if (ma.ma10 > 0 && stock.currentPrice <= ma.ma10) continue;
-        if (ma.ma20 > 0 && stock.currentPrice <= ma.ma20) continue;
+      // MA check: price must be above all 3 MAs (if available) — skip during off-hours
+      let maPass = true;
+      if (ma && !isOffHours) {
+        if (ma.ma5 > 0 && stock.currentPrice <= ma.ma5) maPass = false;
+        if (ma.ma10 > 0 && stock.currentPrice <= ma.ma10) maPass = false;
+        if (ma.ma20 > 0 && stock.currentPrice <= ma.ma20) maPass = false;
       }
+      if (!maPass) continue;
 
-      // VWAP check: estimate VWAP = amount / volume / 100 (volume in lots of 100)
-      if (stock.volume > 0 && stock.amount > 0) {
+      // VWAP check — skip during off-hours (volume data unreliable)
+      if (!isOffHours && stock.volume > 0 && stock.amount > 0) {
         const vwap = stock.amount / (stock.volume * 100);
         if (stock.currentPrice <= vwap) continue;
       }
@@ -285,15 +302,77 @@ export async function GET() {
       "尾盘诱多检测",
     ];
 
-    return NextResponse.json({
+    const finalSignals = signals.slice(0, 20);
+    const now = new Date();
+    const screenTime = now.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+
+    const result: ScreenResponse = {
       success: true,
-      signals: signals.slice(0, 20),
-      screenTime: new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }),
+      signals: finalSignals,
+      screenTime,
       totalScanned: total,
       conditions,
-    } satisfies ScreenResponse);
+    };
+
+    // Cache results to DB when we have valid data (trading hours)
+    if (!isOffHours && finalSignals.length > 0) {
+      const tradeDate = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" }); // YYYY-MM-DD
+      try {
+        await prisma.screenCache.upsert({
+          where: { id: "latest_screen" },
+          update: {
+            data: result as unknown as Record<string, unknown>,
+            tradeDate,
+          },
+          create: {
+            id: "latest_screen",
+            data: result as unknown as Record<string, unknown>,
+            tradeDate,
+          },
+        });
+      } catch (cacheErr) {
+        console.error("Screen cache write error:", cacheErr);
+      }
+    }
+
+    // If off-hours and no signals, try returning cached data
+    if (isOffHours && finalSignals.length === 0) {
+      try {
+        const cached = await prisma.screenCache.findUnique({
+          where: { id: "latest_screen" },
+        });
+        if (cached?.data) {
+          const cachedData = cached.data as unknown as ScreenResponse;
+          return NextResponse.json({
+            ...cachedData,
+            screenTime: `${cached.tradeDate} 缓存 (最近交易日)`,
+          });
+        }
+      } catch {
+        // Ignore cache read errors
+      }
+    }
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Screen API error:", error);
+
+    // On error, also try returning cached data
+    try {
+      const cached = await prisma.screenCache.findUnique({
+        where: { id: "latest_screen" },
+      });
+      if (cached?.data) {
+        const cachedData = cached.data as unknown as ScreenResponse;
+        return NextResponse.json({
+          ...cachedData,
+          screenTime: `${cached.tradeDate} 缓存 (最近交易日)`,
+        });
+      }
+    } catch {
+      // Ignore
+    }
+
     return NextResponse.json({
       success: false,
       signals: [],
