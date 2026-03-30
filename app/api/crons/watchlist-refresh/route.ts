@@ -98,6 +98,40 @@ async function fetchOHLC(
   return null;
 }
 
+/**
+ * 批量获取实时报价
+ */
+async function fetchRealtimeQuotes(codes: string[]): Promise<Map<string, number>> {
+  const priceMap = new Map<string, number>();
+  for (let i = 0; i < codes.length; i += 50) {
+    const batch = codes.slice(i, i + 50);
+    const secids = batch.map((code) => {
+      const secid = toSecid(code);
+      return secid || `1.${code}`;
+    });
+    try {
+      const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?secids=${secids.join(",")}&fields=f2,f12`;
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0", Referer: "https://data.eastmoney.com/" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const diff = json?.data?.diff;
+        if (Array.isArray(diff)) {
+          for (const item of diff) {
+            const code = String(item.f12 ?? "");
+            if (code && typeof item.f2 === "number" && item.f2 > 0) {
+              priceMap.set(code, Number(item.f2));
+            }
+          }
+        }
+      }
+    } catch { /* ignore quote errors */ }
+  }
+  return priceMap;
+}
+
 export async function POST(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -116,6 +150,12 @@ export async function POST(req: Request) {
     if (items.length === 0) {
       return NextResponse.json({ success: true, message: "No items to refresh", refreshed: 0 });
     }
+
+    // 批量获取实时报价
+    const aCodes = items
+      .map((it) => it.stockCode.trim())
+      .filter((c) => !/^[A-Za-z]/.test(c));
+    const realtimePrices = await fetchRealtimeQuotes(aCodes);
 
     let refreshed = 0;
     let skipped = 0;
@@ -143,7 +183,6 @@ export async function POST(req: Request) {
         slParams = { atrMultiplier: 3, atrPeriod: 14 };
         tpMethod = "trailing";
         tpParams = { trailPercent: 5 };
-        // 写入默认方法到 DB
         try {
           await prisma.watchlist.update({
             where: { id: item.id },
@@ -171,7 +210,10 @@ export async function POST(req: Request) {
         const ohlcResult = await fetchOHLC(item.stockCode, maxPeriod + 1);
         const ohlcData = ohlcResult?.ohlcData ?? [];
         const frequency = ohlcResult?.frequency ?? "daily";
-        const currentPrice = ohlcResult?.currentPrice ?? buyPrice;
+        // 优先用实时报价，降级到K线收盘，再降级到买入价
+        const realtimePrice = realtimePrices.get(item.stockCode.trim());
+        const klineClose = ohlcResult?.currentPrice;
+        const currentPrice = realtimePrice ?? klineClose ?? buyPrice;
         const cachedAtr = item.cachedAtr ? item.cachedAtr.toNumber() : undefined;
         const existingHWM = item.highWaterMark ? item.highWaterMark.toNumber() : buyPrice;
 
