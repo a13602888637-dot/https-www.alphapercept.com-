@@ -256,15 +256,26 @@ export async function GET() {
 
     const isOffHours = allStocks.filter((s) => s.currentPrice > 0 && s.changePercent !== 0).length < 10;
 
-    // 硬过滤
+    // 硬过滤（非交易时段放宽条件）
     const layer1Candidates = allStocks.filter((s) => {
       if (s.name.includes("ST") || s.name.includes("*ST") || s.name.includes("退")) return false;
       if (s.symbol.startsWith("920")) return false;
       if (s.currentPrice <= 0) return false;
-      if (s.pe < 5 || s.pe > 25) return false;
-      if (s.pb >= 3.0 || s.pb <= 0) return false;
-      const capYi = s.circulatingMarketCap / 1e8;
-      if (capYi < 100) return false;
+
+      if (isOffHours) {
+        // 非交易时段: 放宽PE/PB/市值，避免数据不完整导致全部被过滤
+        if (s.pe < 3 || s.pe > 40) return false;
+        // PB=999 说明数据缺失("-")，非交易时段允许通过
+        if (s.pb !== 999 && (s.pb >= 5.0 || s.pb <= 0)) return false;
+        const capYi = s.circulatingMarketCap / 1e8;
+        if (capYi < 50) return false;
+      } else {
+        // 交易时段: 严格过滤
+        if (s.pe < 5 || s.pe > 25) return false;
+        if (s.pb >= 3.0 || s.pb <= 0) return false;
+        const capYi = s.circulatingMarketCap / 1e8;
+        if (capYi < 100) return false;
+      }
       return true;
     });
 
@@ -389,20 +400,31 @@ export async function GET() {
       screenTime,
       totalScanned: allStocks.length,
       layer1Count: layer1Candidates.length,
-      conditions: [
-        "PE 5~25",
-        "PB < 3.0",
-        "流通市值>100亿",
-        "排除ST/退市",
-        "RSI(14)超卖检测",
-        "地量(20日<120日×40%)",
-        "250日乖离率",
-        "MACD底背离",
-        "反转触发检测",
-      ],
+      conditions: isOffHours
+        ? [
+            "PE 3~40 (非交易时段放宽)",
+            "PB < 5.0 (非交易时段放宽)",
+            "流通市值>50亿 (非交易时段放宽)",
+            "排除ST/退市",
+            "RSI(14)超卖检测",
+            "地量检测",
+            "MACD底背离",
+            "反转触发检测",
+          ]
+        : [
+            "PE 5~25",
+            "PB < 3.0",
+            "流通市值>100亿",
+            "排除ST/退市",
+            "RSI(14)超卖检测",
+            "地量(20日<120日×40%)",
+            "250日乖离率",
+            "MACD底背离",
+            "反转触发检测",
+          ],
     };
 
-    // 缓存
+    // 交易时段有信号时写入缓存
     if (!isOffHours && finalSignals.length > 0) {
       const tradeDate = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
       try {
@@ -414,8 +436,8 @@ export async function GET() {
       } catch { /* ignore cache errors */ }
     }
 
-    // 非交易时段读缓存
-    if (isOffHours && finalSignals.length === 0) {
+    // 无信号时读缓存兜底（非交易时段 或 交易时段也可能因数据问题无信号）
+    if (finalSignals.length === 0) {
       try {
         const cached = await prisma.screenCache.findUnique({ where: { id: "latest_left_side" } });
         if (cached?.data) {

@@ -246,7 +246,7 @@ export default function DabanPage() {
       })
       if (res.ok) {
         setAccepted((prev) => [...prev, signal])
-        // 同时加入自选股（忽略 409 重复）
+        // 同时加入自选股（带默认止盈止损配置）+ 自动recalculate
         fetch("/api/watchlist", {
           method: "POST",
           headers: {
@@ -257,10 +257,38 @@ export default function DabanPage() {
             stockCode: signal.symbol,
             stockName: signal.name,
             buyPrice: signal.currentPrice,
+            stopLossMethod: "atr",
+            stopLossParams: { atrMultiplier: 3, atrPeriod: 14 },
+            takeProfitMethod: "trailing",
+            takeProfitParams: { trailPercent: 5 },
+            highWaterMark: signal.currentPrice,
           }),
-        }).then((r) => {
+        }).then(async (r) => {
           if (r.ok) {
-            toast.success(`已接受并加入自选股: ${signal.name}`)
+            const data = await r.json()
+            toast.success(`已接受并加入自选股: ${signal.name}（自动计算止盈止损）`)
+            // 自动触发止盈止损计算
+            if (data.item?.id) {
+              fetch("/api/watchlist/recalculate", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ ids: [data.item.id] }),
+              }).then(async (recalcRes) => {
+                if (recalcRes.ok) {
+                  const recalcData = await recalcRes.json()
+                  const result = recalcData.results?.[0]
+                  if (result?.stopLossPrice && result?.targetPrice) {
+                    toast.success(
+                      `${signal.name} 止损¥${Number(result.stopLossPrice).toFixed(2)} 止盈¥${Number(result.targetPrice).toFixed(2)}`,
+                      { duration: 5000 }
+                    )
+                  }
+                }
+              }).catch(() => {})
+            }
           } else if (r.status === 409) {
             toast.success(`已接受: ${signal.name}（自选股中已存在）`)
           } else {

@@ -12,6 +12,10 @@
     {
       "path": "/api/crons/board-track",
       "schedule": "30 7 * * 1-5"
+    },
+    {
+      "path": "/api/crons/watchlist-refresh",
+      "schedule": "45 7 * * 1-5"
     }
   ]
 }
