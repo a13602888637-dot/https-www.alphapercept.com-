@@ -15,9 +15,7 @@ import {
   LogIn,
   Filter,
   ChevronDown,
-  ChevronUp,
   Target,
-  Activity,
 } from "lucide-react"
 
 interface AlphaSignal {
@@ -273,18 +271,38 @@ export default function DabanPage() {
             <Zap className="h-5 w-5 text-amber-400" />
             <h1 className="text-xl font-bold text-white">打板决策流</h1>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={refreshing || screenLoading}
-            className="text-gray-400 hover:text-white hover:bg-white/[0.06]"
-          >
-            <RefreshCw
-              className={`h-4 w-4 mr-1.5 ${refreshing || screenLoading ? "animate-spin" : ""}`}
-            />
-            刷新
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowLogic(!showLogic)}
+              className={`text-xs ${showLogic ? "text-amber-400 bg-amber-500/10" : "text-gray-400 hover:text-white hover:bg-white/[0.06]"}`}
+            >
+              <ChevronDown className={`h-3.5 w-3.5 mr-1 transition-transform ${showLogic ? "rotate-180" : ""}`} />
+              逻辑白盒
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setShowStats(!showStats); if (!boardStats) fetchStats() }}
+              className={`text-xs ${showStats ? "text-emerald-400 bg-emerald-500/10" : "text-gray-400 hover:text-white hover:bg-white/[0.06]"}`}
+            >
+              <Target className="h-3.5 w-3.5 mr-1" />
+              胜率跟踪{boardStats?.overall.tracked ? ` (${boardStats.overall.tracked})` : ""}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing || screenLoading}
+              className="text-gray-400 hover:text-white hover:bg-white/[0.06]"
+            >
+              <RefreshCw
+                className={`h-4 w-4 mr-1.5 ${refreshing || screenLoading ? "animate-spin" : ""}`}
+              />
+              刷新
+            </Button>
+          </div>
         </div>
 
         {/* Sentiment Panel */}
@@ -398,25 +416,6 @@ export default function DabanPage() {
             )}
           </div>
         )}
-
-        {/* Logic Whitebox + Stats Toggle */}
-        <div className="flex items-center gap-2 mb-4">
-          <button
-            onClick={() => setShowLogic(!showLogic)}
-            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            {showLogic ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            逻辑白盒
-          </button>
-          <span className="text-gray-700">|</span>
-          <button
-            onClick={() => { setShowStats(!showStats); if (!boardStats) fetchStats() }}
-            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            <Activity className="h-3 w-3" />
-            胜率跟踪{boardStats?.overall.tracked ? ` (${boardStats.overall.tracked})` : ""}
-          </button>
-        </div>
 
         {/* Logic Whitebox Panel */}
         {showLogic && (
