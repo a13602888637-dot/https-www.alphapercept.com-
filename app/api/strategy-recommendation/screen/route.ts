@@ -377,18 +377,23 @@ export async function GET() {
       if (s.currentPrice <= 0) return false;
 
       if (isOffHours) {
-        // Off-hours: show stocks with changePercent >= 2% as reference
         if (Math.abs(s.changePercent) < 2) return false;
-        // Still require reasonable market cap
         const capInYi = s.circulatingMarketCap / 1e8;
         if (capInYi < 30) return false;
       } else {
-        // Trading hours: full conditions
         if (s.changePercent < 3) return false;
         const capInYi = s.circulatingMarketCap / 1e8;
         if (capInYi < 50) return false;
         if (s.volumeRatio < 1.5) return false;
-        if (s.turnoverRate < 5 || s.turnoverRate > 10) return false;
+        if (s.turnoverRate < 3 || s.turnoverRate > 15) return false;
+
+        // ═══ 新增: 涨停封死排除 — 买不到的股票不推荐 ═══
+        if (s.prevClose > 0 && s.currentPrice >= s.prevClose * 1.097) return false;
+
+        // ═══ 新增: 炸板检测 — 冲击涨停但回落,说明抛压重 ═══
+        if (s.prevClose > 0 && s.highPrice >= s.prevClose * 1.097 && s.currentPrice < s.highPrice * 0.97) {
+          // 冲板后回落超3%, 标记为高风险(不过滤, 让后面标诱多)
+        }
       }
 
       return true;
@@ -446,6 +451,11 @@ export async function GET() {
           isTrap = true;
           trapReason = `盘中跌破昨收${stock.prevClose.toFixed(2)}，尾盘强拉`;
         }
+        // ═══ 新增: 炸板检测 — 冲击涨停但回落 ═══
+        if (stock.highPrice >= stock.prevClose * 1.097 && stock.currentPrice < stock.highPrice * 0.97) {
+          isTrap = true;
+          trapReason = `炸板回落: 最高${stock.highPrice.toFixed(2)}→现${stock.currentPrice.toFixed(2)}，封板失败抛压重`;
+        }
       }
 
       // Skip trapped stocks or mark them
@@ -468,12 +478,12 @@ export async function GET() {
         if (stock.volumeRatio < 2.0) return false;
         // 换手率在合理区间（3-8%，活跃但不过度换手）
         if (stock.turnoverRate < 3 || stock.turnoverRate > 8) return false;
-        // 开盘就强势（开盘涨幅 > 0.5%，不是低开拉升）
-        if (openChangePercent < 0.5) return false;
+        // 开盘就强势（开盘涨幅 > 1%，比之前0.5%更严格，低开拉升次日回落概率高）
+        if (openChangePercent < 1) return false;
         // 全天稳步上攻：最低价不跌破昨收（没有恐慌抛压）
         if (stock.lowPrice < stock.prevClose) return false;
-        // 振幅合理（< 涨幅的2倍，走势平稳不是过山车）
-        if (stock.amplitude > stock.changePercent * 2) return false;
+        // 振幅合理（< 涨幅的1.8倍，走势更平稳）
+        if (stock.amplitude > stock.changePercent * 1.8) return false;
         // 均线多头排列（MA数据可用时才检查）
         if (ma && ma.ma5 > 0 && ma.ma10 > 0 && ma.ma20 > 0) {
           if (!(stock.currentPrice > ma.ma5 && ma.ma5 > ma.ma10 && ma.ma10 > ma.ma20)) return false;
@@ -481,16 +491,20 @@ export async function GET() {
         return true;
       })();
 
-      // Layer B: 爆发打板 — 涨停级别 + 中盘股 + 量比爆发
+      // Layer B: 爆发打板 — 涨停级别 + 中盘股 + 量比爆发 + 封板强度
       const isExplosiveBoard = !isTrap && (() => {
-        // 涨幅 >= 9%（接近或达到涨停）
-        if (stock.changePercent < 9) return false;
+        // 涨幅 >= 9.5%（接近涨停，9%太松容易误判）
+        if (stock.changePercent < 9.5) return false;
         // 流通市值 50-300亿（游资主力偏好的中盘股）
         if (capInYi < 50 || capInYi > 300) return false;
         // 量比爆发（>= 2.5，资金集中涌入）
         if (stock.volumeRatio < 2.5) return false;
         // 最低价不跌破昨收（封板有力度）
         if (stock.lowPrice < stock.prevClose) return false;
+        // ═══ 新增: 开盘强度 — 开盘必须>1%,否则是低开拉涨停,次日高开概率低 ═══
+        if (openChangePercent < 1) return false;
+        // ═══ 新增: 封板确认 — 现价必须在涨停附近(prevClose*1.095以上) ═══
+        if (stock.prevClose > 0 && stock.currentPrice < stock.prevClose * 1.095) return false;
         return true;
       })();
 

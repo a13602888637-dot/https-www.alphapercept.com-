@@ -257,8 +257,8 @@ export default function DabanPage() {
             stockCode: signal.symbol,
             stockName: signal.name,
             buyPrice: signal.currentPrice,
-            stopLossMethod: "atr",
-            stopLossParams: { atrMultiplier: 3, atrPeriod: 14 },
+            stopLossMethod: "fixed",
+            stopLossParams: { fixedPrice: signal.currentPrice * 0.95 },
             takeProfitMethod: "atr_multiple",
             takeProfitParams: { atrMultiple: 3, atrPeriod: 14 },
           }),
@@ -584,10 +584,10 @@ export default function DabanPage() {
                 <span>涨跌幅 &gt; 3%</span>
                 <span>流通市值 &gt; 50亿</span>
                 <span>量比 &gt; 1.5（放量确认）</span>
-                <span>换手率 5%~10%（活跃度）</span>
+                <span>换手率 3%~15%（活跃度）</span>
                 <span>排除 ST / *ST / 退市股</span>
                 <span>排除 920 新股板块</span>
-                <span>排除涨停封死（现价≥昨收×1.1）</span>
+                <span>排除涨停封死（现价≥昨收×1.097，买不到）</span>
                 <span>价格 &gt; 0（有效数据）</span>
               </div>
             </div>
@@ -619,6 +619,7 @@ export default function DabanPage() {
                 <div>尾盘急拉: 开盘涨幅&lt;1%，但尾盘贡献&gt;涨幅的60%</div>
                 <div>振幅异常: 振幅 &gt; 涨幅×2.5 且 振幅 &gt; 5%</div>
                 <div>盘中破昨收: 最低价 &lt; 昨收，但收盘涨 &gt; 3%</div>
+                <div>炸板回落: 最高价触及涨停(≥昨收×1.097)但现价回落&gt;3%</div>
                 <div className="text-yellow-500/60">触发任一条 → 标记"疑似诱多" + 评分扣30分</div>
               </div>
             </div>
@@ -630,9 +631,9 @@ export default function DabanPage() {
                 <div>非诱多（未触发第五条任何规则）</div>
                 <div>量比 ≥ 2.0（显著放量）</div>
                 <div>换手率 3%~8%（活跃但不过度换手）</div>
-                <div>开盘涨幅 ≥ 0.5%（开盘即强势，非低开拉升）</div>
+                <div>开盘涨幅 ≥ 1%（开盘即强势，低开拉升次日回落概率高）</div>
                 <div>最低价 ≥ 昨收（全天未跌破昨收 = 无恐慌抛压）</div>
-                <div>振幅 &lt; 涨幅×2（走势平稳，非过山车）</div>
+                <div>振幅 &lt; 涨幅×1.8（走势更平稳）</div>
                 <div>价格 &gt; MA5 &gt; MA10 &gt; MA20（严格多头排列，MA可用时）</div>
               </div>
             </div>
@@ -642,10 +643,12 @@ export default function DabanPage() {
               <div className="text-purple-400/80 font-medium">七、爆发打板 ⚡（全部满足）</div>
               <div className="space-y-1 text-gray-500 pl-3">
                 <div>非诱多（未触发第五条任何规则）</div>
-                <div>涨幅 ≥ 9%（涨停级别）</div>
+                <div>涨幅 ≥ 9.5%（接近涨停，9%太松易误判）</div>
                 <div>流通市值 50~300亿（游资偏好中盘股）</div>
                 <div>量比 ≥ 2.5（资金集中涌入）</div>
                 <div>最低价 ≥ 昨收（封板力度强）</div>
+                <div>开盘涨幅 ≥ 1%（排除低开拉板）</div>
+                <div>现价 ≥ 昨收×1.095（确认封板未炸）</div>
               </div>
             </div>
 

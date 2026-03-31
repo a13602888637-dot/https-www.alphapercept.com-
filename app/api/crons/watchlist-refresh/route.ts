@@ -178,21 +178,33 @@ export async function POST(req: Request) {
       let slParams = (item.stopLossParams as Record<string, number>) || {};
       let tpParams = (item.takeProfitParams as Record<string, number>) || {};
 
-      // 修正历史 trailing 方法为 atr_multiple（trailing 是追踪止损语义，不适合做 target）
+      // 修正历史: trailing→atr_multiple, atr止损→fixed -5% (打板不适合宽ATR止损)
+      let needMethodUpdate = false;
       if (tpMethod === "trailing") {
         tpMethod = "atr_multiple";
         tpParams = { atrMultiple: 3, atrPeriod: 14 };
+        needMethodUpdate = true;
+      }
+      if (slMethod === "atr") {
+        slMethod = "fixed";
+        slParams = { fixedPrice: Math.round(buyPrice * 0.95 * 100) / 100 };
+        needMethodUpdate = true;
+      }
+      if (needMethodUpdate) {
         try {
           await prisma.watchlist.update({
             where: { id: item.id },
-            data: { takeProfitMethod: tpMethod, takeProfitParams: tpParams },
+            data: {
+              stopLossMethod: slMethod, stopLossParams: slParams,
+              takeProfitMethod: tpMethod, takeProfitParams: tpParams,
+            },
           });
         } catch { /* ignore */ }
       }
 
       if (!slMethod && !tpMethod) {
-        slMethod = "atr";
-        slParams = { atrMultiplier: 3, atrPeriod: 14 };
+        slMethod = "fixed";
+        slParams = { fixedPrice: Math.round(buyPrice * 0.95 * 100) / 100 };
         tpMethod = "atr_multiple";
         tpParams = { atrMultiple: 3, atrPeriod: 14 };
         try {
