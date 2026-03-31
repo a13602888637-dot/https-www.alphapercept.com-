@@ -1000,8 +1000,8 @@ export default function DabanPage() {
                       <span className="text-gray-300">{r.stockName}</span>
                       <span className="text-gray-600">{r.entryDate}</span>
                     </div>
-                    <span className={r.nextDayChange >= 0 ? "text-emerald-400" : "text-red-400"}>
-                      {r.nextDayChange >= 0 ? "+" : ""}{r.nextDayChange.toFixed(2)}%
+                    <span className={r.nextDayChange == null ? "text-yellow-400" : r.nextDayChange >= 0 ? "text-emerald-400" : "text-red-400"}>
+                      {r.nextDayChange == null ? "待跟踪" : `${r.nextDayChange >= 0 ? "+" : ""}${r.nextDayChange.toFixed(2)}%`}
                     </span>
                   </div>
                 ))}

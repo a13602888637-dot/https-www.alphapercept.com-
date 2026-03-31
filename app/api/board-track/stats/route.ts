@@ -97,11 +97,11 @@ export async function GET(req: Request) {
       }
     }
 
-    // 最近 10 条跟踪记录（按 stockCode 去重）
+    // 最近 10 条跟踪记录（含pending+tracked，按 stockCode 去重）
     const recentSeen = new Set<string>();
     const recentTracked = dedupedRecords
       .filter((r) => {
-        if (r.trackStatus !== "tracked") return false;
+        if (r.trackStatus === "failed") return false;
         if (recentSeen.has(r.stockCode)) return false;
         recentSeen.add(r.stockCode);
         return true;
@@ -112,8 +112,9 @@ export async function GET(req: Request) {
         stockName: r.stockName,
         signalTag: r.signalTag,
         entryPrice: Number(r.entryPrice),
-        nextDayChange: Number(r.nextDayChange),
+        nextDayChange: r.trackStatus === "tracked" ? Number(r.nextDayChange) : null,
         entryDate: r.entryDate,
+        trackStatus: r.trackStatus,
       }));
 
     return NextResponse.json({
