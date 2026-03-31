@@ -321,6 +321,10 @@ git reset --hard HEAD~1
 - **OpenSky Network**: Browser fetch blocked by CORS → proxy through Next.js API route (see `/api/aviation`)
 - **AISStream**: WebSocket-only → use short-lived server-side connection via `ws` package (6s window, cache 60s as REST); 3-tier cache: fresh <60s → return, stale <300s → return with `stale:true`, else `noDataReason`
 - **East Money K-line API**: `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid}&klt=101&fqt=1` — secid: `1.6xx`/`1.9xx` for Shanghai, `0.0xx`/`0.3xx` for Shenzhen; replaces empty `StockPriceHistory` Prisma table; see `app/api/stock-price-history/route.ts`
+- **East Money ulist.np 实时报价**: `fltt=2` 参数**必须加**，否则 f2(价格) 返回分为单位（1876 而非 18.76）；缺少会导致 HWM 脏数据级联污染（max()永远取脏值）
+- **East Money clist 排序方向**: `po=0` = **降序**（最大值先返回），`po=1` = **升序**（最小值先返回）— 左侧交易按PE升序需用 `po=1`
+- **East Money 板块与行业**: 个股 `f100` 行业名（如"电网设备"）与行业板块指数名（如"电力设备", `m:90+t:2`）不匹配，不能直接做 key 查找；概念板块成分股有严重交叉归属（制药股出现在电网板块），趋势引擎V3改为全A股扫描+反查行业
+- **East Money 内外盘**: `f34`=外盘(主动买), `f35`=内盘(主动卖), `f34+f35=f5(总量)`; 盘后数据可能清零
 - **GDELT GeoJSON**: Free geo-conflict data (ACLED requires paid credentials) → `https://api.gdeltproject.org/api/v2/geo/geo?query=conflict+OR+military&mode=PointData&format=GeoJSON&timespan=24h`; see `app/api/geoconflict/route.ts`
 - **Map marker jitter**: Multiple entities at same coordinates stack invisibly — apply deterministic ±0.4°~0.6° lat/lng offsets by index; see `jitter()` in `services/adapters/finance-adapter.ts`
 
@@ -398,6 +402,20 @@ git reset --hard HEAD~1
 - `PUT /api/watchlist` 只保存 method + params，不触发计算
 - 必须再调 `POST /api/watchlist/recalculate` 传 `{ ids: [itemId] }` 才会用 K 线数据算出实际价格
 - 前端需用 recalculate 返回的 `results[].stopLossPrice / targetPrice` 更新 UI 状态
+- recalculate 和 watchlist-refresh cron 都用实时报价(ulist.np+fltt=2)，不依赖K线收盘价
+
+### ⚠️ 止盈止损方法语义
+- `trailing`(追踪止损) target = HWM×(1-trailPercent)，**永远低于现价**，不适合做 Target 展示
+- 打板/趋势止盈应用 `atr_multiple`（buyPrice + N×ATR）或 `fixed`
+- 打板止损用 `fixed`（buyPrice×0.95 = -5%），不用 ATR（ATR×3 给出约-15%，对短线太宽）
+- HWM 脏数据保护: take-profit-engine 中 HWM > currentPrice×2 自动重置（防 fltt=2 缺失的分单位污染）
+
+### ⚠️ board-track 去重
+- POST 必须先查同用户同 stockCode 是否已有 pending/tracked 记录，有则返回 duplicate 不重复创建
+- GET/stats 必须按 stockCode 去重后再统计，否则同股票多次接受会重复计算胜率
+- DELETE 支持 `?stockCode=xxx` 按股票批量删除所有跟踪记录（取消跟踪用）
+- stats recentTracked 包含 pending+tracked 记录；前端 pending 显示黄色"待跟踪"
+- 取消跟踪后前端必须调 fetchStats() 同步刷新胜率面板
 
 ### ⚠️ DeepSeek API 响应解析
 - 提取 JSON 用 `indexOf('{')` + `lastIndexOf('}')` 而非纯 regex — DeepSeek 常加前言/后语
