@@ -877,25 +877,23 @@ export default function DabanPage() {
 
             {/* 二十、趋势跟踪引擎 V2 */}
             <div className="space-y-2">
-              <div className="text-cyan-400/80 font-medium">二十、趋势跟踪引擎 V2 — 双引擎架构</div>
+              <div className="text-cyan-400/80 font-medium">二十、趋势跟踪引擎 V3 — 全A股扫描+动态板块</div>
               <div className="space-y-1 text-gray-500 pl-3">
-                <div className="text-gray-400">🔁 周期资源引擎 — ETF宏观锚定:</div>
-                <div className="pl-3">ETF站在MA20上方 且 MA20趋势向上 → 允许做该板块</div>
-                <div className="pl-3">黄金ETF/有色ETF/原油基金/煤炭ETF</div>
-                <div className="text-gray-400">🚀 成长科技引擎 — 板块指数+相对强度:</div>
-                <div className="pl-3">板块指数 &gt; MA20 且 &gt; MA60（短中期多头）</div>
-                <div className="pl-3">板块今日涨幅 &gt; 上证指数涨幅（跑赢大盘）</div>
-                <div className="pl-3 text-red-400/60">不在逆风板块找英雄 — 板块弱势一票否决</div>
+                <div className="text-gray-400">架构: 全A股涨幅前500快筛 → 多层过滤 → 反查行业板块校验</div>
+                <div className="pl-3">不从固定板块出发（避免板块归属错误），而是先找好股再验板块</div>
+                <div className="text-gray-400">L1 板块面板（18个固定+动态扩展）:</div>
+                <div className="pl-3">固定: 黄金/有色/石油/煤炭/航运/电力/军工/半导体/医药/银行/证券</div>
+                <div className="pl-3">概念: 创新药/电网设备/商业航天/AI算力/机器人/低空经济/新能源汽车</div>
+                <div className="pl-3">板块指数 &gt; MA20 且 &gt; MA60 → ✓多头（标绿）</div>
+                <div className="pl-3">板块指数 &lt; MA20 或 &lt; MA60 → ✗弱势（标红，不否决仅标注）</div>
+                <div className="pl-3 text-gray-600">信号中出现新行业 → 自动加入面板并校验</div>
               </div>
               <div className="space-y-1 text-gray-500 pl-3">
-                <div className="text-gray-400">L1.5 涨停梯队（广度验证）:</div>
-                <div className="pl-3">板块内涨&gt;5%的≥3只 或 至少1只涨停</div>
-                <div className="pl-3 text-gray-600">只有1只涨 = 单骑救主，判定假趋势</div>
                 <div className="text-gray-400">L2 Stage 2 底座:</div>
-                <div className="pl-3">价 &gt; MA150 &gt; MA200, MA50 &gt; MA150, MA150拐头</div>
-                <div className="text-gray-400">L2.5 RS相对强度（成长股）:</div>
-                <div className="pl-3">120日涨幅百分位 &gt; 85（战胜85%的股票）</div>
-                <div className="pl-3 text-gray-600">RS低 = 弱势跟风股，只抓绝对龙头</div>
+                <div className="pl-3">价 &gt; MA150 &gt; MA200, MA50 &gt; MA150, MA150拐头向上</div>
+                <div className="pl-3 text-gray-600">机构完成底仓配置，舞台搭好</div>
+                <div className="text-gray-400">L2.5 RS相对强度:</div>
+                <div className="pl-3">120日涨幅 &gt; 30%（近似85百分位，只抓龙头）</div>
                 <div className="text-gray-400">L2.6 回撤熔断:</div>
                 <div className="pl-3">距120日最高回撤 &gt; 20% → 踢出（套牢盘太重）</div>
                 <div className="text-gray-400">L3 VCP 波动率收敛（核心绝杀）:</div>
@@ -905,17 +903,32 @@ export default function DabanPage() {
                 <div className="pl-3">涨 &gt; 2% + 量比 &gt; 1.5 = 带量跨越阻力位</div>
               </div>
               <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-red-400/80 font-medium">L4.5 出货检测（V2.1新增）:</div>
+                <div className="pl-3">高换手滞涨: 换手&gt;15% + 涨&lt;5% + 未封板 → ⚠️高位滞涨 -50分</div>
+                <div className="pl-3">放量破均价: 量&gt;5日均量3倍 + 收&lt;VWAP → ⚠️放量破均价 -40分</div>
+                <div className="pl-3">筹码松动: 振幅/涨幅&gt;3（涨&gt;2%时） → ⚠️筹码松动 -30分</div>
+                <div className="pl-3 text-gray-600">物理含义: 成交量爆表但价格推不动 = 阻力过载 = 主力出货</div>
+              </div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-emerald-400/80 font-medium">资金流向探针（内外盘）:</div>
+                <div className="pl-3">外盘(f34)=主动买, 内盘(f35)=主动卖</div>
+                <div className="pl-3">(内盘-外盘)/总量 &gt; 15% → 🔴资金流出 -15分</div>
+                <div className="pl-3">(外盘-内盘)/总量 &gt; 15% → 💰资金流入 +5分</div>
+                <div className="pl-3 text-gray-600">内盘&gt;外盘 = 卖出订单被主动砸出，即便涨也是且打且退</div>
+              </div>
+              <div className="space-y-1 text-gray-500 pl-3">
                 <div className="text-gray-400">信号标签:</div>
-                <div className="pl-3">[周期共振] / [动能反转] + 趋势突破/VCP收敛/放量异动/Stage2观察</div>
+                <div className="pl-3">趋势突破(L2+L3+L4) / VCP收敛(L2+L3) / 放量异动(L2+L4) / Stage2观察</div>
+                <div className="pl-3 text-red-400/60">⚠️高位滞涨 / ⚠️放量破均价 / ⚠️筹码松动 — 出货警告优先于其他标签</div>
                 <div className="text-gray-400">风控:</div>
-                <div className="pl-3">止损: max(阳线最低, -5%) | 止盈: 跟踪MA20,跌破清仓</div>
+                <div className="pl-3">止损: max(阳线最低, -5%) | 止盈: 跟踪MA20,跌破且次日不收回→清仓</div>
                 <div className="pl-3">仓位: 趋势突破10% / VCP8% / 放量异动6% / 观察3%</div>
               </div>
             </div>
 
             <div className="border-t border-[#1a2035] pt-2 text-[10px] text-gray-600 space-y-1">
-              <div>数据源: 东方财富推送API + K线API(250日) + ETF趋势判定 + BoardTrack数据库</div>
-              <div>限制: 无Level-2盘口、无财报API(ROE/FCF)、无NLP、无基金持仓 — 用近似指标替代</div>
+              <div>数据源: 东方财富推送API(含f34外盘/f35内盘) + K线API(250日) + 板块指数K线 + BoardTrack</div>
+              <div>限制: 内外盘数据盘后可能清零(次日开盘恢复) | RS用固定阈值30%近似85百分位</div>
             </div>
           </div>
         )}
