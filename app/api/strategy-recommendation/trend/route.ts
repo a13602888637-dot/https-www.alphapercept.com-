@@ -95,28 +95,36 @@ async function fetchBoardIndexKline(boardCode: string, limit: number): Promise<n
   } catch { return []; }
 }
 
-// ─── 反查行业板块代码 ───────────────────────────────────────
+// ─── 固定板块列表（用于宏观面板展示） ────────────────────────
 
-// 行业名→东方财富板块代码映射（动态构建 + 缓存）
-const INDUSTRY_BOARD_CACHE = new Map<string, string>();
-
-// 批量获取所有行业板块(一次性)
-async function loadAllIndustryBoards(): Promise<void> {
-  if (INDUSTRY_BOARD_CACHE.size > 0) return;
-  try {
-    const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f2,f3,f12,f14`;
-    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return;
-    const json = await res.json();
-    const diff = json?.data?.diff;
-    if (!Array.isArray(diff)) return;
-    for (const item of diff) {
-      const code = String(item.f12 ?? "");
-      const name = String(item.f14 ?? "");
-      if (code && name) INDUSTRY_BOARD_CACHE.set(name, code);
-    }
-  } catch { /* ignore */ }
+interface SectorPanel {
+  name: string;
+  boardCode: string;
 }
+
+const PANEL_SECTORS: SectorPanel[] = [
+  // 大宗周期
+  { name: "黄金", boardCode: "BK0493" },
+  { name: "有色金属", boardCode: "BK0478" },
+  { name: "石油石化", boardCode: "BK0698" },
+  { name: "煤炭", boardCode: "BK0733" },
+  { name: "航运", boardCode: "BK0549" },
+  // 成长/周期
+  { name: "电力", boardCode: "BK0428" },
+  { name: "军工", boardCode: "BK0481" },
+  { name: "半导体", boardCode: "BK1036" },
+  { name: "医药", boardCode: "BK0465" },
+  { name: "银行", boardCode: "BK0475" },
+  { name: "证券", boardCode: "BK0473" },
+  // 概念热点
+  { name: "创新药", boardCode: "BK1084" },
+  { name: "电网设备", boardCode: "BK1050" },
+  { name: "商业航天", boardCode: "BK1124" },
+  { name: "AI算力", boardCode: "BK1146" },
+  { name: "机器人", boardCode: "BK1131" },
+  { name: "低空经济", boardCode: "BK1159" },
+  { name: "新能源汽车", boardCode: "BK1071" },
+];
 
 // ─── 分析函数 ───────────────────────────────────────────────
 
@@ -187,49 +195,30 @@ function checkBreakout(stock: StockBasic, klines: KlineBar[]): { confirmed: bool
     : { confirmed: false, reason: `量比${stock.volumeRatio.toFixed(1)}` };
 }
 
-// ─── L5: 板块指数校验（动态） ────────────────────────────────
+// ─── 板块指数校验(面板用) ─────────────────────────────────────
 
-interface BoardValidation {
-  boardCode: string;
-  boardName: string;
-  bullish: boolean;
-  breadthOK: boolean;
-  reason: string;
-}
-
-const boardValidationCache = new Map<string, BoardValidation>();
-
-async function validateBoard(industryName: string, benchmarkChange: number): Promise<BoardValidation | null> {
-  if (!industryName) return null;
-  if (boardValidationCache.has(industryName)) return boardValidationCache.get(industryName)!;
-
-  const boardCode = INDUSTRY_BOARD_CACHE.get(industryName);
-  if (!boardCode) return null;
-
-  const closes = await fetchBoardIndexKline(boardCode, 70);
+async function validatePanelSector(
+  sector: SectorPanel, benchmarkChange: number
+): Promise<{ sector: string; bullish: boolean; reason: string }> {
+  const closes = await fetchBoardIndexKline(sector.boardCode, 70);
   if (closes.length < 20) {
-    const result: BoardValidation = { boardCode, boardName: industryName, bullish: true, breadthOK: true, reason: "板块数据不足" };
-    boardValidationCache.set(industryName, result);
-    return result;
+    return { sector: sector.name, bullish: false, reason: "数据不足" };
   }
-
-  const idxPrice = closes[closes.length - 1];
+  const price = closes[closes.length - 1];
   const ma20 = calcSMA(closes, 20);
   const ma60 = closes.length >= 60 ? calcSMA(closes, 60) : ma20;
-  const idxChange = closes.length >= 2 ? ((closes[closes.length - 1] / closes[closes.length - 2]) - 1) * 100 : 0;
+  const change = closes.length >= 2 ? ((closes[closes.length - 1] / closes[closes.length - 2]) - 1) * 100 : 0;
 
-  const aboveMAs = idxPrice > ma20 && idxPrice > ma60;
-  const beatBenchmark = idxChange > benchmarkChange;
-  const bullish = aboveMAs && beatBenchmark;
+  const aboveMAs = price > ma20 && price > ma60;
+  const beat = change > benchmarkChange;
+  const bullish = aboveMAs; // 趋势结构为主，跑赢大盘为加分
 
   let reason: string;
-  if (bullish) reason = `${industryName}指数多头+跑赢大盘✓`;
-  else if (!aboveMAs) reason = `${industryName}指数<均线✗`;
-  else reason = `${industryName}未跑赢大盘✗`;
+  if (aboveMAs && beat) reason = `多头+跑赢大盘✓`;
+  else if (aboveMAs) reason = `多头(未跑赢)`;
+  else reason = `<均线`;
 
-  const result: BoardValidation = { boardCode, boardName: industryName, bullish, breadthOK: true, reason };
-  boardValidationCache.set(industryName, result);
-  return result;
+  return { sector: sector.name, bullish, reason };
 }
 
 // ─── 大盘基准 ───────────────────────────────────────────────
@@ -249,12 +238,19 @@ async function fetchBenchmarkChange(): Promise<number> {
 
 export async function GET() {
   try {
-    // Step 1: 并行拉全A股 + 大盘基准 + 行业板块列表
+    // Step 1: 并行拉全A股 + 大盘基准 + 板块面板校验
     const [allStocks, benchmarkChange] = await Promise.all([
-      fetchAllStocks(500), // 涨幅前500只
+      fetchAllStocks(500),
       fetchBenchmarkChange(),
     ]);
-    await loadAllIndustryBoards();
+
+    // 板块面板(并行校验所有固定板块)
+    const panelResults = await Promise.allSettled(
+      PANEL_SECTORS.map(s => validatePanelSector(s, benchmarkChange))
+    );
+    const macroStatus = panelResults.map((r, i) =>
+      r.status === "fulfilled" ? r.value : { sector: PANEL_SECTORS[i].name, bullish: false, reason: "校验失败" }
+    );
 
     // Step 2: 快筛 — 涨幅>0, 市值>50亿
     const candidates = allStocks
@@ -280,9 +276,6 @@ export async function GET() {
       };
     }> = [];
 
-    // 收集通过的行业板块（用于宏观面板展示）
-    const boardResults = new Map<string, BoardValidation>();
-
     for (let i = 0; i < candidates.length; i++) {
       const stock = candidates[i];
       const kResult = klineResults[i];
@@ -307,17 +300,10 @@ export async function GET() {
       // L4: 突破
       const breakout = checkBreakout(stock, klines);
 
-      // L5: 板块指数校验（标注，不否决）
-      let boardInfo = "未校验";
+      // L5: 板块标注（从面板中查找匹配的板块状态）
       let boardBullish = false;
-      if (stock.industry) {
-        const bv = await validateBoard(stock.industry, benchmarkChange);
-        if (bv) {
-          boardResults.set(stock.industry, bv);
-          boardBullish = bv.bullish;
-          boardInfo = bv.reason;
-        }
-      }
+      const matchedSector = macroStatus.find(m => stock.industry && stock.industry.includes(m.sector));
+      if (matchedSector) boardBullish = matchedSector.bullish;
 
       // 评分
       let score = 30;
@@ -346,7 +332,6 @@ export async function GET() {
       // Reason
       const parts: string[] = [];
       parts.push(`${boardBullish ? "✓" : "✗"}${stock.industry || "未知行业"}`);
-      parts.push(boardInfo);
       parts.push(stage2.reason);
       parts.push(`RS120=${rs120.toFixed(0)}%`);
       parts.push(dd.reason);
@@ -363,7 +348,7 @@ export async function GET() {
         circulatingMarketCap: Math.round(capYi * 10) / 10,
         reason: parts.join(" | "), signalTag: tag, signalScore: score,
         sector: stock.industry || "未知",
-        macroStatus: boardInfo || "未校验",
+        macroStatus: matchedSector ? matchedSector.reason : "未匹配面板",
         stage2: true, vcpDetected: vcp.detected,
         breakoutConfirmed: breakout.confirmed, rs120: Math.round(rs120 * 10) / 10,
         advice: {
@@ -386,17 +371,6 @@ export async function GET() {
     const finalSignals = signals.slice(0, 20);
     const now = new Date();
     const screenTime = now.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
-
-    // 宏观面板：展示所有被校验过的行业板块状态
-    const macroStatus = Array.from(boardResults.values()).map(bv => ({
-      sector: bv.boardName,
-      type: "dynamic" as const,
-      macro: bv.boardName,
-      bullish: bv.bullish,
-      reason: bv.reason,
-      breadthOK: bv.breadthOK,
-      breadthReason: "",
-    }));
 
     const result = {
       success: true,
