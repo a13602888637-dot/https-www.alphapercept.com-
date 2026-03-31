@@ -275,9 +275,8 @@ async function fetchRS85Threshold(): Promise<number> {
   // 计算: 拉500只120日涨幅最高的, 第85百分位
   try {
     // 东方财富没有直接120日涨幅字段, 用涨跌幅排名近似
-    // 替代: 直接用固定阈值 15% (120日涨>15%即战胜85%的股票)
-    // 后续可用cron精确计算
-    return 15;
+    // 固定阈值: 120日涨>30%（近似85百分位，后续可用cron精确计算）
+    return 30;
   } catch { return 15; }
 }
 
