@@ -238,19 +238,36 @@ async function fetchBenchmarkChange(): Promise<number> {
 
 export async function GET() {
   try {
-    // Step 1: 并行拉全A股 + 大盘基准 + 板块面板校验
+    // Step 1: 并行拉全A股 + 大盘基准
     const [allStocks, benchmarkChange] = await Promise.all([
       fetchAllStocks(500),
       fetchBenchmarkChange(),
     ]);
 
-    // 板块面板(并行校验所有固定板块)
+    // 先拉行业板块列表（用于动态匹配行业名→板块代码）
+    const industryBoardMap = new Map<string, string>(); // 行业名→板块代码
+    try {
+      const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=200&po=0&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f12,f14`;
+      const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const json = await res.json();
+        const diff = json?.data?.diff;
+        if (Array.isArray(diff)) {
+          for (const item of diff) {
+            industryBoardMap.set(String(item.f14 ?? ""), String(item.f12 ?? ""));
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
+    // 板块面板: 固定板块 + 后续动态补充
     const panelResults = await Promise.allSettled(
       PANEL_SECTORS.map(s => validatePanelSector(s, benchmarkChange))
     );
-    const macroStatus = panelResults.map((r, i) =>
+    const macroStatus: Array<{ sector: string; bullish: boolean; reason: string }> = panelResults.map((r, i) =>
       r.status === "fulfilled" ? r.value : { sector: PANEL_SECTORS[i].name, bullish: false, reason: "校验失败" }
     );
+    const panelSectorNames = new Set(macroStatus.map(m => m.sector));
 
     // Step 2: 快筛 — 涨幅>0, 市值>50亿
     const candidates = allStocks
@@ -359,6 +376,46 @@ export async function GET() {
           positionSource: "fixed",
         },
       });
+    }
+
+    // Step 5: 收集信号中出现的新行业，动态补充到面板
+    const newIndustries = new Set<string>();
+    for (const s of signals) {
+      if (s.sector && s.sector !== "未知" && !panelSectorNames.has(s.sector)) {
+        newIndustries.add(s.sector);
+      }
+    }
+    if (newIndustries.size > 0) {
+      const dynamicResults = await Promise.allSettled(
+        Array.from(newIndustries).map(name => {
+          // 尝试从行业板块列表匹配板块代码
+          const code = industryBoardMap.get(name);
+          if (!code) {
+            // 模糊匹配: 如 "电网设备" 匹配 "电力设备"
+            for (const [bName, bCode] of industryBoardMap) {
+              if (bName.includes(name.slice(0, 2)) || name.includes(bName.slice(0, 2))) {
+                return validatePanelSector({ name, boardCode: bCode }, benchmarkChange);
+              }
+            }
+            return Promise.resolve({ sector: name, bullish: false, reason: "无板块指数" });
+          }
+          return validatePanelSector({ name, boardCode: code }, benchmarkChange);
+        })
+      );
+      for (const r of dynamicResults) {
+        const result = r.status === "fulfilled" ? r.value : { sector: "未知", bullish: false, reason: "校验失败" };
+        macroStatus.push(result);
+        panelSectorNames.add(result.sector);
+      }
+
+      // 回填信号的板块状态
+      for (const s of signals) {
+        const matched = macroStatus.find(m => s.sector === m.sector);
+        if (matched && matched.bullish && !s.reason.startsWith("✓")) {
+          s.signalScore = Math.min(100, s.signalScore + 10);
+          s.reason = s.reason.replace(/^[✓✗]/, "✓");
+        }
+      }
     }
 
     // 排序
