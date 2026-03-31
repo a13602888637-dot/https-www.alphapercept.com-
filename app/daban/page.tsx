@@ -370,11 +370,12 @@ export default function DabanPage() {
     try {
       const token = await getToken()
       setAccepted((prev) => prev.filter((s) => s.symbol !== symbol))
-      // 按 stockCode 删除该股票的所有跟踪记录
       await fetch(`/api/board-track?stockCode=${symbol}`, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
+      // 同步刷新胜率面板
+      fetchStats()
       toast.success("已取消跟踪")
     } catch {
       toast.error("取消失败")
