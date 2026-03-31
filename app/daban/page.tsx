@@ -938,7 +938,7 @@ export default function DabanPage() {
             {/* Overall stats */}
             <div className="grid grid-cols-4 gap-3">
               <div className="text-center">
-                <div className="text-xl font-bold text-white">{boardStats.overall.tracked}</div>
+                <div className="text-xl font-bold text-white">{boardStats.overall.total}</div>
                 <div className="text-[10px] text-gray-500">已跟踪</div>
               </div>
               <div className="text-center">
