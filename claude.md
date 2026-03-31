@@ -61,11 +61,23 @@ stock-analysis/
 │   │   ├── strategy-recommendation/  # Trading signals
 │   │   ├── portfolio/            # Portfolio management
 │   │   ├── unified-search/       # Global A-stock/US stock search
-│   │   └── ... (20+ total routes)
+│   │   ├── strategy-recommendation/
+│   │   │   ├── screen/           # 条件选股(打板)
+│   │   │   ├── trend/            # 趋势跟踪V3(全A股+板块校验)
+│   │   │   ├── left-side/        # 左侧交易(价值反转)
+│   │   │   └── daily/            # Alpha feed
+│   │   ├── board-track/          # 打板跟踪+胜率统计
+│   │   ├── crons/
+│   │   │   ├── board-track/      # 次日跟踪 cron (15:30 CST)
+│   │   │   ├── watchlist-refresh/ # 止盈止损刷新 cron (15:45 CST)
+│   │   │   ├── daily-rollover/   # T+1 解锁 cron
+│   │   │   └── ...
+│   │   └── ... (30+ total routes)
 │   ├── dashboard/                # Main dashboard
 │   │   ├── macro/                # Macro market overview
 │   │   ├── asset/[symbol]/       # Global asset detail (crypto/commodity/index)
 │   │   └── stock/[symbol]/       # A-share/US stock detail
+│   ├── daban/                    # 打板决策流(全屏, 独立layout, 含趋势跟踪Tab)
 │   ├── osint/                    # Full-screen OSINT radar (own layout.tsx suppresses global nav)
 │   ├── portfolio/                # Portfolio management page
 │   ├── stocks/[code]/            # Individual stock details
@@ -168,6 +180,13 @@ npm run build            # Pre-flight check
 | `/api/unified-search` | A-stock + US stock search |
 | `/api/users/sync` | Sync Clerk user to DB |
 | `/api/watchlist/recalculate` | POST with `{ids}`, computes SL/TP from K-line data (East Money) |
+| `/api/strategy-recommendation/screen` | 条件选股（打板）— 三层信号分类+Kelly仓位 |
+| `/api/strategy-recommendation/trend` | 趋势跟踪V3 — 全A股Stage2+RS+VCP+板块校验 |
+| `/api/strategy-recommendation/left-side` | 左侧交易 — 三层价值反转筛选 |
+| `/api/board-track` | 打板跟踪记录 CRUD (按stockCode去重) |
+| `/api/board-track/stats` | 打板胜率统计（按signalTag分组） |
+| `/api/crons/watchlist-refresh` | 每日刷新自选股止盈止损 (15:45 CST) |
+| `/api/crons/board-track` | 跟踪打板次日表现 (15:30 CST) |
 
 ---
 
@@ -183,6 +202,8 @@ Core entities in `prisma/schema.prisma`:
 | **Portfolio** | Investment portfolio | userId, totalValue, cash |
 | **BacktestResult** | Strategy backtests | strategyId, returns, sharpeRatio |
 | **StockPriceHistory** | Price data cache (unused) | table is empty — OHLC fetched live from East Money API |
+| **BoardTrack** | 打板跟踪记录 | stockCode, entryPrice, signalTag, nextDayChange, trackStatus |
+| **ScreenCache** | 策略缓存 | id(latest_screen/latest_trend/latest_left_side), data, tradeDate |
 
 **Important**: All user-specific data requires `userId` filter in API routes for privacy.
 
@@ -473,5 +494,5 @@ For trading logic & decision rules, see `TRADING_STRATEGY.md`.
 ---
 
 **Project Version**: 0.1.0
-**Last Updated**: 2026-03-19
+**Last Updated**: 2026-03-31
 **Node.js Required**: 20.19.0+
