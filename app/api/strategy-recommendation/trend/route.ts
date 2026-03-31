@@ -307,13 +307,14 @@ export async function GET() {
       // L4: 突破
       const breakout = checkBreakout(stock, klines);
 
-      // L5: 板块指数校验（动态反查）
-      let boardInfo = "";
+      // L5: 板块指数校验（标注，不否决）
+      let boardInfo = "未校验";
+      let boardBullish = false;
       if (stock.industry) {
         const bv = await validateBoard(stock.industry, benchmarkChange);
         if (bv) {
           boardResults.set(stock.industry, bv);
-          if (!bv.bullish) continue; // 板块弱势一票否决
+          boardBullish = bv.bullish;
           boardInfo = bv.reason;
         }
       }
@@ -324,6 +325,7 @@ export async function GET() {
       if (breakout.confirmed) score += 25;
       score += Math.min(10, rs120 / 5);
       score += Math.min(5, stock.changePercent);
+      if (boardBullish) score += 10; // 板块多头加分
       score = Math.round(Math.min(100, score));
 
       // 信号标签
@@ -343,8 +345,8 @@ export async function GET() {
 
       // Reason
       const parts: string[] = [];
-      parts.push(`${stock.industry || "未知行业"}`);
-      if (boardInfo) parts.push(boardInfo);
+      parts.push(`${boardBullish ? "✓" : "✗"}${stock.industry || "未知行业"}`);
+      parts.push(boardInfo);
       parts.push(stage2.reason);
       parts.push(`RS120=${rs120.toFixed(0)}%`);
       parts.push(dd.reason);
