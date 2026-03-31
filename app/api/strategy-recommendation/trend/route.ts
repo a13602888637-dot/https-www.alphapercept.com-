@@ -25,7 +25,10 @@ interface StockBasic {
   symbol: string; name: string; currentPrice: number; changePercent: number;
   volumeRatio: number; turnoverRate: number; circulatingMarketCap: number;
   amount: number; volume: number; highPrice: number; lowPrice: number; prevClose: number;
-  industry: string; // 东方财富行业名
+  amplitude: number;  // 振幅%
+  outerVol: number;   // 外盘(主动买)
+  innerVol: number;   // 内盘(主动卖)
+  industry: string;
 }
 
 interface KlineBar {
@@ -41,8 +44,8 @@ const HEADERS = {
 
 async function fetchAllStocks(size: number): Promise<StockBasic[]> {
   try {
-    // f100=行业板块名
-    const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=${size}&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048&fields=f2,f3,f5,f6,f8,f10,f12,f14,f15,f16,f18,f21,f100`;
+    // f100=行业, f7=振幅, f34=外盘, f35=内盘
+    const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=${size}&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048&fields=f2,f3,f5,f6,f7,f8,f10,f12,f14,f15,f16,f18,f21,f34,f35,f100`;
     const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(12000) });
     if (!res.ok) return [];
     const json = await res.json();
@@ -58,6 +61,9 @@ async function fetchAllStocks(size: number): Promise<StockBasic[]> {
         volumeRatio: Number(item.f10 === "-" ? 0 : (item.f10 ?? 0)),
         highPrice: Number(item.f15 ?? 0), lowPrice: Number(item.f16 ?? 0),
         prevClose: Number(item.f18 ?? 0), circulatingMarketCap: Number(item.f21 ?? 0),
+        amplitude: Number(item.f7 ?? 0),
+        outerVol: Number(item.f34 ?? 0),  // 外盘(主动买)
+        innerVol: Number(item.f35 ?? 0),  // 内盘(主动卖)
         industry: String(item.f100 ?? ""),
       }))
       .filter((s: StockBasic) => !s.name.includes("ST") && !s.name.includes("退") && !s.symbol.startsWith("920"));
@@ -286,6 +292,7 @@ export async function GET() {
       reason: string; signalTag: string; signalScore: number;
       sector: string; macroStatus: string;
       stage2: boolean; vcpDetected: boolean; breakoutConfirmed: boolean; rs120: number;
+      fundFlow: "inflow" | "outflow" | "neutral";
       advice: {
         suggestedPosition: number; stopLoss: number; drawdownExit: number;
         stopLossPrice: number; trailingStopMA20: number; strategyLabel: string;
@@ -317,6 +324,47 @@ export async function GET() {
       // L4: 突破
       const breakout = checkBreakout(stock, klines);
 
+      // ═══ L4.5 出货检测 ═══
+      let selloffWarning = "";
+      let selloffPenalty = 0;
+
+      // (1) 高换手滞涨: 换手>15% + 涨<5% + 未封板
+      const notLimitUp = stock.prevClose > 0 && stock.currentPrice < stock.prevClose * 1.097;
+      if (stock.turnoverRate > 15 && stock.changePercent < 5 && notLimitUp) {
+        selloffWarning = "⚠️高位滞涨";
+        selloffPenalty = 50;
+      }
+      // (2) 放量收于VWAP下方: 成交量>5日均量3倍 + 收<均价
+      if (!selloffWarning && stock.volume > 0 && stock.amount > 0 && klines.length >= 6) {
+        const vol5avg = klines.slice(-6, -1).map(k => k.volume).reduce((a, b) => a + b, 0) / 5;
+        const vwap = stock.amount / (stock.volume * 100);
+        if (stock.volume > vol5avg * 3 && stock.currentPrice < vwap) {
+          selloffWarning = "⚠️放量破均价";
+          selloffPenalty = 40;
+        }
+      }
+      // (3) 振幅/涨幅比>3 (涨幅>2%时才判): 筹码松动
+      if (!selloffWarning && stock.changePercent > 2 && stock.amplitude > 0) {
+        const volRewardRatio = stock.amplitude / stock.changePercent;
+        if (volRewardRatio > 3) {
+          selloffWarning = "⚠️筹码松动";
+          selloffPenalty = 30;
+        }
+      }
+
+      // (4) 内外盘差值比: 内盘远大于外盘 → 资金物理流出
+      let fundFlow: "inflow" | "outflow" | "neutral" = "neutral";
+      const totalVol = stock.outerVol + stock.innerVol;
+      if (totalVol > 0) {
+        const imbalance = (stock.innerVol - stock.outerVol) / totalVol;
+        if (imbalance > 0.15) {
+          fundFlow = "outflow";
+          if (!selloffWarning) selloffPenalty += 15;
+        } else if (imbalance < -0.15) {
+          fundFlow = "inflow";
+        }
+      }
+
       // L5: 板块标注（从面板中查找匹配的板块状态）
       let boardBullish = false;
       const matchedSector = macroStatus.find(m => stock.industry && stock.industry.includes(m.sector));
@@ -328,15 +376,24 @@ export async function GET() {
       if (breakout.confirmed) score += 25;
       score += Math.min(10, rs120 / 5);
       score += Math.min(5, stock.changePercent);
-      if (boardBullish) score += 10; // 板块多头加分
-      score = Math.round(Math.min(100, score));
+      if (boardBullish) score += 10;
+      score -= selloffPenalty; // 出货惩罚
+      if (fundFlow === "inflow") score += 5; // 资金流入加分
+      score = Math.round(Math.max(0, Math.min(100, score)));
 
-      // 信号标签
+      // 信号标签（出货警告优先）
       let tag: string;
-      if (stage2.pass && vcp.detected && breakout.confirmed) tag = "趋势突破";
-      else if (stage2.pass && vcp.detected) tag = "VCP收敛";
-      else if (stage2.pass && breakout.confirmed) tag = "放量异动";
-      else tag = "Stage2观察";
+      if (selloffWarning) {
+        tag = selloffWarning;
+      } else if (stage2.pass && vcp.detected && breakout.confirmed) {
+        tag = "趋势突破";
+      } else if (stage2.pass && vcp.detected) {
+        tag = "VCP收敛";
+      } else if (stage2.pass && breakout.confirmed) {
+        tag = "放量异动";
+      } else {
+        tag = "Stage2观察";
+      }
 
       // 风控
       const breakoutLow = klines[klines.length - 1].low;
@@ -354,6 +411,8 @@ export async function GET() {
       parts.push(dd.reason);
       if (vcp.detected) parts.push(vcp.reason);
       parts.push(breakout.reason);
+      if (selloffWarning) parts.push(`${selloffWarning} 换手${stock.turnoverRate.toFixed(1)}% 振幅${stock.amplitude.toFixed(1)}%`);
+      parts.push(`${fundFlow === "inflow" ? "💰流入" : fundFlow === "outflow" ? "🔴流出" : ""}`)
       parts.push(`市值${capYi.toFixed(0)}亿`);
 
       const position = tag === "趋势突破" ? 10 : tag === "VCP收敛" ? 8 : tag === "放量异动" ? 6 : 3;
@@ -368,6 +427,7 @@ export async function GET() {
         macroStatus: matchedSector ? matchedSector.reason : "未匹配面板",
         stage2: true, vcpDetected: vcp.detected,
         breakoutConfirmed: breakout.confirmed, rs120: Math.round(rs120 * 10) / 10,
+        fundFlow,
         advice: {
           suggestedPosition: position, stopLoss: stopLossPct, drawdownExit,
           stopLossPrice, trailingStopMA20: trailingMA20,

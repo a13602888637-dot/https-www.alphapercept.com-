@@ -1051,11 +1051,14 @@ export default function DabanPage() {
                 const isTrap = signal.riskTag === "疑似诱多"
                 const isTrendBreak = signal.riskTag === "趋势突破"
                 const isVCP = signal.riskTag === "VCP收敛"
-                const cardBorder = isTrendBreak
-                  ? "border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
-                  : isVCP
-                    ? "border-cyan-500/30"
-                    : isStrongBuy
+                const isSelloff = signal.riskTag?.startsWith("⚠️")
+                const cardBorder = isSelloff
+                  ? "border-red-500/40 opacity-70"
+                  : isTrendBreak
+                    ? "border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+                    : isVCP
+                      ? "border-cyan-500/30"
+                      : isStrongBuy
                       ? "border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
                       : isExplosive
                         ? "border-purple-500/40"
@@ -1079,9 +1082,11 @@ export default function DabanPage() {
                         </span>
                         {signal.riskTag && (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                            isTrendBreak
-                              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                              : isVCP
+                            isSelloff
+                              ? "bg-red-500/20 text-red-400 border border-red-500/40"
+                              : isTrendBreak
+                                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                                : isVCP
                                 ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/25"
                                 : signal.riskTag === "放量异动"
                                   ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
@@ -1156,6 +1161,13 @@ export default function DabanPage() {
                       <span>
                         流通: <span className="text-gray-300">{signal.circulatingMarketCap.toFixed(0)}亿</span>
                       </span>
+                    )}
+                    {/* 资金流向(趋势信号) */}
+                    {signal.reason?.includes("💰流入") && (
+                      <span className="text-emerald-400 font-medium">💰流入</span>
+                    )}
+                    {signal.reason?.includes("🔴流出") && (
+                      <span className="text-red-400 font-medium">🔴流出</span>
                     )}
                   </div>
 
