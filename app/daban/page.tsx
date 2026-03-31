@@ -77,12 +77,20 @@ interface BoardStats {
   pendingCount: number
 }
 
-type TabType = "alpha" | "screen" | "leftSide"
+interface MacroStatus {
+  sector: string
+  macro: string
+  price: number | null
+  ma20: number | null
+  bullish: boolean
+  reason: string
+}
+
+type TabType = "screen" | "trend" | "leftSide"
 
 export default function DabanPage() {
-  const [signals, setSignals] = useState<AlphaSignal[]>([])
   const [screenSignals, setScreenSignals] = useState<AlphaSignal[]>([])
-  const [sentiment, setSentiment] = useState<SentimentData | null>(null)
+  const [sentiment] = useState<SentimentData | null>(null)
   const [accepted, setAccepted] = useState<AlphaSignal[]>([])
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -91,6 +99,11 @@ export default function DabanPage() {
   const [activeTab, setActiveTab] = useState<TabType>("screen")
   const [screenTime, setScreenTime] = useState("")
   const [screenConditions, setScreenConditions] = useState<string[]>([])
+  const [trendSignals, setTrendSignals] = useState<AlphaSignal[]>([])
+  const [trendLoading, setTrendLoading] = useState(false)
+  const [trendTime, setTrendTime] = useState("")
+  const [trendConditions, setTrendConditions] = useState<string[]>([])
+  const [macroStatus, setMacroStatus] = useState<MacroStatus[]>([])
   const [leftSignals, setLeftSignals] = useState<AlphaSignal[]>([])
   const [leftLoading, setLeftLoading] = useState(false)
   const [leftTime, setLeftTime] = useState("")
@@ -99,21 +112,6 @@ export default function DabanPage() {
   const [boardStats, setBoardStats] = useState<BoardStats | null>(null)
   const [showStats, setShowStats] = useState(false)
   const { isSignedIn, getToken } = useAuth()
-
-  const fetchSignals = useCallback(async () => {
-    try {
-      const res = await fetch("/api/strategy-recommendation/daily")
-      if (!res.ok) throw new Error("Failed to fetch signals")
-      const data = await res.json()
-      setSignals(data.signals ?? [])
-      setSentiment(data.sentiment ?? null)
-    } catch {
-      // silently fail for alpha feed
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
 
   const fetchScreen = useCallback(async () => {
     setScreenLoading(true)
@@ -128,6 +126,42 @@ export default function DabanPage() {
       toast.error("选股扫描失败")
     } finally {
       setScreenLoading(false)
+    }
+  }, [])
+
+  const fetchTrend = useCallback(async () => {
+    setTrendLoading(true)
+    try {
+      const res = await fetch("/api/strategy-recommendation/trend")
+      if (!res.ok) throw new Error("Failed")
+      const data = await res.json()
+      setTrendSignals((data.signals ?? []).map((s: Record<string, unknown>) => ({
+        symbol: s.symbol as string,
+        name: s.name as string,
+        currentPrice: s.currentPrice as number,
+        changePercent: s.changePercent as number,
+        volumeRatio: s.volumeRatio as number,
+        turnoverRate: s.turnoverRate as number,
+        circulatingMarketCap: s.circulatingMarketCap as number,
+        reason: s.reason as string,
+        riskTag: s.signalTag as string,
+        signalScore: s.signalScore as number,
+        advice: s.advice ? {
+          suggestedPosition: (s.advice as Record<string, unknown>).suggestedPosition as number,
+          stopLoss: (s.advice as Record<string, unknown>).stopLoss as number,
+          takeProfitStrategy: (s.advice as Record<string, unknown>).takeProfitStrategy as string,
+          drawdownExit: 0,
+          strategyLabel: (s.advice as Record<string, unknown>).strategyLabel as string,
+          positionSource: "fixed" as const,
+        } : undefined,
+      })))
+      setTrendTime(data.screenTime ?? "")
+      setTrendConditions(data.conditions ?? [])
+      setMacroStatus(data.macroStatus ?? [])
+    } catch {
+      toast.error("趋势扫描失败")
+    } finally {
+      setTrendLoading(false)
     }
   }, [])
 
@@ -197,25 +231,28 @@ export default function DabanPage() {
 
   useEffect(() => {
     if (isSignedIn === undefined) return
-    fetchSignals()
     fetchScreen()
     if (isSignedIn) {
       loadAccepted()
       fetchStats()
     }
-  }, [isSignedIn, fetchSignals, fetchScreen, loadAccepted, fetchStats])
+    setLoading(false)
+  }, [isSignedIn, fetchScreen, loadAccepted, fetchStats])
 
-  // 左侧交易: 切换到Tab时才加载（较慢的API）
+  // 趋势/左侧交易: 切换到Tab时才加载（较慢的API）
   useEffect(() => {
+    if (activeTab === "trend" && trendSignals.length === 0 && !trendLoading) {
+      fetchTrend()
+    }
     if (activeTab === "leftSide" && leftSignals.length === 0 && !leftLoading) {
       fetchLeftSide()
     }
-  }, [activeTab, leftSignals.length, leftLoading, fetchLeftSide])
+  }, [activeTab, trendSignals.length, trendLoading, fetchTrend, leftSignals.length, leftLoading, fetchLeftSide])
 
   const handleRefresh = () => {
     setRefreshing(true)
-    if (activeTab === "alpha") {
-      fetchSignals()
+    if (activeTab === "trend") {
+      fetchTrend().finally(() => setRefreshing(false))
     } else if (activeTab === "leftSide") {
       fetchLeftSide().finally(() => setRefreshing(false))
     } else {
@@ -387,7 +424,7 @@ export default function DabanPage() {
   const isLockdown = sentiment?.lockdown === true
   const acceptedSymbols = new Set(accepted.map((s) => s.symbol))
 
-  const currentSignals = activeTab === "alpha" ? signals : activeTab === "leftSide" ? leftSignals : screenSignals
+  const currentSignals = activeTab === "trend" ? trendSignals : activeTab === "leftSide" ? leftSignals : screenSignals
   const visibleSignals = currentSignals.filter(
     (s) => !dismissed.has(s.symbol)
   )
@@ -517,17 +554,17 @@ export default function DabanPage() {
             )}
           </button>
           <button
-            onClick={() => setActiveTab("alpha")}
+            onClick={() => setActiveTab("trend")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
-              activeTab === "alpha"
-                ? "bg-amber-500/15 text-amber-400"
+              activeTab === "trend"
+                ? "bg-cyan-500/15 text-cyan-400"
                 : "text-gray-500 hover:text-gray-300"
             }`}
           >
-            <Zap className="h-3.5 w-3.5" />
-            涨幅扫描
-            {signals.length > 0 && (
-              <span className="text-[10px] ml-0.5 opacity-70">({signals.length})</span>
+            <TrendingUp className="h-3.5 w-3.5" />
+            趋势跟踪
+            {trendSignals.length > 0 && (
+              <span className="text-[10px] ml-0.5 opacity-70">({trendSignals.length})</span>
             )}
           </button>
           <button
@@ -547,20 +584,40 @@ export default function DabanPage() {
         </div>
 
         {/* Conditions Bar */}
-        {((activeTab === "screen" && screenConditions.length > 0) || (activeTab === "leftSide" && leftConditions.length > 0)) && (
-          <div className="flex flex-wrap items-center gap-1.5 mb-4">
-            {(activeTab === "leftSide" ? leftConditions : screenConditions).map((c) => (
-              <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a2035] text-gray-400 border border-[#2a3045]">
-                {c}
-              </span>
+        {/* Macro Status Panel (趋势Tab) */}
+        {activeTab === "trend" && macroStatus.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+            {macroStatus.map((m) => (
+              <div key={m.sector} className={`bg-[#0d1117] border rounded-lg px-3 py-2 ${m.bullish ? "border-emerald-500/20" : "border-red-500/20"}`}>
+                <div className="text-[10px] text-gray-500">{m.macro}</div>
+                <div className={`text-sm font-bold ${m.bullish ? "text-emerald-400" : "text-red-400"}`}>
+                  {m.sector} {m.bullish ? "✓" : "✗"}
+                </div>
+                <div className="text-[9px] text-gray-600 truncate">{m.reason}</div>
+              </div>
             ))}
-            {(activeTab === "leftSide" ? leftTime : screenTime) && (
-              <span className="text-[10px] text-gray-600 ml-2">
-                扫描时间: {activeTab === "leftSide" ? leftTime : screenTime}
-              </span>
-            )}
           </div>
         )}
+
+        {/* Conditions Bar */}
+        {(() => {
+          const conds = activeTab === "leftSide" ? leftConditions : activeTab === "trend" ? trendConditions : screenConditions
+          const time = activeTab === "leftSide" ? leftTime : activeTab === "trend" ? trendTime : screenTime
+          return conds.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5 mb-4">
+              {conds.map((c) => (
+                <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a2035] text-gray-400 border border-[#2a3045]">
+                  {c}
+                </span>
+              ))}
+              {time && (
+                <span className="text-[10px] text-gray-600 ml-2">
+                  扫描时间: {time}
+                </span>
+              )}
+            </div>
+          ) : null
+        })()}
 
         {/* Logic Whitebox Panel */}
         {showLogic && (
@@ -932,11 +989,11 @@ export default function DabanPage() {
 
         {/* Signal Cards Grid */}
         <div className="mb-8">
-          {((screenLoading && activeTab === "screen") || (leftLoading && activeTab === "leftSide")) ? (
+          {((screenLoading && activeTab === "screen") || (leftLoading && activeTab === "leftSide") || (trendLoading && activeTab === "trend")) ? (
             <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg py-16 text-center">
               <Loader2 className="h-6 w-6 animate-spin text-gray-500 mx-auto mb-3" />
               <p className="text-gray-500 text-sm">
-                {activeTab === "leftSide" ? "正在扫描低估值超卖股..." : "正在扫描全A股..."}
+                {activeTab === "trend" ? "正在扫描宏观趋势标的..." : activeTab === "leftSide" ? "正在扫描低估值超卖股..." : "正在扫描全A股..."}
               </p>
             </div>
           ) : currentSignals.length === 0 ? (
@@ -963,15 +1020,21 @@ export default function DabanPage() {
                 const isExplosive = signal.riskTag === "爆发打板"
                 const isConfirmed = signal.riskTag === "确认上攻"
                 const isTrap = signal.riskTag === "疑似诱多"
-                const cardBorder = isStrongBuy
-                  ? "border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-                  : isExplosive
-                    ? "border-purple-500/40"
-                    : isConfirmed
-                      ? "border-emerald-500/30"
-                      : isTrap
-                        ? "border-yellow-500/30 opacity-60"
-                        : "border-[#1a2035]"
+                const isTrendBreak = signal.riskTag === "趋势突破"
+                const isVCP = signal.riskTag === "VCP收敛"
+                const cardBorder = isTrendBreak
+                  ? "border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+                  : isVCP
+                    ? "border-cyan-500/30"
+                    : isStrongBuy
+                      ? "border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                      : isExplosive
+                        ? "border-purple-500/40"
+                        : isConfirmed
+                          ? "border-emerald-500/30"
+                          : isTrap
+                            ? "border-yellow-500/30 opacity-60"
+                            : "border-[#1a2035]"
 
                 return (
                 <div
@@ -987,19 +1050,27 @@ export default function DabanPage() {
                         </span>
                         {signal.riskTag && (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                            isStrongBuy
-                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                              : isExplosive
-                                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                                : isConfirmed
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                  : isTrap
-                                    ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-                                    : signal.riskTag === "高风险追板"
-                                      ? "bg-red-500/15 text-red-400"
-                                      : "bg-blue-500/15 text-blue-400"
+                            isTrendBreak
+                              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                              : isVCP
+                                ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/25"
+                                : signal.riskTag === "放量异动"
+                                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                  : signal.riskTag === "Stage2观察"
+                                    ? "bg-gray-500/15 text-gray-400"
+                                    : isStrongBuy
+                                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                      : isExplosive
+                                        ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                                        : isConfirmed
+                                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                          : isTrap
+                                            ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+                                            : signal.riskTag === "高风险追板"
+                                              ? "bg-red-500/15 text-red-400"
+                                              : "bg-blue-500/15 text-blue-400"
                           }`}>
-                            {isStrongBuy ? "🔥" : isExplosive ? "⚡" : isConfirmed ? "✅" : isTrap ? "⚠️" : ""}
+                            {isTrendBreak ? "🏔️" : isVCP ? "🔋" : signal.riskTag === "放量异动" ? "📊" : isStrongBuy ? "🔥" : isExplosive ? "⚡" : isConfirmed ? "✅" : isTrap ? "⚠️" : ""}
                             {signal.riskTag}
                           </span>
                         )}

@@ -23,6 +23,15 @@ export async function POST(req: Request) {
 
     const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
 
+    // fix=true: 重置所有脏数据(nextDayChange异常)为pending重新跟踪
+    if (searchParams.get("fix") === "true") {
+      const corrupted = await prisma.boardTrack.updateMany({
+        where: { trackStatus: "tracked" },
+        data: { trackStatus: "pending", nextDayPrice: null, nextDayChange: null, nextDayHigh: null, nextDayLow: null, trackedAt: null },
+      });
+      console.log(`[Board Track Fix] Reset ${corrupted.count} corrupted records to pending`);
+    }
+
     // 找出所有待跟踪的记录（entryDate 早于今天）
     const pending = await prisma.boardTrack.findMany({
       where: {
@@ -55,7 +64,7 @@ export async function POST(req: Request) {
       });
 
       try {
-        const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?secids=${secids.join(",")}&fields=f2,f3,f12,f15,f16`;
+        const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=${secids.join(",")}&fields=f2,f3,f12,f15,f16`;
         const res = await fetch(url, {
           headers: {
             "User-Agent": "Mozilla/5.0",
