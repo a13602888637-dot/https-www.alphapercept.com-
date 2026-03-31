@@ -29,17 +29,24 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
     });
 
-    // 按 signalTag 分组统计
+    // 按 stockCode 去重：每只股票只算最新一条记录
+    const seenStocks = new Set<string>();
+    const dedupedRecords = allRecords.filter((r) => {
+      if (seenStocks.has(r.stockCode)) return false;
+      seenStocks.add(r.stockCode);
+      return true;
+    });
+
+    // 按 signalTag 分组统计（基于去重后的记录）
     const tagMap = new Map<string, {
       total: number;
       tracked: number;
       changes: number[];
     }>();
 
-    // 也统计总体
     const overall = { total: 0, tracked: 0, changes: [] as number[] };
 
-    for (const r of allRecords) {
+    for (const r of dedupedRecords) {
       const tag = r.signalTag || "未分类";
       if (!tagMap.has(tag)) {
         tagMap.set(tag, { total: 0, tracked: 0, changes: [] });
@@ -90,9 +97,15 @@ export async function GET(req: Request) {
       }
     }
 
-    // 最近 10 条跟踪记录
-    const recentTracked = allRecords
-      .filter((r) => r.trackStatus === "tracked")
+    // 最近 10 条跟踪记录（按 stockCode 去重）
+    const recentSeen = new Set<string>();
+    const recentTracked = dedupedRecords
+      .filter((r) => {
+        if (r.trackStatus !== "tracked") return false;
+        if (recentSeen.has(r.stockCode)) return false;
+        recentSeen.add(r.stockCode);
+        return true;
+      })
       .slice(0, 10)
       .map((r) => ({
         stockCode: r.stockCode,
@@ -108,7 +121,7 @@ export async function GET(req: Request) {
       overall: buildStats("总计", overall),
       byTag,
       recentTracked,
-      pendingCount: allRecords.filter((r) => r.trackStatus === "pending").length,
+      pendingCount: dedupedRecords.filter((r) => r.trackStatus === "pending").length,
     });
   } catch (error) {
     console.error("BoardTrack stats error:", error);

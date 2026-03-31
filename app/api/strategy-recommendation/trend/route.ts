@@ -351,10 +351,10 @@ export async function GET() {
       const sectorIdx = MACRO_SECTORS.indexOf(bullishSectors[i]);
       const macroInfo = macroStatus[sectorIdx].reason;
 
-      // 正涨幅 + 市值>50亿, 限15只/板块
+      // 正涨幅 + 市值>50亿(不设上限), 限20只/板块
       const filtered = stocks
         .filter((s: StockBasic) => s.currentPrice > 0 && s.changePercent > 0 && s.circulatingMarketCap / 1e8 > 50)
-        .slice(0, 15);
+        .slice(0, 20);
 
       for (const stock of filtered) {
         candidates.push({ stock, sectorName: bullishSectors[i].name, macroInfo });

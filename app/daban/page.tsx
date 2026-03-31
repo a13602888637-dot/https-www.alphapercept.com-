@@ -874,8 +874,47 @@ export default function DabanPage() {
               </div>
             </div>
 
+            {/* 二十、趋势跟踪引擎 */}
+            <div className="space-y-2">
+              <div className="text-cyan-400/80 font-medium">二十、趋势跟踪引擎（独立Tab）</div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-gray-400">Layer 1 — 宏观Beta校验（一票否决）:</div>
+                <div className="pl-3">底层资产(ETF)站在MA20上方 且 MA20趋势向上</div>
+                <div className="pl-3">黄金→黄金ETF、铜→有色ETF、石油→原油基金、煤炭→煤炭ETF</div>
+                <div className="pl-3">无ETF对标的概念板块(AI/机器人/航天等)默认通过</div>
+                <div className="pl-3 text-red-400/60">宏观否决 = 该板块一票否决，不做右侧试错</div>
+                <div className="text-gray-400">Layer 2 — Stage 2 底座判定:</div>
+                <div className="pl-3">价格 &gt; MA150 且 价格 &gt; MA200</div>
+                <div className="pl-3">MA150 趋势向上（对比20日前拐头）</div>
+                <div className="pl-3">MA50 &gt; MA150（中期动能超越长期）</div>
+                <div className="pl-3 text-gray-600">逻辑: 机构完成底仓配置，舞台搭好</div>
+                <div className="text-gray-400">Layer 3 — VCP 波动率收敛（核心绝杀）:</div>
+                <div className="pl-3">10日平均振幅 &lt; 3%（价格收窄）</div>
+                <div className="pl-3">近3日均量 &lt; 50日均量×50%（量能枯竭）</div>
+                <div className="pl-3 text-gray-600">逻辑: 浮筹洗净，卖盘枯竭，爆发前的宁静</div>
+                <div className="text-gray-400">Layer 4 — 右侧突破确认:</div>
+                <div className="pl-3">涨幅 &gt; 2%（跨越横盘箱体上沿）</div>
+                <div className="pl-3">量比 &gt; 1.5 或 成交量 &gt; 10日均量×150%</div>
+                <div className="pl-3 text-gray-600">逻辑: 没有放量的2%是假突破，需真实资金燃料</div>
+              </div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-gray-400">信号标签:</div>
+                <div className="pl-3">🏔️趋势突破 = L2+L3+L4 / 🔋VCP收敛 = L2+L3 / 📊放量异动 = L2+L4 / Stage2观察 = 仅L2</div>
+                <div className="text-gray-400">风控（趋势跟随退出）:</div>
+                <div className="pl-3">止损: max(突破阳线最低, 买入价×0.95) — 跌破说明突破失败</div>
+                <div className="pl-3">移动止盈: 跟踪MA20，收盘跌破且次日不收回→清仓</div>
+                <div className="pl-3">仓位: 趋势突破10% / VCP收敛8% / 放量异动6% / 观察3%</div>
+              </div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-gray-400">覆盖板块(18个):</div>
+                <div className="pl-3">大宗: 黄金/有色·铜铝/石油石化/煤炭/航运</div>
+                <div className="pl-3">成长: 电力/军工/半导体/医药/银行/证券</div>
+                <div className="pl-3">概念: 创新药/电网设备/商业航天/AI算力/机器人/低空经济</div>
+              </div>
+            </div>
+
             <div className="border-t border-[#1a2035] pt-2 text-[10px] text-gray-600 space-y-1">
-              <div>数据源: 东方财富推送API + K线API + technicalindicators库 + BoardTrack数据库</div>
+              <div>数据源: 东方财富推送API + K线API(250日) + ETF趋势判定 + BoardTrack数据库</div>
               <div>限制: 无Level-2盘口、无财报API(ROE/FCF)、无NLP、无基金持仓 — 用近似指标替代</div>
             </div>
           </div>
@@ -1238,7 +1277,7 @@ export default function DabanPage() {
                       {signal.symbol}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <span className="text-gray-400 text-xs">
                       入场¥{signal.currentPrice.toFixed(2)}
                     </span>
@@ -1251,6 +1290,12 @@ export default function DabanPage() {
                         待跟踪
                       </Badge>
                     )}
+                    <button
+                      onClick={() => handleCancelTrack(signal.symbol)}
+                      className="text-gray-600 hover:text-red-400 text-xs transition-colors"
+                    >
+                      取消
+                    </button>
                   </div>
                 </div>
               ))}
