@@ -150,7 +150,7 @@ export default function DabanPage() {
           suggestedPosition: (s.advice as Record<string, unknown>).suggestedPosition as number,
           stopLoss: (s.advice as Record<string, unknown>).stopLoss as number,
           takeProfitStrategy: (s.advice as Record<string, unknown>).takeProfitStrategy as string,
-          drawdownExit: 0,
+          drawdownExit: (s.advice as Record<string, unknown>).drawdownExit as number ?? 0,
           strategyLabel: (s.advice as Record<string, unknown>).strategyLabel as string,
           positionSource: "fixed" as const,
         } : undefined,
@@ -349,7 +349,7 @@ export default function DabanPage() {
             signalTag: signal.riskTag || "未分类",
             signalScore: signal.signalScore || 0,
           }),
-        }).catch(() => {})
+        }).then(() => fetchStats()).catch(() => {})
       } else {
         const errData = await res.json().catch(() => ({}))
         const msg = errData.error || `HTTP ${res.status}`

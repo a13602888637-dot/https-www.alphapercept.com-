@@ -409,8 +409,8 @@ export async function GET() {
       sector: string; macroStatus: string; engineType: string;
       stage2: boolean; vcpDetected: boolean; breakoutConfirmed: boolean; rs120: number;
       advice: {
-        suggestedPosition: number; stopLoss: number;
-        trailingStopMA20: number; strategyLabel: string;
+        suggestedPosition: number; stopLoss: number; drawdownExit: number;
+        stopLossPrice: number; trailingStopMA20: number; strategyLabel: string;
         takeProfitStrategy: string; positionSource: "fixed";
       };
     }> = [];
@@ -467,7 +467,10 @@ export async function GET() {
 
       // ─── 风控 ───
       const breakoutLow = klines[klines.length - 1].low;
-      const stopLoss = Math.round(Math.max(breakoutLow, stock.currentPrice * 0.95) * 100) / 100;
+      const stopLossPrice = Math.round(Math.max(breakoutLow, stock.currentPrice * 0.95) * 100) / 100;
+      const stopLossPct = stock.currentPrice > 0
+        ? Math.round(((stopLossPrice - stock.currentPrice) / stock.currentPrice) * 1000) / 10
+        : -5;
       const trailingStopMA20 = Math.round(stage2.ma20 * 100) / 100;
       const capYi = stock.circulatingMarketCap / 1e8;
 
@@ -484,6 +487,10 @@ export async function GET() {
       parts.push(`市值${capYi.toFixed(0)}亿`);
 
       const position = signalTag.includes("趋势突破") ? 10 : signalTag.includes("VCP收敛") ? 8 : signalTag.includes("放量异动") ? 6 : 3;
+      // drawdownExit: 跟踪MA20的回撤幅度
+      const drawdownExit = trailingStopMA20 > 0 && stock.currentPrice > 0
+        ? Math.round(((trailingStopMA20 - stock.currentPrice) / stock.currentPrice) * 1000) / 10
+        : -5;
 
       signals.push({
         symbol: stock.symbol, name: stock.name,
@@ -498,9 +505,13 @@ export async function GET() {
         stage2: stage2.pass, vcpDetected: vcp.detected,
         breakoutConfirmed: breakout.confirmed, rs120: Math.round(rs120 * 10) / 10,
         advice: {
-          suggestedPosition: position, stopLoss, trailingStopMA20,
+          suggestedPosition: position,
+          stopLoss: stopLossPct,       // 百分比（如 -5）
+          drawdownExit,                // MA20回撤百分比
+          stopLossPrice,               // 绝对价格
+          trailingStopMA20,            // MA20绝对价格
           strategyLabel: signalTag.replace(/\[.*\]\s*/, ""),
-          takeProfitStrategy: `跟踪MA20(¥${trailingStopMA20})止盈 | 止损¥${stopLoss} | 跌破MA20且次日不收回→清仓`,
+          takeProfitStrategy: `止损¥${stopLossPrice}(${stopLossPct}%) | 跟踪MA20(¥${trailingStopMA20}) | 跌破MA20且次日不收回→清仓`,
           positionSource: "fixed",
         },
       });
