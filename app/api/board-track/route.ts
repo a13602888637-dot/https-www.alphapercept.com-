@@ -22,6 +22,18 @@ export async function POST(req: Request) {
     const now = new Date();
     const entryDate = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
 
+    // 去重: 同一用户同一股票如果已有pending/tracked记录，不重复创建
+    const existing = await prisma.boardTrack.findFirst({
+      where: {
+        userId: clerkUserId,
+        stockCode,
+        trackStatus: { in: ["pending", "tracked"] },
+      },
+    });
+    if (existing) {
+      return NextResponse.json({ success: true, id: existing.id, duplicate: true });
+    }
+
     const record = await prisma.boardTrack.create({
       data: {
         userId: clerkUserId,
@@ -52,15 +64,23 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "30");
 
-    const records = await prisma.boardTrack.findMany({
+    const allRecords = await prisma.boardTrack.findMany({
       where: { userId: clerkUserId },
       orderBy: { createdAt: "desc" },
-      take: limit,
+      take: limit * 3, // fetch more to allow dedup
     });
+
+    // 按 stockCode 去重，只保留每只股票最新的一条记录
+    const seen = new Set<string>();
+    const deduped = allRecords.filter((r) => {
+      if (seen.has(r.stockCode)) return false;
+      seen.add(r.stockCode);
+      return true;
+    }).slice(0, limit);
 
     return NextResponse.json({
       success: true,
-      records: records.map((r) => ({
+      records: deduped.map((r) => ({
         ...r,
         entryPrice: Number(r.entryPrice),
         nextDayPrice: r.nextDayPrice ? Number(r.nextDayPrice) : null,
@@ -85,19 +105,29 @@ export async function DELETE(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
-    if (!id) {
-      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    const stockCode = searchParams.get("stockCode");
+
+    if (!id && !stockCode) {
+      return NextResponse.json({ error: "Missing id or stockCode" }, { status: 400 });
     }
 
-    // 验证记录属于当前用户
+    if (stockCode) {
+      // 按股票代码删除该用户所有跟踪记录
+      const deleted = await prisma.boardTrack.deleteMany({
+        where: { userId: clerkUserId, stockCode },
+      });
+      return NextResponse.json({ success: true, deleted: deleted.count });
+    }
+
+    // 按 id 删除单条
     const record = await prisma.boardTrack.findFirst({
-      where: { id, userId: clerkUserId },
+      where: { id: id!, userId: clerkUserId },
     });
     if (!record) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    await prisma.boardTrack.delete({ where: { id } });
+    await prisma.boardTrack.delete({ where: { id: id! } });
 
     return NextResponse.json({ success: true });
   } catch (error) {

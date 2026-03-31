@@ -24,12 +24,28 @@ interface SectorConfig {
 }
 
 // 板块→宏观映射
+// macroSymbol: A股ETF secid，用K线判断MA20趋势; null=无ETF对标,默认通过
 const MACRO_SECTORS: SectorConfig[] = [
-  { name: "黄金", macroSymbol: "gc.f", macroName: "COMEX黄金", boardQuery: "b:BK0493" },
-  { name: "有色·铜", macroSymbol: "hg.f", macroName: "COMEX铜", boardQuery: "b:BK0478" },
-  { name: "石油石化", macroSymbol: "cl.f", macroName: "WTI原油", boardQuery: "b:BK0698" },
+  // 大宗商品链
+  { name: "黄金", macroSymbol: "1.518880", macroName: "黄金ETF", boardQuery: "b:BK0493" },
+  { name: "有色·铜铝", macroSymbol: "0.159980", macroName: "有色ETF", boardQuery: "b:BK0478" },
+  { name: "石油石化", macroSymbol: "1.501018", macroName: "原油基金", boardQuery: "b:BK0698" },
+  { name: "煤炭", macroSymbol: "1.515220", macroName: "煤炭ETF", boardQuery: "b:BK0733" },
   { name: "航运", macroSymbol: null, macroName: "BDI指数", boardQuery: "b:BK0549" },
-  { name: "煤炭", macroSymbol: null, macroName: "动力煤", boardQuery: "b:BK0733" },
+  // 成长/周期
+  { name: "电力", macroSymbol: "0.159611", macroName: "电力ETF", boardQuery: "b:BK0428" },
+  { name: "军工", macroSymbol: "1.512660", macroName: "军工ETF", boardQuery: "b:BK0481" },
+  { name: "半导体", macroSymbol: "1.512480", macroName: "半导体ETF", boardQuery: "b:BK1036" },
+  { name: "医药", macroSymbol: "1.512010", macroName: "医药ETF", boardQuery: "b:BK0465" },
+  { name: "银行", macroSymbol: "1.512800", macroName: "银行ETF", boardQuery: "b:BK0475" },
+  { name: "证券", macroSymbol: "1.512880", macroName: "证券ETF", boardQuery: "b:BK0473" },
+  // 中国概念热点
+  { name: "创新药", macroSymbol: null, macroName: "创新药", boardQuery: "b:BK1084" },
+  { name: "电网设备", macroSymbol: null, macroName: "电网设备", boardQuery: "b:BK1050" },
+  { name: "商业航天", macroSymbol: null, macroName: "商业航天", boardQuery: "b:BK1124" },
+  { name: "AI算力", macroSymbol: null, macroName: "AI算力", boardQuery: "b:BK1146" },
+  { name: "机器人", macroSymbol: null, macroName: "机器人", boardQuery: "b:BK1131" },
+  { name: "低空经济", macroSymbol: null, macroName: "低空经济", boardQuery: "b:BK1159" },
 ];
 
 interface MacroResult {
@@ -41,69 +57,54 @@ interface MacroResult {
   reason: string;
 }
 
-// ═══ 1. 宏观 Beta 校验 (stooq.com 历史数据) ═══
+// ═══ 1. 宏观 Beta 校验 (用A股ETF的K线判断趋势) ═══
 
 async function fetchMacroTrend(config: SectorConfig): Promise<MacroResult> {
   const { name, macroSymbol, macroName } = config;
 
   if (!macroSymbol) {
-    return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "无数据源,跳过校验" };
+    return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "无数据源,默认通过" };
   }
 
   try {
-    const now = new Date();
-    const d2 = now.toISOString().slice(0, 10).replace(/-/g, "");
-    const d1Date = new Date(now.getTime() - 60 * 86400000);
-    const d1 = d1Date.toISOString().slice(0, 10).replace(/-/g, "");
+    // 获取ETF 30日K线
+    const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${macroSymbol}&klt=101&fqt=1&lmt=30&end=20500101&fields1=f1&fields2=f51,f52,f53,f54,f55,f56`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0", Referer: "https://quote.eastmoney.com/" },
+      signal: AbortSignal.timeout(6000),
+    });
 
-    const url = `https://stooq.com/q/d/l/?s=${macroSymbol}&d1=${d1}&d2=${d2}&i=d`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) {
-      return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "API失败,跳过" };
+      return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "API失败" };
     }
 
-    const csv = await res.text();
-    const lines = csv.trim().split("\n").filter(l => l.trim() && !l.startsWith("Date"));
-    if (lines.length < 20) {
-      return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "数据不足" };
+    const json = await res.json();
+    const klines = json?.data?.klines;
+    if (!Array.isArray(klines) || klines.length < 20) {
+      return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "K线不足" };
     }
 
-    const closes: number[] = [];
-    for (const line of lines) {
-      const parts = line.split(",");
-      if (parts.length >= 5) {
-        const close = parseFloat(parts[4]);
-        if (!isNaN(close) && close > 0) closes.push(close);
-      }
-    }
-
-    if (closes.length < 20) {
-      return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "数据不足" };
-    }
-
+    const closes = klines.map((k: string) => parseFloat(k.split(",")[2]));
     const currentPrice = closes[closes.length - 1];
-    const ma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const ma20 = closes.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
 
-    // MA20 趋势判断: 当前MA20 vs 5天前的MA20
+    // MA20 趋势: 当前MA20 vs 5天前
     let trendUp = true;
     if (closes.length >= 25) {
-      const prev20 = closes.slice(-25, -5);
-      if (prev20.length >= 20) {
-        const ma20_5ago = prev20.slice(-20).reduce((a, b) => a + b, 0) / 20;
-        trendUp = ma20 > ma20_5ago;
-      }
+      const ma20_5ago = closes.slice(-25, -5).slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
+      trendUp = ma20 > ma20_5ago;
     }
 
     const bullish = currentPrice > ma20 && trendUp;
     const reason = bullish
-      ? `${currentPrice.toFixed(1)}>${ma20.toFixed(1)}(MA20) 多头✓`
+      ? `${currentPrice.toFixed(2)}>${ma20.toFixed(2)}(MA20) 多头✓`
       : currentPrice <= ma20
-        ? `${currentPrice.toFixed(1)}<${ma20.toFixed(1)}(MA20) ✗否决`
-        : `MA20趋势向下 ✗否决`;
+        ? `${currentPrice.toFixed(2)}<${ma20.toFixed(2)}(MA20) ✗否决`
+        : `MA20向下 ✗否决`;
 
     return { sector: name, macro: macroName, price: currentPrice, ma20, bullish, reason };
   } catch {
-    return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "获取异常,跳过" };
+    return { sector: name, macro: macroName, price: null, ma20: null, bullish: true, reason: "获取异常" };
   }
 }
 

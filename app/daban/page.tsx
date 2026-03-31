@@ -369,22 +369,12 @@ export default function DabanPage() {
   const handleCancelTrack = async (symbol: string) => {
     try {
       const token = await getToken()
-      // 从accepted列表中找到并移除
       setAccepted((prev) => prev.filter((s) => s.symbol !== symbol))
-      // 删除BoardTrack记录（按stockCode查最近的pending记录）
-      const res = await fetch("/api/board-track?" + new URLSearchParams({ limit: "50" }), {
+      // 按 stockCode 删除该股票的所有跟踪记录
+      await fetch(`/api/board-track?stockCode=${symbol}`, {
+        method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
-      if (res.ok) {
-        const data = await res.json()
-        const record = data.records?.find((r: { stockCode: string }) => r.stockCode === symbol)
-        if (record) {
-          await fetch(`/api/board-track?id=${record.id}`, {
-            method: "DELETE",
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          })
-        }
-      }
       toast.success("已取消跟踪")
     } catch {
       toast.error("取消失败")
@@ -432,7 +422,7 @@ export default function DabanPage() {
 
   return (
     <div className="min-h-full bg-[#0a0e17] text-gray-100">
-      <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+      <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
