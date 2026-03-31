@@ -157,19 +157,21 @@ export default function DabanPage() {
       if (res.ok) {
         const data = await res.json()
         if (data.records) {
-          const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" })
-          // 只加载今天和pending状态的记录为"已接受"
+          // 加载最近7天的记录（包括pending和tracked状态）
+          const sevenDaysAgo = new Date()
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+          const cutoff = sevenDaysAgo.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" })
           const todayRecords = data.records.filter(
             (r: { entryDate: string; trackStatus: string }) =>
-              r.entryDate === today || r.trackStatus === "pending"
+              r.trackStatus !== "failed" && r.entryDate >= cutoff
           )
-          setAccepted(todayRecords.map((r: { stockCode: string; stockName: string; entryPrice: number; signalScore?: number }) => ({
+          setAccepted(todayRecords.map((r: { stockCode: string; stockName: string; entryPrice: number; signalScore?: number; trackStatus: string; nextDayChange?: number; entryDate: string }) => ({
             symbol: r.stockCode,
             name: r.stockName,
             currentPrice: r.entryPrice,
-            changePercent: 0,
+            changePercent: r.nextDayChange ?? 0,
             volumeRatio: 0,
-            reason: "",
+            reason: r.trackStatus === "tracked" ? `${r.entryDate} 次日${(r.nextDayChange ?? 0) >= 0 ? "+" : ""}${(r.nextDayChange ?? 0).toFixed(2)}%` : `${r.entryDate} 待跟踪`,
           })))
         }
       }
@@ -1176,12 +1178,18 @@ export default function DabanPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-emerald-400 text-sm">
-                      ¥{signal.currentPrice.toFixed(2)}
+                    <span className="text-gray-400 text-xs">
+                      入场¥{signal.currentPrice.toFixed(2)}
                     </span>
-                    <Badge className="text-yellow-400 border-yellow-400/30 text-xs bg-transparent">
-                      T+1锁定
-                    </Badge>
+                    {signal.reason ? (
+                      <span className={`text-xs ${signal.changePercent >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {signal.reason}
+                      </span>
+                    ) : (
+                      <Badge className="text-yellow-400 border-yellow-400/30 text-xs bg-transparent">
+                        待跟踪
+                      </Badge>
+                    )}
                   </div>
                 </div>
               ))}
