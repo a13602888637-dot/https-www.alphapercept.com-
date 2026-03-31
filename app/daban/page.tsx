@@ -875,42 +875,41 @@ export default function DabanPage() {
               </div>
             </div>
 
-            {/* 二十、趋势跟踪引擎 */}
+            {/* 二十、趋势跟踪引擎 V2 */}
             <div className="space-y-2">
-              <div className="text-cyan-400/80 font-medium">二十、趋势跟踪引擎（独立Tab）</div>
+              <div className="text-cyan-400/80 font-medium">二十、趋势跟踪引擎 V2 — 双引擎架构</div>
               <div className="space-y-1 text-gray-500 pl-3">
-                <div className="text-gray-400">Layer 1 — 宏观Beta校验（一票否决）:</div>
-                <div className="pl-3">底层资产(ETF)站在MA20上方 且 MA20趋势向上</div>
-                <div className="pl-3">黄金→黄金ETF、铜→有色ETF、石油→原油基金、煤炭→煤炭ETF</div>
-                <div className="pl-3">无ETF对标的概念板块(AI/机器人/航天等)默认通过</div>
-                <div className="pl-3 text-red-400/60">宏观否决 = 该板块一票否决，不做右侧试错</div>
-                <div className="text-gray-400">Layer 2 — Stage 2 底座判定:</div>
-                <div className="pl-3">价格 &gt; MA150 且 价格 &gt; MA200</div>
-                <div className="pl-3">MA150 趋势向上（对比20日前拐头）</div>
-                <div className="pl-3">MA50 &gt; MA150（中期动能超越长期）</div>
-                <div className="pl-3 text-gray-600">逻辑: 机构完成底仓配置，舞台搭好</div>
-                <div className="text-gray-400">Layer 3 — VCP 波动率收敛（核心绝杀）:</div>
-                <div className="pl-3">10日平均振幅 &lt; 3%（价格收窄）</div>
-                <div className="pl-3">近3日均量 &lt; 50日均量×50%（量能枯竭）</div>
-                <div className="pl-3 text-gray-600">逻辑: 浮筹洗净，卖盘枯竭，爆发前的宁静</div>
-                <div className="text-gray-400">Layer 4 — 右侧突破确认:</div>
-                <div className="pl-3">涨幅 &gt; 2%（跨越横盘箱体上沿）</div>
-                <div className="pl-3">量比 &gt; 1.5 或 成交量 &gt; 10日均量×150%</div>
-                <div className="pl-3 text-gray-600">逻辑: 没有放量的2%是假突破，需真实资金燃料</div>
+                <div className="text-gray-400">🔁 周期资源引擎 — ETF宏观锚定:</div>
+                <div className="pl-3">ETF站在MA20上方 且 MA20趋势向上 → 允许做该板块</div>
+                <div className="pl-3">黄金ETF/有色ETF/原油基金/煤炭ETF</div>
+                <div className="text-gray-400">🚀 成长科技引擎 — 板块指数+相对强度:</div>
+                <div className="pl-3">板块指数 &gt; MA20 且 &gt; MA60（短中期多头）</div>
+                <div className="pl-3">板块今日涨幅 &gt; 上证指数涨幅（跑赢大盘）</div>
+                <div className="pl-3 text-red-400/60">不在逆风板块找英雄 — 板块弱势一票否决</div>
+              </div>
+              <div className="space-y-1 text-gray-500 pl-3">
+                <div className="text-gray-400">L1.5 涨停梯队（广度验证）:</div>
+                <div className="pl-3">板块内涨&gt;5%的≥3只 或 至少1只涨停</div>
+                <div className="pl-3 text-gray-600">只有1只涨 = 单骑救主，判定假趋势</div>
+                <div className="text-gray-400">L2 Stage 2 底座:</div>
+                <div className="pl-3">价 &gt; MA150 &gt; MA200, MA50 &gt; MA150, MA150拐头</div>
+                <div className="text-gray-400">L2.5 RS相对强度（成长股）:</div>
+                <div className="pl-3">120日涨幅百分位 &gt; 85（战胜85%的股票）</div>
+                <div className="pl-3 text-gray-600">RS低 = 弱势跟风股，只抓绝对龙头</div>
+                <div className="text-gray-400">L2.6 回撤熔断:</div>
+                <div className="pl-3">距120日最高回撤 &gt; 20% → 踢出（套牢盘太重）</div>
+                <div className="text-gray-400">L3 VCP 波动率收敛（核心绝杀）:</div>
+                <div className="pl-3">10日振幅 &lt; 3% + 近3日量 &lt; 50日均量50%</div>
+                <div className="pl-3 text-gray-600">爆发前必有宁静，浮筹洗净卖盘枯竭</div>
+                <div className="text-gray-400">L4 右侧突破:</div>
+                <div className="pl-3">涨 &gt; 2% + 量比 &gt; 1.5 = 带量跨越阻力位</div>
               </div>
               <div className="space-y-1 text-gray-500 pl-3">
                 <div className="text-gray-400">信号标签:</div>
-                <div className="pl-3">🏔️趋势突破 = L2+L3+L4 / 🔋VCP收敛 = L2+L3 / 📊放量异动 = L2+L4 / Stage2观察 = 仅L2</div>
-                <div className="text-gray-400">风控（趋势跟随退出）:</div>
-                <div className="pl-3">止损: max(突破阳线最低, 买入价×0.95) — 跌破说明突破失败</div>
-                <div className="pl-3">移动止盈: 跟踪MA20，收盘跌破且次日不收回→清仓</div>
-                <div className="pl-3">仓位: 趋势突破10% / VCP收敛8% / 放量异动6% / 观察3%</div>
-              </div>
-              <div className="space-y-1 text-gray-500 pl-3">
-                <div className="text-gray-400">覆盖板块(18个):</div>
-                <div className="pl-3">大宗: 黄金/有色·铜铝/石油石化/煤炭/航运</div>
-                <div className="pl-3">成长: 电力/军工/半导体/医药/银行/证券</div>
-                <div className="pl-3">概念: 创新药/电网设备/商业航天/AI算力/机器人/低空经济</div>
+                <div className="pl-3">[周期共振] / [动能反转] + 趋势突破/VCP收敛/放量异动/Stage2观察</div>
+                <div className="text-gray-400">风控:</div>
+                <div className="pl-3">止损: max(阳线最低, -5%) | 止盈: 跟踪MA20,跌破清仓</div>
+                <div className="pl-3">仓位: 趋势突破10% / VCP8% / 放量异动6% / 观察3%</div>
               </div>
             </div>
 
