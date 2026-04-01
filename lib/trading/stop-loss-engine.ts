@@ -147,7 +147,12 @@ export function calculateStopLoss(input: StopLossInput): StopLossResult {
         if (frequency !== "daily") {
           atr = convertATRFrequency(atr, frequency, "daily");
         }
-        const sl = currentPrice - multiplier * atr;
+        // 安全限制: ATR不应超过现价的20%（防止低频推演异常放大）
+        const maxAtr = currentPrice * 0.2;
+        if (atr > maxAtr) atr = maxAtr;
+        let sl = currentPrice - multiplier * atr;
+        // 止损价绝不能高于现价
+        if (sl > currentPrice) sl = currentPrice * 0.95;
         return {
           stopLossPrice: Math.round(Math.max(sl, 0) * 100) / 100,
           method: "atr",
@@ -166,6 +171,9 @@ export function calculateStopLoss(input: StopLossInput): StopLossResult {
         if (frequency !== "daily") {
           atr = convertATRFrequency(atr, frequency, "daily");
         }
+        // 安全限制: ATR不应超过现价的20%
+        const maxAtrC = currentPrice * 0.2;
+        if (atr > maxAtrC) atr = maxAtrC;
         const hh = highestHigh(ohlcData, lookbackPeriod);
         const sl = hh - multiplier * atr;
         return {
