@@ -111,6 +111,7 @@ interface SectorPanel {
 const PANEL_SECTORS: SectorPanel[] = [
   // 大宗周期
   { name: "黄金", boardCode: "BK0493" },
+  { name: "白银", boardCode: "BK1473" },
   { name: "有色金属", boardCode: "BK0478" },
   { name: "石油石化", boardCode: "BK0698" },
   { name: "煤炭", boardCode: "BK0733" },
