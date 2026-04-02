@@ -16,6 +16,7 @@ import { PhaseProgressBar, DEFAULT_PHASES } from "@/components/my-stocks/PhasePr
 import { CalendarGrid, type CalendarEvent } from "@/components/my-stocks/CalendarGrid";
 import { DayDetailPanel } from "@/components/my-stocks/DayDetailPanel";
 import { WeeklyTodoList } from "@/components/my-stocks/WeeklyTodoList";
+import { StrategyGenerator } from "@/components/my-stocks/StrategyGenerator";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export default function MyStocksPage() {
   const [triggers, setTriggers] = useState<TriggerItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [healthLoading, setHealthLoading] = useState(true);
+  const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set());
 
   // Tab 2 state
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
@@ -222,6 +224,16 @@ export default function MyStocksPage() {
     }
   }, [fetchWithAuth]);
 
+  const fetchWatchlist = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/watchlist");
+      const data = await res.json();
+      if (data.success && data.watchlist) {
+        setWatchlistCodes(new Set(data.watchlist.map((w: { stockCode: string }) => w.stockCode)));
+      }
+    } catch {}
+  }, [fetchWithAuth]);
+
   const fetchCalendarEvents = useCallback(async () => {
     setCalendarLoading(true);
     try {
@@ -253,12 +265,9 @@ export default function MyStocksPage() {
     fetchPortfolio();
     fetchHealthCheck();
     fetchTriggers();
-  }, [isSignedIn, fetchPortfolio, fetchHealthCheck, fetchTriggers]);
-
-  useEffect(() => {
-    if (isSignedIn === undefined) return;
     fetchCalendarEvents();
-  }, [isSignedIn, fetchCalendarEvents]);
+    fetchWatchlist();
+  }, [isSignedIn, fetchPortfolio, fetchHealthCheck, fetchTriggers, fetchCalendarEvents, fetchWatchlist]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
@@ -269,6 +278,44 @@ export default function MyStocksPage() {
       if (data.success) {
         setTriggers((prev) => prev.filter((t) => t.id !== id));
         toast.success("已删除监控标的");
+      }
+    } catch {
+      toast.error("删除失败");
+    }
+  }
+
+  async function handleAddToWatchlist(stockCode: string, stockName: string) {
+    try {
+      const res = await fetchWithAuth("/api/watchlist", {
+        method: "POST",
+        body: JSON.stringify({ stockCode, stockName }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWatchlistCodes(prev => new Set([...prev, stockCode]));
+        toast.success(`${stockName} 已加入自选`);
+      }
+    } catch {
+      toast.error("添加失败");
+    }
+  }
+
+  async function handleRemoveFromWatchlist(stockCode: string) {
+    try {
+      // Need to find watchlist item id - fetch then delete
+      const res = await fetchWithAuth(`/api/watchlist`);
+      const data = await res.json();
+      if (data.success && data.watchlist) {
+        const item = data.watchlist.find((w: { stockCode: string }) => w.stockCode === stockCode);
+        if (item) {
+          await fetchWithAuth(`/api/watchlist?id=${item.id}`, { method: "DELETE" });
+          setWatchlistCodes(prev => {
+            const next = new Set(prev);
+            next.delete(stockCode);
+            return next;
+          });
+          toast.success("已移出自选");
+        }
       }
     } catch {
       toast.error("删除失败");
@@ -341,6 +388,13 @@ export default function MyStocksPage() {
     } catch {
       toast.error("更新失败");
     }
+  }
+
+  // Called after AI strategy is saved — refresh all data
+  function handleStrategySaved() {
+    fetchCalendarEvents();
+    fetchTriggers();
+    toast.success("策略已保存到日历");
   }
 
   function handleNavigateMonth(dir: -1 | 1) {
@@ -447,6 +501,12 @@ export default function MyStocksPage() {
               triggers={triggers}
               loading={portfolioLoading}
               onDeleteTrigger={handleDeleteTrigger}
+              watchlistCodes={watchlistCodes}
+              onAddToWatchlist={handleAddToWatchlist}
+              onRemoveFromWatchlist={handleRemoveFromWatchlist}
+              cashBalance={594}
+              reverseRepo={10000}
+              totalAssets={totalAssets}
             />
 
             {/* AI 持仓诊断 */}
@@ -457,6 +517,19 @@ export default function MyStocksPage() {
         {/* ═══ Tab 2: 交易日历 ═══ */}
         <TabsContent value="trading-calendar">
           <div className="space-y-4 mt-4">
+            {/* AI 策略生成 */}
+            <StrategyGenerator
+              positions={positions}
+              healthRules={healthRules}
+              watchlistCodes={watchlistCodes}
+              totalAssets={totalAssets}
+              cashBalance={594}
+              reverseRepo={10000}
+              onStrategySaved={handleStrategySaved}
+              targetYear={calYear}
+              targetMonth={calMonth}
+            />
+
             {/* 阶段进度条 */}
             <Card className="bg-[#0d1117] border-[#1a2035] p-4">
               <PhaseProgressBar phases={DEFAULT_PHASES} currentPhaseIndex={getCurrentPhaseIndex()} />

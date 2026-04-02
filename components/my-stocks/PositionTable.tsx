@@ -8,6 +8,7 @@ import {
   Trash2,
   Radar,
   PackageOpen,
+  Star,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -43,6 +44,14 @@ interface PositionTableProps {
   triggers: TriggerItem[];
   loading?: boolean;
   onDeleteTrigger?: (id: string) => void;
+  // Watchlist integration
+  watchlistCodes?: Set<string>;
+  onAddToWatchlist?: (stockCode: string, stockName: string) => void;
+  onRemoveFromWatchlist?: (stockCode: string) => void;
+  // Cash & reverse repo summary rows
+  cashBalance?: number;
+  reverseRepo?: number;
+  totalAssets?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +128,7 @@ function StatusBadge({
 function SkeletonTableRow() {
   return (
     <tr>
-      {Array.from({ length: 6 }).map((_, i) => (
+      {Array.from({ length: 7 }).map((_, i) => (
         <td key={i} className="px-3 py-2.5">
           <div className="h-4 rounded bg-[#1a2035] animate-pulse" />
         </td>
@@ -146,7 +155,7 @@ function SkeletonTriggerRow() {
 function EmptyPositions() {
   return (
     <tr>
-      <td colSpan={6} className="py-10 text-center">
+      <td colSpan={7} className="py-10 text-center">
         <PackageOpen className="h-8 w-8 text-gray-600 mx-auto mb-2" />
         <p className="text-sm text-gray-500">暂无持仓记录</p>
         <p className="text-xs text-gray-600 mt-1">
@@ -175,6 +184,12 @@ export function PositionTable({
   triggers,
   loading = false,
   onDeleteTrigger,
+  watchlistCodes,
+  onAddToWatchlist,
+  onRemoveFromWatchlist,
+  cashBalance,
+  reverseRepo,
+  totalAssets,
 }: PositionTableProps) {
   return (
     <Card className="bg-[#0d1117] border-[#1a2035] shadow-none col-span-1 md:col-span-2">
@@ -203,6 +218,7 @@ export function PositionTable({
               <th className="text-right px-3 py-2 font-medium">现价</th>
               <th className="text-right px-3 py-2 font-medium">盈亏%</th>
               <th className="text-right px-3 py-2 font-medium">占比</th>
+              <th className="text-center px-3 py-2 font-medium">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#1a2035]/60">
@@ -261,9 +277,76 @@ export function PositionTable({
                     <td className="px-3 py-2.5">
                       <WeightBar weight={pos.weight} />
                     </td>
+
+                    {/* Actions */}
+                    <td className="px-3 py-2.5 text-center">
+                      {watchlistCodes?.has(pos.stockCode) ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                          onClick={() =>
+                            onRemoveFromWatchlist?.(pos.stockCode)
+                          }
+                        >
+                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-gray-500 hover:text-amber-400 hover:bg-amber-500/10"
+                          onClick={() =>
+                            onAddToWatchlist?.(pos.stockCode, pos.stockName)
+                          }
+                        >
+                          <Star className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 );
               })
+            )}
+
+            {/* ---- Cash & Reverse Repo summary rows ---- */}
+            {!loading && positions.length > 0 && totalAssets && totalAssets > 0 && (
+              <>
+                {(cashBalance ?? 0) > 0 && (
+                  <tr className="text-gray-500">
+                    <td className="px-3 py-2.5">
+                      <span className="text-sm font-medium">现金</span>
+                    </td>
+                    <td className="text-right px-3 py-2.5">&mdash;</td>
+                    <td className="text-right px-3 py-2.5">&mdash;</td>
+                    <td className="text-right px-3 py-2.5">&mdash;</td>
+                    <td className="text-right px-3 py-2.5">&mdash;</td>
+                    <td className="px-3 py-2.5">
+                      <WeightBar
+                        weight={((cashBalance ?? 0) / totalAssets) * 100}
+                      />
+                    </td>
+                    <td className="px-3 py-2.5">&mdash;</td>
+                  </tr>
+                )}
+                {(reverseRepo ?? 0) > 0 && (
+                  <tr className="text-gray-500">
+                    <td className="px-3 py-2.5">
+                      <span className="text-sm font-medium">国债逆回购</span>
+                    </td>
+                    <td className="text-right px-3 py-2.5">&mdash;</td>
+                    <td className="text-right px-3 py-2.5">&mdash;</td>
+                    <td className="text-right px-3 py-2.5">&mdash;</td>
+                    <td className="text-right px-3 py-2.5">&mdash;</td>
+                    <td className="px-3 py-2.5">
+                      <WeightBar
+                        weight={((reverseRepo ?? 0) / totalAssets) * 100}
+                      />
+                    </td>
+                    <td className="px-3 py-2.5">&mdash;</td>
+                  </tr>
+                )}
+              </>
             )}
           </tbody>
         </table>
