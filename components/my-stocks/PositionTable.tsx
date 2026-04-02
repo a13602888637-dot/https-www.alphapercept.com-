@@ -9,6 +9,8 @@ import {
   Radar,
   PackageOpen,
   Star,
+  Plus,
+  Pencil,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +18,7 @@ import {
 // ---------------------------------------------------------------------------
 
 interface Position {
+  id: string;
   stockCode: string;
   stockName: string;
   quantity: number;
@@ -48,6 +51,10 @@ interface PositionTableProps {
   watchlistCodes?: Set<string>;
   onAddToWatchlist?: (stockCode: string, stockName: string) => void;
   onRemoveFromWatchlist?: (stockCode: string) => void;
+  // Position CRUD callbacks
+  onAddPosition?: () => void;
+  onEditPosition?: (pos: Position) => void;
+  onDeletePosition?: (id: string) => void;
   // Cash & reverse repo summary rows
   cashBalance?: number;
   reverseRepo?: number;
@@ -152,15 +159,18 @@ function SkeletonTriggerRow() {
 // Empty states
 // ---------------------------------------------------------------------------
 
-function EmptyPositions() {
+function EmptyPositions({ onAdd }: { onAdd?: () => void }) {
   return (
     <tr>
       <td colSpan={7} className="py-10 text-center">
         <PackageOpen className="h-8 w-8 text-gray-600 mx-auto mb-2" />
         <p className="text-sm text-gray-500">暂无持仓记录</p>
-        <p className="text-xs text-gray-600 mt-1">
-          在 Portfolio 页面添加持仓后数据将展示在这里
-        </p>
+        <p className="text-xs text-gray-600 mt-1 mb-3">点击下方按钮添加你的真实持仓</p>
+        {onAdd && (
+          <Button variant="outline" size="sm" onClick={onAdd} className="text-xs">
+            <Plus className="size-3 mr-1" /> 添加持仓
+          </Button>
+        )}
       </td>
     </tr>
   );
@@ -187,6 +197,9 @@ export function PositionTable({
   watchlistCodes,
   onAddToWatchlist,
   onRemoveFromWatchlist,
+  onAddPosition,
+  onEditPosition,
+  onDeletePosition,
   cashBalance,
   reverseRepo,
   totalAssets,
@@ -195,15 +208,27 @@ export function PositionTable({
     <Card className="bg-[#0d1117] border-[#1a2035] shadow-none col-span-1 md:col-span-2">
       {/* ---- Positions ---- */}
       <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-cyan-400" />
-          <CardTitle className="text-base font-semibold text-white">
-            持仓列表
-          </CardTitle>
-          {!loading && (
-            <span className="text-xs text-gray-500 ml-1">
-              {positions.length} 只
-            </span>
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-cyan-400" />
+            <CardTitle className="text-base font-semibold text-white">
+              持仓列表
+            </CardTitle>
+            {!loading && (
+              <span className="text-xs text-gray-500 ml-1">
+                {positions.length} 只
+              </span>
+            )}
+          </div>
+          {onAddPosition && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAddPosition}
+              className="text-xs text-blue-400 hover:text-blue-300"
+            >
+              <Plus className="size-3 mr-1" /> 添加持仓
+            </Button>
           )}
         </div>
       </CardHeader>
@@ -227,7 +252,7 @@ export function PositionTable({
                 <SkeletonTableRow key={i} />
               ))
             ) : positions.length === 0 ? (
-              <EmptyPositions />
+              <EmptyPositions onAdd={onAddPosition} />
             ) : (
               positions.map((pos) => {
                 const positive = pos.profitLossPercent >= 0;
@@ -279,30 +304,51 @@ export function PositionTable({
                     </td>
 
                     {/* Actions */}
-                    <td className="px-3 py-2.5 text-center">
-                      {watchlistCodes?.has(pos.stockCode) ? (
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center justify-end gap-0.5">
+                        {/* Edit button */}
                         <Button
                           variant="ghost"
                           size="icon-xs"
-                          className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                          onClick={() =>
-                            onRemoveFromWatchlist?.(pos.stockCode)
-                          }
+                          className="text-gray-500 hover:text-blue-400 hover:bg-blue-500/10"
+                          onClick={() => onEditPosition?.(pos)}
                         >
-                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                          <Pencil className="h-3 w-3" />
                         </Button>
-                      ) : (
+                        {/* Delete button */}
                         <Button
                           variant="ghost"
                           size="icon-xs"
-                          className="text-gray-500 hover:text-amber-400 hover:bg-amber-500/10"
-                          onClick={() =>
-                            onAddToWatchlist?.(pos.stockCode, pos.stockName)
-                          }
+                          className="text-gray-500 hover:text-red-400 hover:bg-red-500/10"
+                          onClick={() => onDeletePosition?.(pos.id)}
                         >
-                          <Star className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3 w-3" />
                         </Button>
-                      )}
+                        {/* Watchlist star button */}
+                        {watchlistCodes?.has(pos.stockCode) ? (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                            onClick={() =>
+                              onRemoveFromWatchlist?.(pos.stockCode)
+                            }
+                          >
+                            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-gray-500 hover:text-amber-400 hover:bg-amber-500/10"
+                            onClick={() =>
+                              onAddToWatchlist?.(pos.stockCode, pos.stockName)
+                            }
+                          >
+                            <Star className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

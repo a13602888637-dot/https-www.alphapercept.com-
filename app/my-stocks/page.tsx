@@ -17,10 +17,12 @@ import { CalendarGrid, type CalendarEvent } from "@/components/my-stocks/Calenda
 import { DayDetailPanel } from "@/components/my-stocks/DayDetailPanel";
 import { WeeklyTodoList } from "@/components/my-stocks/WeeklyTodoList";
 import { StrategyGenerator } from "@/components/my-stocks/StrategyGenerator";
+import { AddEditPositionDialog } from "@/components/my-stocks/AddEditPositionDialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Position {
+  id: string;
   stockCode: string;
   stockName: string;
   quantity: number;
@@ -87,6 +89,8 @@ export default function MyStocksPage() {
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [healthLoading, setHealthLoading] = useState(true);
   const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set());
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
 
   // Tab 2 state
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
@@ -120,6 +124,7 @@ export default function MyStocksPage() {
       const data = await res.json();
       if (data.success && data.portfolio) {
         const pos: Position[] = data.portfolio.map((p: Record<string, unknown>) => ({
+          id: p.id as string,
           stockCode: p.stockCode as string,
           stockName: p.stockName as string,
           quantity: Number(p.quantity),
@@ -322,6 +327,22 @@ export default function MyStocksPage() {
     }
   }
 
+  async function handleDeletePosition(id: string) {
+    try {
+      const res = await fetchWithAuth(`/api/portfolio?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("持仓已删除");
+        fetchPortfolio();
+        fetchHealthCheck();
+      } else {
+        toast.error(data.error || "删除失败");
+      }
+    } catch {
+      toast.error("删除失败");
+    }
+  }
+
   async function handleSaveCalendarEvent(event: Partial<CalendarEvent>) {
     try {
       const res = await fetchWithAuth("/api/personal-notes", {
@@ -504,6 +525,9 @@ export default function MyStocksPage() {
               watchlistCodes={watchlistCodes}
               onAddToWatchlist={handleAddToWatchlist}
               onRemoveFromWatchlist={handleRemoveFromWatchlist}
+              onAddPosition={() => setShowAddDialog(true)}
+              onEditPosition={(pos) => setEditingPosition(pos)}
+              onDeletePosition={handleDeletePosition}
               cashBalance={594}
               reverseRepo={10000}
               totalAssets={totalAssets}
@@ -512,6 +536,51 @@ export default function MyStocksPage() {
             {/* AI 持仓诊断 */}
             <AIDiagnosis portfolioContext={portfolioContext} />
           </div>
+
+          {/* Add Position Dialog */}
+          <AddEditPositionDialog
+            open={showAddDialog}
+            onOpenChange={setShowAddDialog}
+            onSave={async (data) => {
+              const res = await fetchWithAuth("/api/portfolio", {
+                method: "POST",
+                body: JSON.stringify(data),
+              });
+              const result = await res.json();
+              if (result.success) {
+                toast.success(`已添加 ${data.stockName}`);
+                setShowAddDialog(false);
+                fetchPortfolio();
+                fetchHealthCheck();
+              } else {
+                toast.error(result.error || "添加失败");
+              }
+            }}
+          />
+
+          {/* Edit Position Dialog */}
+          {editingPosition && (
+            <AddEditPositionDialog
+              open={!!editingPosition}
+              onOpenChange={(v) => { if (!v) setEditingPosition(null); }}
+              editData={editingPosition}
+              onSave={async (data) => {
+                const res = await fetchWithAuth("/api/portfolio", {
+                  method: "PUT",
+                  body: JSON.stringify({ id: editingPosition.id, ...data }),
+                });
+                const result = await res.json();
+                if (result.success) {
+                  toast.success("持仓已更新");
+                  setEditingPosition(null);
+                  fetchPortfolio();
+                  fetchHealthCheck();
+                } else {
+                  toast.error(result.error || "更新失败");
+                }
+              }}
+            />
+          )}
         </TabsContent>
 
         {/* ═══ Tab 2: 交易日历 ═══ */}
