@@ -45,6 +45,7 @@ export interface DashboardContext {
     buyPrice?: number | null
     stopLossPrice?: number | null
     targetPrice?: number | null
+    isSelected?: boolean
   }>
   indices?: Array<{
     label: string
@@ -142,7 +143,8 @@ export function QAChat({ className, initialMessages, dashboardContext }: QAChatP
       parts.push("\n## 用户自选股")
       dashboardContext.watchlist.forEach((s) => {
         const sign = s.changePercent >= 0 ? "+" : ""
-        let line = `- ${s.stockCode} ${s.stockName}: ¥${s.price.toFixed(2)} (${sign}${s.changePercent.toFixed(2)}%)`
+        const prefix = s.isSelected ? "**[当前关注]** " : ""
+        let line = `- ${prefix}${s.stockCode} ${s.stockName}: ¥${s.price.toFixed(2)} (${sign}${s.changePercent.toFixed(2)}%)`
         if (s.buyPrice) line += ` | 买入价:¥${s.buyPrice.toFixed(2)}`
         if (s.stopLossPrice) line += ` | 止损:¥${s.stopLossPrice.toFixed(2)}`
         if (s.targetPrice) line += ` | 目标:¥${s.targetPrice.toFixed(2)}`

@@ -77,7 +77,7 @@ stock-analysis/
 │   │   ├── macro/                # Macro market overview
 │   │   ├── asset/[symbol]/       # Global asset detail (crypto/commodity/index)
 │   │   └── stock/[symbol]/       # A-share/US stock detail
-│   ├── daban/                    # 打板决策流(全屏, 独立layout, 含趋势跟踪Tab)
+│   ├── daban/                    # 重定向到 /dashboard（打板已合并进交易台）
 │   ├── osint/                    # Full-screen OSINT radar (own layout.tsx suppresses global nav)
 │   ├── portfolio/                # Portfolio management page
 │   ├── stocks/[code]/            # Individual stock details
@@ -88,13 +88,24 @@ stock-analysis/
 │
 ├── components/                   # React components
 │   ├── layout/                   # Navigation, sidebar, headers
+│   ├── dashboard/                # Trading desk (merged: watchlist + 打板 + AI)
+│   │   ├── TradingCommandCenter.tsx  # Main shell (2-column layout)
+│   │   ├── WatchlistStrip.tsx        # Horizontal scrolling watchlist cards
+│   │   ├── DabanPanel.tsx            # Tab switcher + shared state for 打板
+│   │   ├── HealthMiniPanel.tsx       # Portfolio health score (calls /api/portfolio/health-check)
+│   │   └── tabs/                     # Tab sub-components
+│   │       ├── ScreenTab.tsx         # 条件选股
+│   │       ├── TrendTab.tsx          # 趋势跟踪
+│   │       ├── LeftSideTab.tsx       # 左侧交易
+│   │       ├── BoardTrackTab.tsx     # 打板跟踪 (stats + accepted list)
+│   │       └── SignalCard.tsx        # Shared signal card component
 │   ├── charts/                   # Charts (technical indicators, K-lines)
 │   ├── intelligence-feed/        # Feed items, filtering
 │   ├── osint-v2/                 # OSINT situational awareness (GeoMapInner, IntelFeed, StatusBar, AISituationBrain)
 │   ├── portfolio/                # Portfolio UI
 │   ├── macro/                    # Macro indicators
 │   ├── global-search/            # Unified search results
-│   ├── strategy-chat/            # Strategy recommendation UI
+│   ├── strategy-chat/            # Strategy recommendation UI (QAChat)
 │   └── ui/                       # shadcn/ui primitives
 │
 ├── services/                     # Data adapters (normalized to SituationalEntity type)
@@ -448,9 +459,9 @@ git reset --hard HEAD~1
 - Vercel Hobby cron 限制：仅支持每天一次的 schedule，总数 ~2 个；超频 cron 需外部服务（cron-job.org）或升级 Pro
 
 ### ⚠️ 导航结构
-- 顶部导航栏：`components/layout/TopNavBar.tsx` — `NAV_LINKS` 数组控制菜单项
+- 顶部导航栏：`components/layout/TopNavBar.tsx` — `NAV_LINKS` 数组控制菜单项（3项：交易台/我的股票/OSINT雷达）
+- 打板功能已合并进交易台（`/dashboard`），`/daban` 路由重定向到 `/dashboard`
 - 侧边栏：`components/layout/sidebar.tsx` — 存在但未在主 layout 使用
-- 新功能页面应创建独立路由（如 `/daban`），不嵌入已有大页面
 
 ### ⚠️ Claude Code Configuration
 - `.claude/` directory is gitignored (personal tool config)
