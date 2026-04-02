@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Briefcase, Calendar, RefreshCw, Loader2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 import { AccountSummary } from "@/components/my-stocks/AccountSummary";
@@ -76,21 +80,58 @@ function pad(n: number): string {
 export default function MyStocksPage() {
   const { getToken, isSignedIn } = useAuth();
 
-  // Tab 1 state
+  // Tab 1 state — raw data
   const [positions, setPositions] = useState<Position[]>([]);
   const [healthRules, setHealthRules] = useState<HealthRule[]>([]);
   const [healthScore, setHealthScore] = useState(100);
-  const [totalAssets, setTotalAssets] = useState(0);
-  const [totalPnL, setTotalPnL] = useState(0);
-  const [totalPnLPercent, setTotalPnLPercent] = useState(0);
-  const [cashRatio, setCashRatio] = useState(0);
-  const [maxStockRatio, setMaxStockRatio] = useState(0);
   const [triggers, setTriggers] = useState<TriggerItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [healthLoading, setHealthLoading] = useState(true);
   const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingPosition, setEditingPosition] = useState<Position | null>(null);
+
+  // Editable cash & reverse repo — persisted in localStorage
+  const [cashBalance, setCashBalance] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("my-stocks-cash");
+      return saved ? Number(saved) : 0;
+    }
+    return 0;
+  });
+  const [reverseRepo, setReverseRepo] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("my-stocks-repo");
+      return saved ? Number(saved) : 0;
+    }
+    return 0;
+  });
+  const [showCashEditor, setShowCashEditor] = useState(false);
+
+  // ─── Derived data (single source of truth) ──────────────────────────────
+  const derived = useMemo(() => {
+    const totalMarketValue = positions.reduce((s, p) => s + p.currentPrice * p.quantity, 0);
+    const totalCost = positions.reduce((s, p) => s + p.avgCost * p.quantity, 0);
+    const totalAssets = totalMarketValue + cashBalance + reverseRepo;
+    const totalPnL = totalMarketValue - totalCost;
+    const totalPnLPercent = totalCost > 0 ? (totalPnL / totalCost) * 100 : 0;
+    const cashRatio = totalAssets > 0 ? ((cashBalance + reverseRepo) / totalAssets) * 100 : 0;
+
+    // Recompute weights relative to totalAssets
+    const positionsWithWeight = positions.map((p) => ({
+      ...p,
+      marketValue: p.currentPrice * p.quantity,
+      profitLoss: (p.currentPrice - p.avgCost) * p.quantity,
+      profitLossPercent: p.avgCost > 0 ? ((p.currentPrice - p.avgCost) / p.avgCost) * 100 : 0,
+      weight: totalAssets > 0 ? ((p.currentPrice * p.quantity) / totalAssets) * 100 : 0,
+    }));
+
+    const maxStockRatio = positionsWithWeight.length > 0
+      ? Math.max(...positionsWithWeight.map((p) => p.weight))
+      : 0;
+
+    return { totalAssets, totalMarketValue, totalCost, totalPnL, totalPnLPercent, cashRatio, maxStockRatio, positionsWithWeight };
+  }, [positions, cashBalance, reverseRepo]);
 
   // Tab 2 state
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
@@ -130,20 +171,13 @@ export default function MyStocksPage() {
           quantity: Number(p.quantity),
           avgCost: Number(p.avgCost),
           currentPrice: Number(p.currentPrice),
-          marketValue: Number(p.marketValue),
-          profitLoss: Number(p.profitLoss),
-          profitLossPercent: Number(p.profitLossPercent),
-          weight: Number(p.weight),
+          // These will be recomputed by useMemo `derived`, but set initial values from API
+          marketValue: Number(p.marketValue || 0),
+          profitLoss: Number(p.profitLoss || 0),
+          profitLossPercent: Number(p.profitLossPercent || 0),
+          weight: Number(p.weight || 0),
         }));
         setPositions(pos);
-
-        const summary = data.summary;
-        if (summary) {
-          setTotalAssets(Number(summary.totalValue || 0));
-          setTotalPnL(Number(summary.totalPnL || 0));
-          const totalCost = pos.reduce((s, p) => s + p.avgCost * p.quantity, 0);
-          setTotalPnLPercent(totalCost > 0 ? ((Number(summary.totalPnL || 0)) / totalCost) * 100 : 0);
-        }
       }
     } catch (e) {
       console.error("[my-stocks] portfolio fetch error:", e);
@@ -155,25 +189,20 @@ export default function MyStocksPage() {
   const fetchHealthCheck = useCallback(async () => {
     setHealthLoading(true);
     try {
-      const res = await fetchWithAuth("/api/portfolio/health-check?cash=594&reverseRepo=10000&monthlyTrades=2");
+      const res = await fetchWithAuth(
+        `/api/portfolio/health-check?cash=${cashBalance}&reverseRepo=${reverseRepo}&monthlyTrades=2`
+      );
       const data = await res.json();
       if (data.success) {
         setHealthRules(data.rules || []);
         setHealthScore(data.score || 0);
-        if (data.summary) {
-          setTotalAssets(data.summary.totalAssets || 0);
-          const liquid = (data.summary.cashBalance || 0) + (data.summary.reverseRepo || 0);
-          setCashRatio(data.summary.totalAssets > 0 ? (liquid / data.summary.totalAssets) * 100 : 0);
-        }
-        const singleRule = (data.rules || []).find((r: HealthRule) => r.id === "single_stock_limit");
-        if (singleRule) setMaxStockRatio(parseFloat(singleRule.value));
       }
     } catch (e) {
       console.error("[my-stocks] health check error:", e);
     } finally {
       setHealthLoading(false);
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, cashBalance, reverseRepo]);
 
   const fetchTriggers = useCallback(async () => {
     try {
@@ -428,12 +457,26 @@ export default function MyStocksPage() {
     setSelectedDate(null);
   }
 
+  // ─── Cash editor save ──────────────────────────────────────────────────────
+
+  function saveCashSettings(newCash: number, newRepo: number) {
+    setCashBalance(newCash);
+    setReverseRepo(newRepo);
+    localStorage.setItem("my-stocks-cash", String(newCash));
+    localStorage.setItem("my-stocks-repo", String(newRepo));
+    setShowCashEditor(false);
+    toast.success("现金设置已更新");
+    // Refresh health check with new values (will be picked up via dependency)
+    setTimeout(() => fetchHealthCheck(), 100);
+  }
+
   // ─── Build AI context ─────────────────────────────────────────────────────
 
   const portfolioContext = [
     `== 持仓数据 ==`,
-    ...positions.map(
-      (p) => `${p.stockName}(${p.stockCode}): ${p.quantity}股, 成本${p.avgCost}, 现价${p.currentPrice}, 盈亏${p.profitLossPercent.toFixed(2)}%, 占比${p.weight.toFixed(1)}%`
+    `总资产: ¥${derived.totalAssets.toFixed(0)}, 现金: ¥${cashBalance}, 逆回购: ¥${reverseRepo}`,
+    ...derived.positionsWithWeight.map(
+      (p) => `${p.stockName}(${p.stockCode}): ${p.quantity}股, 成本${p.avgCost.toFixed(2)}, 现价${p.currentPrice.toFixed(2)}, 盈亏${p.profitLossPercent.toFixed(2)}%, 占比${p.weight.toFixed(1)}%`
     ),
     `== 健康度 ${healthScore}分 ==`,
     ...healthRules.map((r) => `${r.pass ? "✅" : "⚠️"} ${r.name}: ${r.value} — ${r.message}`),
@@ -505,12 +548,12 @@ export default function MyStocksPage() {
           <div className="space-y-4 mt-4">
             {/* 账户总览 */}
             <AccountSummary
-              totalAssets={totalAssets}
-              totalPnL={totalPnL}
-              totalPnLPercent={totalPnLPercent}
-              cashRatio={cashRatio}
-              maxSingleStockRatio={maxStockRatio}
-              loading={portfolioLoading && healthLoading}
+              totalAssets={derived.totalAssets}
+              totalPnL={derived.totalPnL}
+              totalPnLPercent={derived.totalPnLPercent}
+              cashRatio={derived.cashRatio}
+              maxSingleStockRatio={derived.maxStockRatio}
+              loading={portfolioLoading}
             />
 
             {/* 健康度检查 */}
@@ -518,7 +561,7 @@ export default function MyStocksPage() {
 
             {/* 持仓列表 + 监控清单 */}
             <PositionTable
-              positions={positions}
+              positions={derived.positionsWithWeight}
               triggers={triggers}
               loading={portfolioLoading}
               onDeleteTrigger={handleDeleteTrigger}
@@ -528,9 +571,10 @@ export default function MyStocksPage() {
               onAddPosition={() => setShowAddDialog(true)}
               onEditPosition={(pos) => setEditingPosition(pos)}
               onDeletePosition={handleDeletePosition}
-              cashBalance={594}
-              reverseRepo={10000}
-              totalAssets={totalAssets}
+              cashBalance={cashBalance}
+              reverseRepo={reverseRepo}
+              totalAssets={derived.totalAssets}
+              onEditCash={() => setShowCashEditor(true)}
             />
 
             {/* AI 持仓诊断 */}
@@ -588,12 +632,12 @@ export default function MyStocksPage() {
           <div className="space-y-4 mt-4">
             {/* AI 策略生成 */}
             <StrategyGenerator
-              positions={positions}
+              positions={derived.positionsWithWeight}
               healthRules={healthRules}
               watchlistCodes={watchlistCodes}
-              totalAssets={totalAssets}
-              cashBalance={594}
-              reverseRepo={10000}
+              totalAssets={derived.totalAssets}
+              cashBalance={cashBalance}
+              reverseRepo={reverseRepo}
               onStrategySaved={handleStrategySaved}
               targetYear={calYear}
               targetMonth={calMonth}
@@ -645,6 +689,85 @@ export default function MyStocksPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* ═══ Cash / Reverse Repo Editor Dialog ═══ */}
+      <CashEditorDialog
+        open={showCashEditor}
+        onOpenChange={setShowCashEditor}
+        cashBalance={cashBalance}
+        reverseRepo={reverseRepo}
+        onSave={saveCashSettings}
+      />
     </div>
+  );
+}
+
+// ─── Cash Editor Dialog ─────────────────────────────────────────────────────
+
+function CashEditorDialog({
+  open,
+  onOpenChange,
+  cashBalance,
+  reverseRepo,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  cashBalance: number;
+  reverseRepo: number;
+  onSave: (cash: number, repo: number) => void;
+}) {
+  const [cash, setCash] = useState(String(cashBalance));
+  const [repo, setRepo] = useState(String(reverseRepo));
+
+  useEffect(() => {
+    if (open) {
+      setCash(String(cashBalance));
+      setRepo(String(reverseRepo));
+    }
+  }, [open, cashBalance, reverseRepo]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-[#0d1117] border-[#1a2035] max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-white text-sm">编辑现金 & 逆回购</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 mt-2">
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">账户现金 (元)</label>
+            <Input
+              type="number"
+              value={cash}
+              onChange={(e) => setCash(e.target.value)}
+              className="bg-[#060a12] border-[#1a2035] font-mono"
+              step="100"
+              min="0"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">国债逆回购 (元)</label>
+            <Input
+              type="number"
+              value={repo}
+              onChange={(e) => setRepo(e.target.value)}
+              className="bg-[#060a12] border-[#1a2035] font-mono"
+              step="1000"
+              min="0"
+            />
+          </div>
+        </div>
+        <DialogFooter className="mt-4">
+          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700"
+            onClick={() => onSave(Number(cash) || 0, Number(repo) || 0)}
+          >
+            保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

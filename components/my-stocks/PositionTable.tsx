@@ -59,6 +59,7 @@ interface PositionTableProps {
   cashBalance?: number;
   reverseRepo?: number;
   totalAssets?: number;
+  onEditCash?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +204,7 @@ export function PositionTable({
   cashBalance,
   reverseRepo,
   totalAssets,
+  onEditCash,
 }: PositionTableProps) {
   return (
     <Card className="bg-[#0d1117] border-[#1a2035] shadow-none col-span-1 md:col-span-2">
@@ -355,43 +357,53 @@ export function PositionTable({
               })
             )}
 
-            {/* ---- Cash & Reverse Repo summary rows ---- */}
-            {!loading && positions.length > 0 && totalAssets && totalAssets > 0 && (
+            {/* ---- Cash & Reverse Repo summary rows (always show, editable) ---- */}
+            {!loading && totalAssets != null && (
               <>
-                {(cashBalance ?? 0) > 0 && (
-                  <tr className="text-gray-500">
-                    <td className="px-3 py-2.5">
-                      <span className="text-sm font-medium">现金</span>
-                    </td>
-                    <td className="text-right px-3 py-2.5">&mdash;</td>
-                    <td className="text-right px-3 py-2.5">&mdash;</td>
-                    <td className="text-right px-3 py-2.5">&mdash;</td>
-                    <td className="text-right px-3 py-2.5">&mdash;</td>
-                    <td className="px-3 py-2.5">
-                      <WeightBar
-                        weight={((cashBalance ?? 0) / totalAssets) * 100}
-                      />
-                    </td>
-                    <td className="px-3 py-2.5">&mdash;</td>
-                  </tr>
-                )}
-                {(reverseRepo ?? 0) > 0 && (
-                  <tr className="text-gray-500">
-                    <td className="px-3 py-2.5">
-                      <span className="text-sm font-medium">国债逆回购</span>
-                    </td>
-                    <td className="text-right px-3 py-2.5">&mdash;</td>
-                    <td className="text-right px-3 py-2.5">&mdash;</td>
-                    <td className="text-right px-3 py-2.5">&mdash;</td>
-                    <td className="text-right px-3 py-2.5">&mdash;</td>
-                    <td className="px-3 py-2.5">
-                      <WeightBar
-                        weight={((reverseRepo ?? 0) / totalAssets) * 100}
-                      />
-                    </td>
-                    <td className="px-3 py-2.5">&mdash;</td>
-                  </tr>
-                )}
+                <tr
+                  className="text-gray-500 hover:bg-[#0a1020] cursor-pointer transition-colors"
+                  onClick={() => onEditCash?.()}
+                >
+                  <td className="px-3 py-2.5">
+                    <span className="text-sm font-medium">现金</span>
+                  </td>
+                  <td className="text-right px-3 py-2.5">&mdash;</td>
+                  <td className="text-right px-3 py-2.5">&mdash;</td>
+                  <td className="text-right px-3 py-2.5 font-mono tabular-nums text-gray-400">
+                    {(cashBalance ?? 0).toLocaleString()}
+                  </td>
+                  <td className="text-right px-3 py-2.5">&mdash;</td>
+                  <td className="px-3 py-2.5">
+                    <WeightBar
+                      weight={totalAssets > 0 ? ((cashBalance ?? 0) / totalAssets) * 100 : 0}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <Pencil className="h-3 w-3 text-gray-600 inline-block" />
+                  </td>
+                </tr>
+                <tr
+                  className="text-gray-500 hover:bg-[#0a1020] cursor-pointer transition-colors"
+                  onClick={() => onEditCash?.()}
+                >
+                  <td className="px-3 py-2.5">
+                    <span className="text-sm font-medium">国债逆回购</span>
+                  </td>
+                  <td className="text-right px-3 py-2.5">&mdash;</td>
+                  <td className="text-right px-3 py-2.5">&mdash;</td>
+                  <td className="text-right px-3 py-2.5 font-mono tabular-nums text-gray-400">
+                    {(reverseRepo ?? 0).toLocaleString()}
+                  </td>
+                  <td className="text-right px-3 py-2.5">&mdash;</td>
+                  <td className="px-3 py-2.5">
+                    <WeightBar
+                      weight={totalAssets > 0 ? ((reverseRepo ?? 0) / totalAssets) * 100 : 0}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <Pencil className="h-3 w-3 text-gray-600 inline-block" />
+                  </td>
+                </tr>
               </>
             )}
           </tbody>
