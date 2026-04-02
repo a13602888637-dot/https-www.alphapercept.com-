@@ -43,6 +43,12 @@ interface WatchlistContext {
   current: number;
 }
 
+interface ScopeConfig {
+  modules: string[];       // subset of ["calendarEvents", "strategies", "rules"]
+  stocks: 'all' | string[]; // "all" or array of stock codes
+  weeks: 'full' | number[]; // "full" or array of week numbers (1-based)
+}
+
 interface GenerateStrategyRequest {
   model: SupportedModel;
   context: {
@@ -53,6 +59,7 @@ interface GenerateStrategyRequest {
     currentDate: string;
     targetMonth: number;
     targetYear: number;
+    scope?: ScopeConfig;
   };
 }
 
@@ -163,12 +170,44 @@ const MODEL_CONFIGS: Record<SupportedModel, {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Calculate trading days (weekdays) for a given month.
+ * Returns formatted strings like "4/1(一)", "4/2(二)" etc.
+ */
+function getTradingDays(year: number, month: number): { label: string; date: string; weekNum: number }[] {
+  const days: { label: string; date: string; weekNum: number }[] = [];
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const weekdayNames = ['日', '一', '二', '三', '四', '五', '六'];
+  let currentWeek = 1;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month - 1, d);
+    const dow = date.getDay();
+    if (dow === 1 && d > 1) currentWeek++; // new week on Monday
+    if (dow >= 1 && dow <= 5) {
+      const mm = String(month).padStart(2, '0');
+      const dd = String(d).padStart(2, '0');
+      days.push({
+        label: `${month}/${d}(${weekdayNames[dow]})`,
+        date: `${year}-${mm}-${dd}`,
+        weekNum: currentWeek,
+      });
+    }
+  }
+  return days;
+}
+
 /** Build system prompt with user-specific context injected. */
-function buildSystemPrompt(ctx: GenerateStrategyRequest['context']): string {
+function buildSystemPrompt(ctx: GenerateStrategyRequest['context'], scope: ScopeConfig): string {
   const { account, positions, watchlist, healthIssues, targetYear, targetMonth } = ctx;
 
-  const positionsSummary = positions.length > 0
-    ? positions.map(p =>
+  // --- Scope-aware position filtering ---
+  const filteredPositions = scope.stocks === 'all'
+    ? positions
+    : positions.filter(p => (scope.stocks as string[]).includes(p.code));
+
+  const positionsSummary = filteredPositions.length > 0
+    ? filteredPositions.map(p =>
         `${p.name}(${p.code}): ${p.shares}股, 成本${p.cost.toFixed(2)}, 现价${p.current.toFixed(2)}, 盈亏${p.pnlPct >= 0 ? '+' : ''}${p.pnlPct.toFixed(1)}%, 仓位${p.weightPct.toFixed(1)}%`
       ).join('\n')
     : '空仓';
@@ -180,6 +219,37 @@ function buildSystemPrompt(ctx: GenerateStrategyRequest['context']): string {
   const healthSummary = healthIssues.length > 0
     ? healthIssues.join('；')
     : '无异常';
+
+  // --- Trading days enumeration ---
+  const allTradingDays = getTradingDays(targetYear, targetMonth);
+  const tradingDays = scope.weeks === 'full'
+    ? allTradingDays
+    : allTradingDays.filter(td => (scope.weeks as number[]).includes(td.weekNum));
+
+  // --- Scope-aware prompt sections ---
+  const moduleLabels: Record<string, string> = {
+    calendarEvents: '日历事件',
+    strategies: '买入策略',
+    rules: '交易铁律',
+  };
+
+  let scopeInstructions = '';
+  const allModules = ['calendarEvents', 'strategies', 'rules'];
+  if (scope.modules.length < allModules.length) {
+    const selectedLabels = scope.modules.map(m => moduleLabels[m] || m).join('、');
+    scopeInstructions += `\n本次只需生成以下模块：${selectedLabels}\n未选中的模块请返回空数组。\n`;
+  }
+
+  if (scope.stocks !== 'all') {
+    const stockNames = filteredPositions.map(p => `${p.name}(${p.code})`);
+    if (stockNames.length > 0) {
+      scopeInstructions += `\n本次仅分析以下标的：${stockNames.join('、')}，其余持仓不做规划。\n`;
+    }
+  }
+
+  if (scope.weeks !== 'full') {
+    scopeInstructions += `\n本次仅规划第${(scope.weeks as number[]).join('、')}周的交易日，其余时间不做规划。\n`;
+  }
 
   return `你是一个专业的量化投资策略分析师。基于用户的真实持仓数据、账户状态和市场环境，生成一份结构化的月度交易策略计划。
 
@@ -193,12 +263,22 @@ ${watchlistSummary}
 - 健康度问题：${healthSummary}
 - 目标月份：${targetYear}年${targetMonth}月
 
+本月交易日（共${tradingDays.length}个）：
+${tradingDays.map(td => td.label).join(', ')}
+${scopeInstructions}
 请严格按以下JSON格式返回，不要添加任何前言、后语或markdown标记：
 ${STRATEGY_SCHEMA}
 
 要求：
 1. phases 必须包含3-4个阶段，每阶段有明确的日期范围和操作重点
-2. calendarEvents 按日期排列，覆盖整个月的关键操作日、观察日、财报日
+2. calendarEvents 必须覆盖本月每一个交易日（共${tradingDays.length}天，不含周末），具体要求：
+   - 关键操作日（财报公布、除权除息、重要经济数据、技术面关键位突破）：type="action"或"earnings"，detail必须包含具体价格条件和操作指令
+   - 择机窗口（触发价位附近的观察期）：type="trigger"，detail标注具体价格区间和量能条件
+   - 定期复盘日（每周五）：type="review"，detail列出本周需回顾的持仓表现和下周计划
+   - 其余交易日：type="watch"，title格式如"持仓观察·关注信立泰放量"，detail必须具体到某只股票的某个技术指标
+   - 严禁出现"关注市场动态""观察盘面变化"等笼统描述
+   - 每条event的detail字段至少包含：①关注的股票 ②具体价格或指标条件 ③达到条件后的操作建议
+   - calendarEvents数组长度必须≥${tradingDays.length}条（每个交易日至少1条）
 3. strategies 只包含你认为值得关注的股票买入计划（必须有具体的触发价位）
 4. rules 基于用户当前仓位风险给出3-6条纪律性约束
 5. summary 用1-2句话总结本月核心策略方向
@@ -263,10 +343,15 @@ const VALID_EVENT_TYPES = new Set(['action', 'watch', 'earnings', 'review', 'tri
 /**
  * Validate and normalise the raw parsed JSON into a strongly-typed strategy.
  * Returns null if required top-level keys are missing.
+ * If enabledModules is provided, only those modules + 'summary' + 'phases' are required.
  */
-function normalizeStrategy(raw: Record<string, unknown>): GeneratedStrategy | null {
-  // Check required keys
-  for (const key of REQUIRED_TOP_KEYS) {
+function normalizeStrategy(raw: Record<string, unknown>, enabledModules?: string[]): GeneratedStrategy | null {
+  // Check required keys — if scope provided, only require enabled modules + summary + phases
+  const requiredKeys = enabledModules
+    ? [...new Set([...enabledModules, 'summary', 'phases'])] as (keyof GeneratedStrategy)[]
+    : REQUIRED_TOP_KEYS;
+
+  for (const key of requiredKeys) {
     if (!(key in raw)) {
       console.error(`[generate-strategy] Missing required key: ${key}`);
       return null;
@@ -352,7 +437,7 @@ async function callDeepSeek(systemPrompt: string): Promise<string> {
         { role: 'user', content: '请根据以上用户情况，生成本月交易策略计划。' },
       ],
       temperature: 0.3,
-      max_tokens: 4000,
+      max_tokens: 6000,
     }),
   });
 
@@ -379,7 +464,7 @@ async function callClaude(systemPrompt: string): Promise<string> {
     },
     body: JSON.stringify({
       model: 'claude-opus-4-20250514',
-      max_tokens: 4000,
+      max_tokens: 6000,
       temperature: 0.3,
       system: systemPrompt,
       messages: [
@@ -510,8 +595,15 @@ export async function POST(request: NextRequest) {
     }
     const { model, context } = validation.data;
 
+    // 2b. Extract scope (with backwards-compatible defaults)
+    const scope: ScopeConfig = context.scope || {
+      modules: ['calendarEvents', 'strategies', 'rules'],
+      stocks: 'all',
+      weeks: 'full',
+    };
+
     // 3. Build system prompt
-    const systemPrompt = buildSystemPrompt(context);
+    const systemPrompt = buildSystemPrompt(context, scope);
 
     // 4. Call AI
     const config = MODEL_CONFIGS[model];
@@ -560,7 +652,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Validate & normalize
-    const strategy = normalizeStrategy(parsed);
+    const strategy = normalizeStrategy(parsed, scope.modules);
     if (!strategy) {
       console.error('[generate-strategy] Validation failed, keys present:', Object.keys(parsed));
       return NextResponse.json(

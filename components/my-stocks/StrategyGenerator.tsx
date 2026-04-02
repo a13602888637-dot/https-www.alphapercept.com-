@@ -28,6 +28,7 @@ import {
   Plus,
   AlertTriangle,
   ChevronRight,
+  ChevronDown,
   ShieldAlert,
   Target,
   CalendarDays,
@@ -181,10 +182,45 @@ const PRIORITY_MAP: Record<number, { label: string; color: string }> = {
 };
 
 // ---------------------------------------------------------------------------
+// Helper: compute week date ranges for a given month
+// ---------------------------------------------------------------------------
+
+function getMonthWeeks(
+  year: number,
+  month: number
+): Array<{ week: number; start: string; end: string }> {
+  const weeks: Array<{ week: number; start: string; end: string }> = [];
+  const lastDay = new Date(year, month, 0).getDate();
+  let weekStart = 1;
+
+  while (weekStart <= lastDay) {
+    const d = new Date(year, month - 1, weekStart);
+    const dow = d.getDay() || 7; // Monday=1 ... Sunday=7
+    const daysUntilSunday = 7 - dow;
+    const weekEnd = Math.min(weekStart + daysUntilSunday, lastDay);
+
+    weeks.push({
+      week: weeks.length + 1,
+      start: `${month}/${weekStart}`,
+      end: `${month}/${weekEnd}`,
+    });
+
+    weekStart = weekEnd + 1;
+  }
+  return weeks;
+}
+
+// ---------------------------------------------------------------------------
 // Helper: build compact AI context (~2000 tokens)
 // ---------------------------------------------------------------------------
 
-function buildCompactContext(props: StrategyGeneratorProps) {
+interface ScopeConfig {
+  modules: string[];
+  stocks: "all" | string[];
+  weeks: "full" | number[];
+}
+
+function buildCompactContext(props: StrategyGeneratorProps, scope: ScopeConfig) {
   const healthIssues = props.healthRules
     .filter((r) => !r.pass)
     .map((r) => `${r.name}: ${r.value}`);
@@ -210,6 +246,7 @@ function buildCompactContext(props: StrategyGeneratorProps) {
     currentDate: new Date().toISOString().slice(0, 10),
     targetMonth: props.targetMonth,
     targetYear: props.targetYear,
+    scope,
   };
 }
 
@@ -262,6 +299,16 @@ export function StrategyGenerator({
     useState<ModelOption>("deepseek-chat");
   const [generating, setGenerating] = useState(false);
 
+  // Scope controls (advanced options)
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [enabledModules, setEnabledModules] = useState<Set<string>>(
+    new Set(["calendarEvents", "strategies", "rules"])
+  );
+  const [stockScope, setStockScope] = useState<"all" | "selected">("all");
+  const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
+  const [timeScope, setTimeScope] = useState<"full" | "weeks">("full");
+  const [selectedWeeks, setSelectedWeeks] = useState<number[]>([]);
+
   // Preview state — mutable copy of AI output
   const [strategy, setStrategy] = useState<GeneratedStrategy | null>(null);
 
@@ -290,17 +337,24 @@ export function StrategyGenerator({
         return;
       }
 
-      const compactContext = buildCompactContext({
-        positions,
-        healthRules,
-        watchlistCodes,
-        totalAssets,
-        cashBalance,
-        reverseRepo,
-        onStrategySaved,
-        targetYear,
-        targetMonth,
-      });
+      const compactContext = buildCompactContext(
+        {
+          positions,
+          healthRules,
+          watchlistCodes,
+          totalAssets,
+          cashBalance,
+          reverseRepo,
+          onStrategySaved,
+          targetYear,
+          targetMonth,
+        },
+        {
+          modules: Array.from(enabledModules),
+          stocks: stockScope === "all" ? ("all" as const) : selectedStocks,
+          weeks: timeScope === "full" ? ("full" as const) : selectedWeeks,
+        }
+      );
 
       const res = await fetch("/api/ai/generate-strategy", {
         method: "POST",
@@ -347,6 +401,11 @@ export function StrategyGenerator({
     targetYear,
     targetMonth,
     selectedModel,
+    enabledModules,
+    stockScope,
+    selectedStocks,
+    timeScope,
+    selectedWeeks,
   ]);
 
   // ------------------------------------------------------------------
@@ -1130,11 +1189,176 @@ export function StrategyGenerator({
           </div>
         </div>
 
+        {/* Advanced options toggle */}
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+        >
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")} />
+          高级选项
+        </button>
+
+        {showAdvanced && (
+          <div className="space-y-3 rounded-lg border border-[#1a2035] bg-[#060a12] p-3">
+            {/* Section 1: Module toggles */}
+            <div>
+              <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">生成模块</div>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { key: "calendarEvents", label: "日历事件" },
+                  { key: "strategies", label: "买入策略" },
+                  { key: "rules", label: "交易铁律" },
+                ] as const).map(({ key, label }) => {
+                  const active = enabledModules.has(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setEnabledModules((prev) => {
+                          const next = new Set(prev);
+                          if (active && next.size > 1) {
+                            next.delete(key);
+                          } else if (!active) {
+                            next.add(key);
+                          }
+                          return next;
+                        });
+                      }}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs transition-colors",
+                        active
+                          ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                          : "border-[#1a2035] bg-[#0d1117] text-gray-500 hover:text-gray-300"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Section 2: Stock scope */}
+            <div>
+              <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">持仓范围</div>
+              <div className="flex gap-1.5 mb-2">
+                {([
+                  { value: "all" as const, label: "全部持仓" },
+                  { value: "selected" as const, label: "指定个股" },
+                ]).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setStockScope(value);
+                      if (value === "all") setSelectedStocks([]);
+                    }}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs transition-colors",
+                      stockScope === value
+                        ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                        : "border-[#1a2035] bg-[#0d1117] text-gray-500 hover:text-gray-300"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {stockScope === "selected" && positions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {positions.map((p) => {
+                    const selected = selectedStocks.includes(p.stockCode);
+                    return (
+                      <button
+                        key={p.stockCode}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStocks((prev) =>
+                            selected
+                              ? prev.filter((c) => c !== p.stockCode)
+                              : [...prev, p.stockCode]
+                          );
+                        }}
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-[11px] font-mono transition-colors",
+                          selected
+                            ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-400"
+                            : "border-[#1a2035] bg-[#0d1117] text-gray-500 hover:text-gray-300"
+                        )}
+                      >
+                        {p.stockName}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Section 3: Time scope */}
+            <div>
+              <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">时间范围</div>
+              <div className="flex gap-1.5 mb-2">
+                {([
+                  { value: "full" as const, label: "整月" },
+                  { value: "weeks" as const, label: "指定周" },
+                ]).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setTimeScope(value);
+                      if (value === "full") setSelectedWeeks([]);
+                    }}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs transition-colors",
+                      timeScope === value
+                        ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                        : "border-[#1a2035] bg-[#0d1117] text-gray-500 hover:text-gray-300"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {timeScope === "weeks" && (
+                <div className="flex flex-wrap gap-1.5">
+                  {getMonthWeeks(targetYear, targetMonth).map((w) => {
+                    const selected = selectedWeeks.includes(w.week);
+                    return (
+                      <button
+                        key={w.week}
+                        type="button"
+                        onClick={() => {
+                          setSelectedWeeks((prev) =>
+                            selected
+                              ? prev.filter((n) => n !== w.week)
+                              : [...prev, w.week]
+                          );
+                        }}
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-[11px] font-mono transition-colors",
+                          selected
+                            ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                            : "border-[#1a2035] bg-[#0d1117] text-gray-500 hover:text-gray-300"
+                        )}
+                      >
+                        W{w.week} {w.start}-{w.end}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Generate button */}
         <Button
           className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-medium"
           onClick={generate}
-          disabled={generating || !isSignedIn}
+          disabled={generating || !isSignedIn || enabledModules.size === 0}
         >
           {generating ? (
             <>
