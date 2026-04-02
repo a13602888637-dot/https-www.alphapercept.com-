@@ -164,20 +164,39 @@ export default function MyStocksPage() {
       const res = await fetchWithAuth("/api/portfolio");
       const data = await res.json();
       if (data.success && data.portfolio) {
-        const pos: Position[] = data.portfolio.map((p: Record<string, unknown>) => ({
+        const rawPositions = data.portfolio.map((p: Record<string, unknown>) => ({
           id: p.id as string,
           stockCode: p.stockCode as string,
           stockName: p.stockName as string,
           quantity: Number(p.quantity),
           avgCost: Number(p.avgCost),
-          currentPrice: Number(p.currentPrice),
-          // These will be recomputed by useMemo `derived`, but set initial values from API
-          marketValue: Number(p.marketValue || 0),
-          profitLoss: Number(p.profitLoss || 0),
-          profitLossPercent: Number(p.profitLossPercent || 0),
-          weight: Number(p.weight || 0),
+          currentPrice: Number(p.avgCost), // fallback, will be overwritten
+          marketValue: 0,
+          profitLoss: 0,
+          profitLossPercent: 0,
+          weight: 0,
         }));
-        setPositions(pos);
+
+        // Client-side fetch real-time prices (bypasses Vercel server-to-server issue)
+        const codes = rawPositions.map((p: Position) => p.stockCode).join(",");
+        if (codes) {
+          try {
+            const priceRes = await fetch(`/api/stock-prices?symbols=${codes}`);
+            const priceData = await priceRes.json();
+            if (priceData.success && priceData.prices) {
+              for (const pos of rawPositions) {
+                const p = priceData.prices[pos.stockCode];
+                if (p && p.price > 0) {
+                  pos.currentPrice = p.price;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("[my-stocks] price fetch failed, using avgCost:", e);
+          }
+        }
+
+        setPositions(rawPositions);
       }
     } catch (e) {
       console.error("[my-stocks] portfolio fetch error:", e);
