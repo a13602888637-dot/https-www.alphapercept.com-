@@ -10,7 +10,7 @@ import { buildSystemPrompt } from '@/lib/ai/prompts';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-type SupportedModel = 'deepseek-chat' | 'deepseek-reasoner' | 'claude-3-5-sonnet' | 'claude-3-haiku';
+type SupportedModel = 'deepseek-chat' | 'deepseek-reasoner' | 'claude-3-5-sonnet' | 'claude-3-haiku' | 'claude-opus';
 
 interface ModelConfig {
   provider: 'deepseek' | 'anthropic';
@@ -41,6 +41,12 @@ const MODEL_CONFIGS: Record<SupportedModel, ModelConfig> = {
   'claude-3-haiku': {
     provider: 'anthropic',
     modelId: 'claude-haiku-4-5-20251001',
+    apiUrlEnv: 'https://api.anthropic.com/v1/messages',
+    apiKeyEnv: 'ANTHROPIC_API_KEY',
+  },
+  'claude-opus': {
+    provider: 'anthropic',
+    modelId: 'claude-opus-4-20250514',
     apiUrlEnv: 'https://api.anthropic.com/v1/messages',
     apiKeyEnv: 'ANTHROPIC_API_KEY',
   },

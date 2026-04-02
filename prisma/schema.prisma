@@ -236,3 +236,26 @@ model ScreenCache {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// 个人笔记：策略计划 / 交易日历 / 铁律规则 / 复盘记录
+model PersonalNote {
+  id             String    @id @default(cuid())
+  userId         String
+  type           String    // "strategy" | "calendar" | "rule" | "review"
+  title          String
+  content        String?   @db.Text
+  effectiveDate  DateTime?
+  dateRangeStart DateTime?
+  dateRangeEnd   DateTime?
+  stockCode      String?
+  priority       Int       @default(0)  // 0=普通, 1=重要, 2=紧急
+  status         String    @default("active") // "active" | "completed" | "expired"
+  tags           String?   // JSON 数组
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId, type])
+  @@index([userId, effectiveDate])
+  @@index([userId, stockCode])
+}
