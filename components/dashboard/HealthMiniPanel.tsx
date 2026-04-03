@@ -52,7 +52,11 @@ export function HealthMiniPanel() {
       const token = await getToken();
       if (!token) return;
 
-      const res = await fetch("/api/portfolio/health-check", {
+      // Read cash values from localStorage (shared with my-stocks page)
+      const cash = typeof window !== "undefined" ? localStorage.getItem("my-stocks-cash") || "0" : "0";
+      const repo = typeof window !== "undefined" ? localStorage.getItem("my-stocks-repo") || "0" : "0";
+
+      const res = await fetch(`/api/portfolio/health-check?cash=${cash}&reverseRepo=${repo}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });

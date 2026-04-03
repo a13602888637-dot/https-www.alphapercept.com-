@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListTodo } from "lucide-react";
+import { ChevronLeft, ChevronRight, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const EVENT_DOT_COLORS: Record<string, string> = {
@@ -12,6 +12,9 @@ const EVENT_DOT_COLORS: Record<string, string> = {
   review: "bg-blue-500",
   trigger: "bg-green-500",
 };
+
+// Only actionable event types show as todos
+const TODO_EVENT_TYPES = new Set(["action", "earnings", "trigger", "review"]);
 
 interface CalendarEvent {
   id: string;
@@ -28,12 +31,12 @@ interface WeeklyTodoListProps {
   onToggleComplete: (id: string, completed: boolean) => Promise<void>;
 }
 
-function getWeekRange(): { start: Date; end: Date; label: string } {
+function getWeekRange(offset: number): { start: Date; end: Date; label: string } {
   const now = new Date();
   const day = now.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
   const monday = new Date(now);
-  monday.setDate(now.getDate() + diffToMonday);
+  monday.setDate(now.getDate() + diffToMonday + offset * 7);
   monday.setHours(0, 0, 0, 0);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
@@ -44,18 +47,30 @@ function getWeekRange(): { start: Date; end: Date; label: string } {
 }
 
 function formatShortDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
+  const d = new Date(dateStr.slice(0, 10) + "T00:00:00");
   return `${d.getMonth() + 1}.${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function weekLabel(offset: number): string {
+  if (offset === 0) return "本周待办";
+  if (offset === 1) return "下周待办";
+  if (offset === -1) return "上周待办";
+  return offset > 0 ? `${offset}周后` : `${-offset}周前`;
+}
+
 export function WeeklyTodoList({ events, onToggleComplete }: WeeklyTodoListProps) {
-  const week = useMemo(() => getWeekRange(), []);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const week = useMemo(() => getWeekRange(weekOffset), [weekOffset]);
 
   const weekEvents = useMemo(() => {
     return events
       .filter((ev) => {
-        const d = new Date(ev.effectiveDate + "T00:00:00");
-        return d >= week.start && d <= week.end;
+        const dateStr = ev.effectiveDate.slice(0, 10);
+        const d = new Date(dateStr + "T00:00:00");
+        if (d < week.start || d > week.end) return false;
+        // Only show actionable events as todos
+        const eventType = ev.metadata?.eventType || "watch";
+        return TODO_EVENT_TYPES.has(eventType);
       })
       .sort((a, b) => {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -69,18 +84,45 @@ export function WeeklyTodoList({ events, onToggleComplete }: WeeklyTodoListProps
         <CardTitle className="text-sm font-semibold text-white flex items-center justify-between">
           <span className="flex items-center gap-2">
             <ListTodo className="size-4 text-amber-400" />
-            本周待办
+            {weekLabel(weekOffset)}
           </span>
-          <span className="text-xs font-mono text-gray-500 font-normal">{week.label}</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setWeekOffset((o) => o - 1)}
+              className="p-0.5 rounded text-gray-500 hover:text-white hover:bg-[#1a2035] transition-colors"
+            >
+              <ChevronLeft className="size-3.5" />
+            </button>
+            <span className="text-xs font-mono text-gray-500 font-normal min-w-[100px] text-center">
+              {week.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => setWeekOffset((o) => o + 1)}
+              className="p-0.5 rounded text-gray-500 hover:text-white hover:bg-[#1a2035] transition-colors"
+            >
+              <ChevronRight className="size-3.5" />
+            </button>
+            {weekOffset !== 0 && (
+              <button
+                type="button"
+                onClick={() => setWeekOffset(0)}
+                className="text-[10px] text-blue-400 hover:text-blue-300 ml-1"
+              >
+                本周
+              </button>
+            )}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
         {weekEvents.length === 0 ? (
           <div className="text-center py-6 text-gray-500 text-sm">
-            本周无待办事项
+            {weekLabel(weekOffset).replace("待办", "")}无操作事项
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-1 max-h-[280px] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1a2035] scrollbar-track-transparent pr-1">
             {weekEvents.map((ev) => {
               const completed = ev.status === "completed";
               const eventType = ev.metadata?.eventType || "watch";
@@ -115,7 +157,7 @@ export function WeeklyTodoList({ events, onToggleComplete }: WeeklyTodoListProps
 
                   <span
                     className={cn(
-                      "flex-1 text-sm truncate",
+                      "flex-1 text-sm",
                       completed ? "line-through text-gray-600" : "text-gray-200"
                     )}
                   >
