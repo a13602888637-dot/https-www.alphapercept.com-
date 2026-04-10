@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
-import { Loader2, Zap } from "lucide-react"
+import { Filter, Loader2, Zap } from "lucide-react"
 import SignalCard from "./SignalCard"
 import type { DabanSharedProps, AlphaSignal } from "../DabanPanel"
 
@@ -37,6 +37,7 @@ export default function TrendTab({
   const [trendConditions, setTrendConditions] = useState<string[]>([])
   const [macroStatus, setMacroStatus] = useState<MacroStatus[]>([])
   const [hasFetched, setHasFetched] = useState(false)
+  const [selectedSector, setSelectedSector] = useState<string | null>(null)
 
   const fetchTrend = useCallback(async () => {
     setTrendLoading(true)
@@ -55,6 +56,7 @@ export default function TrendTab({
         reason: s.reason as string,
         riskTag: s.signalTag as string,
         signalScore: s.signalScore as number,
+        sector: (s.sector as string) || "",
         advice: s.advice ? {
           suggestedPosition: (s.advice as Record<string, unknown>).suggestedPosition as number,
           stopLoss: (s.advice as Record<string, unknown>).stopLoss as number,
@@ -92,23 +94,48 @@ export default function TrendTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey])
 
-  const visibleSignals = trendSignals.filter((s) => !dismissed.has(s.symbol))
-  const allProcessed = visibleSignals.length === 0 && trendSignals.length > 0
+  const visibleSignals = trendSignals.filter((s) => {
+    if (dismissed.has(s.symbol)) return false
+    if (selectedSector && s.sector !== selectedSector) return false
+    return true
+  })
+  const allProcessed = visibleSignals.length === 0 && trendSignals.length > 0 && !selectedSector
 
   return (
     <>
       {/* Macro Status Panel */}
       {macroStatus.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-          {macroStatus.map((m) => (
-            <div key={m.sector} className={`bg-[#0d1117] border rounded-lg px-3 py-2 ${m.bullish ? "border-emerald-500/20" : "border-red-500/20"}`}>
-              <div className="text-[10px] text-gray-500">{m.macro}</div>
-              <div className={`text-sm font-bold ${m.bullish ? "text-emerald-400" : "text-red-400"}`}>
-                {m.sector} {m.bullish ? "✓" : "✗"}
+          {macroStatus.map((m) => {
+            const isSelected = selectedSector === m.sector
+            const stockCount = trendSignals.filter((s) => s.sector === m.sector && !dismissed.has(s.symbol)).length
+            return (
+              <div
+                key={m.sector}
+                onClick={() => setSelectedSector(isSelected ? null : m.sector)}
+                className={`bg-[#0d1117] border rounded-lg px-3 py-2 cursor-pointer transition-all duration-150 ${
+                  isSelected
+                    ? "border-cyan-400/60 ring-1 ring-cyan-400/30 bg-cyan-950/10"
+                    : m.bullish
+                      ? "border-emerald-500/20 hover:border-emerald-500/40"
+                      : "border-red-500/20 hover:border-red-500/40"
+                }`}
+              >
+                <div className="text-[10px] text-gray-500">{m.macro}</div>
+                <div className={`text-sm font-bold ${m.bullish ? "text-emerald-400" : "text-red-400"}`}>
+                  {m.sector} {m.bullish ? "✓" : "✗"}
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-[9px] text-gray-600 truncate flex-1">{m.reason}</div>
+                  {stockCount > 0 && (
+                    <span className="text-[9px] font-mono text-cyan-400/70 ml-1 flex-shrink-0">
+                      {stockCount}只
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="text-[9px] text-gray-600 truncate">{m.reason}</div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -128,6 +155,23 @@ export default function TrendTab({
         </div>
       )}
 
+      {/* Active Filter Indicator */}
+      {selectedSector && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-1.5 bg-cyan-950/20 border border-cyan-500/20 rounded-lg">
+          <Filter className="h-3 w-3 text-cyan-400" />
+          <span className="text-[11px] text-cyan-300">
+            筛选: <span className="font-bold">{selectedSector}</span>
+            <span className="text-gray-500 ml-1">({visibleSignals.length}只)</span>
+          </span>
+          <button
+            onClick={() => setSelectedSector(null)}
+            className="ml-auto text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            清除筛选 ✕
+          </button>
+        </div>
+      )}
+
       {/* Signal Cards Grid */}
       <div className="mb-8">
         {trendLoading ? (
@@ -141,6 +185,10 @@ export default function TrendTab({
             <p className="text-gray-500 text-sm">
               当前暂无打板信号，等待盘中扫描...
             </p>
+          </div>
+        ) : visibleSignals.length === 0 && selectedSector ? (
+          <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg py-16 text-center">
+            <p className="text-gray-500 text-sm">「{selectedSector}」板块暂无趋势信号</p>
           </div>
         ) : allProcessed ? (
           <div className="bg-[#0d1117] border border-[#1a2035] rounded-lg py-16 text-center">

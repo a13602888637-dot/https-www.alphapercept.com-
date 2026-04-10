@@ -47,6 +47,7 @@ export interface AlphaSignal {
   reason: string
   riskTag?: string
   signalScore?: number
+  sector?: string
   advice?: PositionAdvice
 }
 
