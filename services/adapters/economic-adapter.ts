@@ -1,9 +1,10 @@
 /**
- * EconomicAdapter: Macro-economic indicators & energy data
+ * EconomicAdapter: Macro-economic indicators, energy & shipping data
  *
  * Data flow:
  *   FRED indicators -> /api/fred
  *   EIA energy data -> /api/eia
+ *   Shipping indices -> /api/shipping-indices (East Money: BDI + BDTI)
  *
  * All outputs normalized to EconomicEntity[]
  */
@@ -47,6 +48,11 @@ function deriveTradingSignal(
     return delta > 0 ? "bearish" : delta < 0 ? "bullish" : "neutral";
   }
 
+  // Shipping: BDI up = bullish (global trade activity), BDTI up = bullish (oil demand)
+  if (upperSeries.includes("BDI") || upperSeries.includes("BDTI")) {
+    return delta > 0 ? "bullish" : delta < 0 ? "bearish" : "neutral";
+  }
+
   // CPI / inflation up = bearish
   if (upperSeries.includes("CPI") || upperSeries.includes("INFLATION")) {
     return delta > 0 ? "bearish" : delta < 0 ? "bullish" : "neutral";
@@ -63,15 +69,17 @@ export class EconomicAdapter implements DataAdapter<EconomicEntity> {
   readonly refreshIntervalMs = 3_600_000; // 1 hour
 
   async fetch(): Promise<EconomicEntity[]> {
-    const [fredResult, eiaResult] = await Promise.allSettled([
+    const [fredResult, eiaResult, shippingResult] = await Promise.allSettled([
       this.fetchFred(),
       this.fetchEia(),
+      this.fetchShipping(),
     ]);
 
     const results: EconomicEntity[] = [];
 
     if (fredResult.status === "fulfilled") results.push(...fredResult.value);
     if (eiaResult.status === "fulfilled") results.push(...eiaResult.value);
+    if (shippingResult.status === "fulfilled") results.push(...shippingResult.value);
 
     return results;
   }
@@ -182,6 +190,55 @@ export class EconomicAdapter implements DataAdapter<EconomicEntity> {
       });
     } catch (err) {
       console.warn("EconomicAdapter: EIA fetch failed:", err);
+      return [];
+    }
+  }
+
+  // ─── Shipping indices (East Money BDI + BDTI) ─────────────
+
+  private async fetchShipping(): Promise<EconomicEntity[]> {
+    try {
+      const res = await fetch("/api/shipping-indices", {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return [];
+
+      const data = await res.json();
+      if (!data.success || !Array.isArray(data.indices)) return [];
+
+      const now = Date.now();
+
+      return data.indices.map((idx: any): EconomicEntity => {
+        const value = idx.value ?? 0;
+        const previousValue = idx.previousValue ?? value;
+        const delta = value - previousValue;
+        const deltaPercent = idx.changeRate ?? 0;
+
+        return {
+          id: `econ-shipping-${idx.key}`,
+          type: EntityType.ECONOMIC,
+          subtype: "supply_chain",
+          label: idx.name || idx.key,
+          coordinates: null,
+          value,
+          delta,
+          deltaPercent,
+          status: delta >= 0 ? "up" : "down",
+          metadata: {
+            seriesId: idx.key,
+            name: idx.name || idx.key,
+            unit: "points",
+            value,
+            previousValue,
+            frequency: "daily",
+            tradingSignal: deriveTradingSignal(idx.key || "", delta),
+          },
+          source: "eastmoney",
+          timestamp: now,
+        };
+      });
+    } catch (err) {
+      console.warn("EconomicAdapter: Shipping fetch failed:", err);
       return [];
     }
   }
