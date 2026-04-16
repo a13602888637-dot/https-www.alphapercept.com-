@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
 import {
@@ -19,6 +20,7 @@ import { QAChat, type DashboardContext } from "@/components/strategy-chat/qa-cha
 // ---------------------------------------------------------------------------
 
 export function TradingCommandCenter() {
+  const router = useRouter();
   const { getToken, isSignedIn } = useAuth();
   const { isLoaded } = useUser();
 
@@ -378,7 +380,10 @@ export function TradingCommandCenter() {
           alerts={alerts}
           isLoading={isLoading && isLoaded !== false}
           selectedStock={selectedStock}
-          onSelectStock={setSelectedStock}
+          onSelectStock={(code) => {
+            setSelectedStock(code);
+            router.push(`/dashboard/stock/${code}`);
+          }}
           onAdd={handleAddStock}
           onDelete={handleDeleteStock}
           onRefresh={fetchWatchlist}
