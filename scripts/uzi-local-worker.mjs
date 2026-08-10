@@ -39,7 +39,11 @@ function log(message) {
 }
 
 function codexEnvironment() {
-  const allowed = ["HOME", "PATH", "LANG", "LC_ALL", "TMPDIR", "CODEX_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR"];
+  const allowed = [
+    "HOME", "PATH", "LANG", "LC_ALL", "TMPDIR", "CODEX_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR",
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+    "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+  ];
   const env = Object.fromEntries(allowed.flatMap((key) => process.env[key] ? [[key, process.env[key]]] : []));
   return {
     ...env,

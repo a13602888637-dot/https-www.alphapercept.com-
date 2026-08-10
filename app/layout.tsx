@@ -48,6 +48,10 @@ export default function RootLayout({
       }}
     >
       <html lang="zh-CN" suppressHydrationWarning>
+        <head>
+          <link rel="preconnect" href="https://clerk.alphapercept.com" crossOrigin="anonymous" />
+          <link rel="dns-prefetch" href="https://clerk.alphapercept.com" />
+        </head>
         <body className="antialiased">
           <ThemeProvider
             attribute="class"

@@ -40,7 +40,7 @@ export function TopNavBar() {
       <div className="w-px h-4 bg-[#1a2035]" />
 
       {/* Branding */}
-      <Link href="/dashboard" className="flex items-center gap-1.5 mr-2">
+      <Link href="/dashboard" prefetch={false} className="flex items-center gap-1.5 mr-2">
         <div className="h-5 w-5 rounded border border-cyan-300/25 bg-cyan-300/[0.07] flex items-center justify-center">
           <Aperture className="h-3 w-3 text-cyan-300" />
         </div>
@@ -58,6 +58,7 @@ export function TopNavBar() {
             <Link
               key={link.href}
               href={link.href}
+              prefetch={false}
               aria-label={link.label}
               title={link.label}
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-medium transition-colors ${
