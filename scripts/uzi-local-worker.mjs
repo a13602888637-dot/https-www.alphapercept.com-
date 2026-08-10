@@ -6,7 +6,7 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 const PROJECT_ROOT = resolve(import.meta.dirname, "..");
 const STATE_ROOT = resolve(process.env.ALPHAPERCEPT_WORKER_HOME || join(homedir(), ".local", "share", "alphapercept-worker"));
 const SECRET_PATH = resolve(process.env.ALPHAPERCEPT_WORKER_SECRET_FILE || join(STATE_ROOT, "worker-secret"));
@@ -223,7 +223,7 @@ async function runUziResearch(job, pythonPath, resumeFromCache) {
   const resultPath = join(STATE_ROOT, "logs", `${job.id}-uzi-result.json`);
   const logPath = join(STATE_ROOT, "logs", `${job.id}-uzi.log`);
   await runLogged(CODEX_BIN, [
-    "exec", "--ephemeral", "--json",
+    "exec", "--json",
     "-C", UZI_ROOT, "-o", resultPath, "-",
   ], { cwd: UZI_ROOT, input: uziPrompt(job, pythonPath, resumeFromCache), logPath, env: codexEnvironment() });
 }
