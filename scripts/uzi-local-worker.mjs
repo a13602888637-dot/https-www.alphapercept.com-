@@ -6,7 +6,7 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const PROJECT_ROOT = resolve(import.meta.dirname, "..");
 const STATE_ROOT = resolve(process.env.ALPHAPERCEPT_WORKER_HOME || join(homedir(), ".local", "share", "alphapercept-worker"));
 const SECRET_PATH = resolve(process.env.ALPHAPERCEPT_WORKER_SECRET_FILE || join(STATE_ROOT, "worker-secret"));
@@ -76,22 +76,38 @@ function sanitizeAccountContext(value) {
   };
 }
 
-async function api(path, { method = "GET", body, timeoutMs = 20_000 } = {}) {
-  const response = await fetch(`${SITE_URL}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${workerSecret()}`,
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(timeoutMs),
-    cache: "no-store",
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.success === false) {
-    throw new Error(payload.error || `AlphaPercept API ${response.status}`);
+async function api(path, { method = "GET", body, timeoutMs = 20_000, attempts = 3 } = {}) {
+  const requestBody = body ? JSON.stringify(body) : undefined;
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(`${SITE_URL}${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${workerSecret()}`,
+          ...(body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: requestBody,
+        signal: AbortSignal.timeout(timeoutMs),
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload.success !== false) return payload;
+
+      const error = new Error(payload.error || `AlphaPercept API ${response.status}`);
+      if (response.status !== 429 && response.status < 500) throw error;
+      lastError = error;
+    } catch (error) {
+      lastError = error;
+      if (error?.name !== "AbortError" && error?.name !== "TimeoutError" && error?.cause == null) {
+        throw error;
+      }
+    }
+    if (attempt < attempts) {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, attempt * 1_000));
+    }
   }
-  return payload;
+  throw lastError || new Error("AlphaPercept API request failed");
 }
 
 function run(command, args, options = {}) {
@@ -173,15 +189,19 @@ async function resolveUziPython() {
   return runtimePython;
 }
 
-function resetJobWorkspace(ticker) {
+function prepareJobWorkspace(ticker, resumeRequested = false) {
   const scriptsRoot = join(UZI_ROOT, "skills", "deep-analysis", "scripts");
   const cacheDir = join(scriptsRoot, ".cache", ticker);
-  rmSync(cacheDir, { recursive: true, force: true });
   const compactDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date()).replaceAll("-", "");
-  rmSync(join(scriptsRoot, "reports", `${ticker}_${compactDate}`), { recursive: true, force: true });
-  return { scriptsRoot, cacheDir, reportDirName: `${ticker}_${compactDate}` };
+  const reportDirName = `${ticker}_${compactDate}`;
+  const canResume = resumeRequested && existsSync(cacheDir);
+  if (!canResume) {
+    rmSync(cacheDir, { recursive: true, force: true });
+    rmSync(join(scriptsRoot, "reports", reportDirName), { recursive: true, force: true });
+  }
+  return { scriptsRoot, cacheDir, reportDirName, canResume };
 }
 
 function uziPrompt(job, pythonPath) {
@@ -302,7 +322,8 @@ async function updateStage(job, stage, message) {
 async function processJob(job) {
   log(`开始深研 ${job.stockName} (${job.ticker})`);
   const pythonPath = await ensureUziRuntime();
-  const { cacheDir, reportDirName } = resetJobWorkspace(job.ticker);
+  const { cacheDir, reportDirName, canResume } = prepareJobWorkspace(job.ticker, job.attempt > 1);
+  if (canResume) log(`续跑已有 Uzi 缓存 ${job.ticker}`);
   let heartbeatBusy = false;
   let radarBusy = false;
   const heartbeat = setInterval(async () => {
