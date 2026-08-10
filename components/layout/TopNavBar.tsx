@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
 import {
   ArrowLeft,
-  Brain,
+  Aperture,
   Briefcase,
   FileChartColumnIncreasing,
   Globe,
@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 
 const NAV_LINKS = [
-  { href: "/dashboard", label: "交易台", icon: LayoutDashboard },
-  { href: "/my-stocks", label: "我的股票", icon: Briefcase },
-  { href: "/uzi-reports", label: "Uzi 研判", icon: FileChartColumnIncreasing },
-  { href: "/osint", label: "OSINT 雷达", icon: Globe },
+  { href: "/dashboard", label: "今日", icon: LayoutDashboard },
+  { href: "/my-stocks", label: "持仓", icon: Briefcase },
+  { href: "/uzi-reports", label: "深研", icon: FileChartColumnIncreasing },
+  { href: "/osint", label: "情报", icon: Globe },
 ];
 
 export function TopNavBar() {
@@ -41,11 +41,11 @@ export function TopNavBar() {
 
       {/* Branding */}
       <Link href="/dashboard" className="flex items-center gap-1.5 mr-2">
-        <div className="h-5 w-5 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-          <Brain className="h-3 w-3 text-white" />
+        <div className="h-5 w-5 rounded border border-cyan-300/25 bg-cyan-300/[0.07] flex items-center justify-center">
+          <Aperture className="h-3 w-3 text-cyan-300" />
         </div>
         <span className="text-[11px] font-bold text-gray-300 hidden sm:inline">
-          Alpha-Quant
+          AlphaPercept
         </span>
       </Link>
 
@@ -62,7 +62,7 @@ export function TopNavBar() {
               title={link.label}
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-medium transition-colors ${
                 isActive
-                  ? "bg-blue-600/20 text-blue-400"
+                  ? "bg-cyan-300/[0.08] text-cyan-300"
                   : "text-gray-500 hover:text-gray-300 hover:bg-[#111827]"
               }`}
             >

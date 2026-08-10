@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "stance": { "type": "string", "enum": ["偏多", "中性", "偏空", "数据不足"] },
+    "summary": { "type": "string", "minLength": 20, "maxLength": 500 },
+    "evidence": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "label": { "type": "string" },
+          "value": { "type": "string" },
+          "source": { "type": "string" },
+          "asOf": { "type": ["string", "null"] }
+        },
+        "required": ["label", "value", "source", "asOf"]
+      }
+    },
+    "action": { "type": "string", "enum": ["WATCH", "REVIEW", "REDUCE", "EXIT"] },
+    "actionCondition": { "type": "string", "minLength": 8, "maxLength": 300 },
+    "invalidatesWhen": { "type": "string", "minLength": 8, "maxLength": 300 },
+    "riskFlags": { "type": "array", "maxItems": 6, "items": { "type": "string" } },
+    "dataGaps": { "type": "array", "maxItems": 6, "items": { "type": "string" } }
+  },
+  "required": ["stance", "summary", "evidence", "action", "actionCondition", "invalidatesWhen", "riskFlags", "dataGaps"]
+}

@@ -15,6 +15,16 @@ const OUTPUT_ROOT = join(PROJECT_ROOT, "public", "uzi-assets");
 const REPORT_OUTPUT_ROOT = join(OUTPUT_ROOT, "reports");
 const MANIFEST_PATH = join(OUTPUT_ROOT, "manifest.json");
 const CHECK_ONLY = process.argv.includes("--check");
+const MERGE_EXISTING = process.argv.includes("--merge-existing");
+const REQUIRE_AGENT_REVIEW = process.argv.includes("--require-agent-review");
+const tickerArgIndex = process.argv.indexOf("--ticker");
+const ONLY_TICKER = tickerArgIndex >= 0
+  ? String(process.argv[tickerArgIndex + 1] || "").trim().toUpperCase()
+  : null;
+const reportDirArgIndex = process.argv.indexOf("--report-dir");
+const ONLY_REPORT_DIR = reportDirArgIndex >= 0
+  ? String(process.argv[reportDirArgIndex + 1] || "").trim()
+  : null;
 
 const uziRoot = resolve(
   process.env.UZI_SKILL_ROOT || join(homedir(), ".codex", "skills", "uzi")
@@ -165,6 +175,7 @@ function extractReport(reportDirName) {
   const panelPath = join(cacheDir, "panel.json");
   const rawDataPath = join(cacheDir, "raw_data.json");
   const reviewPath = join(cacheDir, "_review_issues.json");
+  const agentAnalysisPath = join(cacheDir, "agent_analysis.json");
 
   if (
     !existsSync(standalonePath) ||
@@ -179,6 +190,7 @@ function extractReport(reportDirName) {
   const panel = parseJson(panelPath);
   const rawData = parseJson(rawDataPath, { loose: true });
   const review = existsSync(reviewPath) ? parseJson(reviewPath) : null;
+  const agentAnalysis = existsSync(agentAnalysisPath) ? parseJson(agentAnalysisPath) : null;
   const sourceHtml = readFileSync(standalonePath, "utf8");
   const sourceValidation = validateHtml(sourceHtml, standalonePath);
   const hardenedHtml = hardenForSandbox(sourceHtml);
@@ -248,6 +260,7 @@ function extractReport(reportDirName) {
     reviewStatus: synthesis.agent_reviewed === true ? "agent-reviewed" : "mechanical",
     quality: {
       status: qualityStatus(review),
+      agentAnalysisPresent: Boolean(agentAnalysis && typeof agentAnalysis === "object"),
       selfReview: review
         ? {
             passed: review.passed === true,
@@ -303,6 +316,22 @@ function extractReport(reportDirName) {
   };
 }
 
+function validatePublishableReport(report) {
+  if (!REQUIRE_AGENT_REVIEW) return;
+  if (report.agentReviewed !== true) {
+    fail(`${report.ticker} 未完成 Agent 深度复核，拒绝发布`);
+  }
+  if (report.quality.status === "fail") {
+    fail(`${report.ticker} 自查存在 critical，拒绝发布`);
+  }
+  if (!report.quality.selfReview || report.quality.selfReview.passed !== true) {
+    fail(`${report.ticker} 缺少通过的 self review，拒绝发布`);
+  }
+  if (report.quality.agentAnalysisPresent !== true) {
+    fail(`${report.ticker} 缺少 agent_analysis.json，拒绝发布`);
+  }
+}
+
 function verifyPublishedManifest() {
   if (!existsSync(MANIFEST_PATH)) fail("manifest.json 不存在，请先执行同步");
   const manifest = parseJson(MANIFEST_PATH);
@@ -343,10 +372,23 @@ if (CHECK_ONLY) {
   }
 
   mkdirSync(REPORT_OUTPUT_ROOT, { recursive: true });
-  const reports = readdirSync(sourceReportsRoot, { withFileTypes: true })
+  const freshReports = readdirSync(sourceReportsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
+    .filter((entry) => !ONLY_TICKER || entry.name.toUpperCase().startsWith(`${ONLY_TICKER}_`))
+    .filter((entry) => !ONLY_REPORT_DIR || entry.name === ONLY_REPORT_DIR)
     .map((entry) => extractReport(entry.name))
-    .filter(Boolean)
+    .filter(Boolean);
+
+  for (const report of freshReports) validatePublishableReport(report);
+
+  const existingReports = MERGE_EXISTING && existsSync(MANIFEST_PATH)
+    ? (parseJson(MANIFEST_PATH).reports ?? [])
+    : [];
+  const freshIds = new Set(freshReports.map((report) => report.id));
+  const reports = [
+    ...freshReports,
+    ...existingReports.filter((report) => !freshIds.has(report.id)),
+  ]
     .sort(
       (a, b) =>
         b.reportDate.localeCompare(a.reportDate) ||

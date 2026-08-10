@@ -32,6 +32,7 @@ export interface UziReport {
   reviewStatus: "agent-reviewed" | "mechanical";
   quality: {
     status: "pass" | "warning" | "fail" | "unknown";
+    agentAnalysisPresent?: boolean;
     selfReview: {
       passed: boolean;
       criticalCount: number;

@@ -41,6 +41,7 @@ export interface MarketData {
   outerVolume?: number;     // 外盘
   innerVolume?: number;     // 内盘
   bidRatio?: number;        // 委比 %
+  source?: 'sina' | 'tencent' | 'yahoo' | 'database' | 'unavailable';
 }
 
 // Sina finance API configuration
@@ -419,7 +420,8 @@ export async function fetchMultipleStocks(symbols: string[], maxRetries: number 
           lowPrice: 0,
           lastUpdateTime: new Date().toISOString(),
           change: 0,
-          changePercent: 0
+          changePercent: 0,
+          source: 'unavailable'
         };
         Logger.warn(`Returning fallback data for northbound capital`);
         return fallbackData;
@@ -427,16 +429,16 @@ export async function fetchMultipleStocks(symbols: string[], maxRetries: number 
     }
 
     // Regular stock/index data
-    return fetchSinaStockData(symbol, maxRetries).catch(error => {
+    return fetchSinaStockData(symbol, maxRetries).then(data => ({ ...data, source: 'sina' as const })).catch(error => {
       Logger.error(`Sina API failed for ${symbol}:`, error);
 
       // Try Tencent API as fallback
       Logger.info(`Trying Tencent API as fallback for ${symbol}`);
-      return fetchTencentStockData(symbol, maxRetries).catch(tencentError => {
+      return fetchTencentStockData(symbol, maxRetries).then(data => ({ ...data, source: 'tencent' as const })).catch(tencentError => {
         Logger.error(`Sina and Tencent APIs failed for ${symbol}, trying Yahoo Finance as global fallback`, tencentError);
 
         // Try Yahoo Finance as global fallback
-        return fetchYahooStockData(symbol, maxRetries).catch(yahooError => {
+        return fetchYahooStockData(symbol, maxRetries).then(data => ({ ...data, source: 'yahoo' as const })).catch(yahooError => {
           Logger.error(`All APIs including Yahoo Finance failed for ${symbol}:`, yahooError);
           // Ultimate fallback: return minimal market data
           const fallbackData: MarketData = {
@@ -447,7 +449,8 @@ export async function fetchMultipleStocks(symbols: string[], maxRetries: number 
             lowPrice: 0,
             lastUpdateTime: new Date().toISOString(),
             change: 0,
-            changePercent: 0
+            changePercent: 0,
+            source: 'unavailable'
           };
           Logger.warn(`Returning ultimate fallback data for ${symbol} due to complete API failure`);
           return fallbackData;

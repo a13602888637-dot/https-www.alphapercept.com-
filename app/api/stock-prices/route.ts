@@ -123,6 +123,7 @@ async function fetchFromTencent(symbols: string[]): Promise<MarketData[]> {
             outerVolume: parseInt(parts[7]) || 0,
             innerVolume: parseInt(parts[8]) || 0,
             bidRatio,
+            source: 'tencent',
           });
         }
       } catch {
@@ -205,6 +206,7 @@ export async function GET(req: Request) {
                 changePercent: Number(record.changePercent || 0),
                 volume: record.volume || 0,
                 turnover: record.turnover || 0,
+                source: 'database' as const,
               };
             }
             return null;
@@ -236,6 +238,7 @@ export async function GET(req: Request) {
         changePercent: 0,
         volume: 0,
         turnover: 0,
+        source: 'unavailable' as const,
       }));
     }
 
@@ -258,6 +261,7 @@ export async function GET(req: Request) {
         turnover: data.turnover,
         lastUpdate: data.lastUpdateTime,
         name: data.name,
+        source: data.source || source,
         // 扩展指标
         turnoverRate: data.turnoverRate,
         volumeRatio: data.volumeRatio,

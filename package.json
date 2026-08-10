@@ -24,7 +24,11 @@
     "search:test": "ts-node lib/search-proxy/test.ts",
     "search:status": "ts-node -e \"import { getSearchService } from './lib/search-proxy'; console.log(JSON.stringify(getSearchService().getStatus(), null, 2));\"",
     "test:smart-selector": "node scripts/test_smart_selector.js",
-    "test:data-sources": "ts-node -e \"import { testSmartDataSourceSelector } from './skills/data_crawler'; testSmartDataSourceSelector().then(result => console.log('Test result:', result ? 'PASS' : 'FAIL')).catch(console.error);\""
+    "test:data-sources": "ts-node -e \"import { testSmartDataSourceSelector } from './skills/data_crawler'; testSmartDataSourceSelector().then(result => console.log('Test result:', result ? 'PASS' : 'FAIL')).catch(console.error);\"",
+    "uzi:worker": "node scripts/uzi-local-worker.mjs",
+    "uzi:worker:once": "node scripts/uzi-local-worker.mjs --once",
+    "uzi:worker:check": "node scripts/uzi-local-worker.mjs --check",
+    "uzi:worker:setup": "node scripts/setup-uzi-worker.mjs"
   },
   "keywords": [
     "quantitative-trading",

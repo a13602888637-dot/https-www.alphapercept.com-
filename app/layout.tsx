@@ -1,20 +1,17 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "Alpha-Quant-Copilot | AI量化交易助手",
-  description: "基于五大投资流派融合的AI量化交易分析系统，实时市场数据与智能策略推荐",
-  keywords: ["量化投资", "股票分析", "AI助手", "实时数据", "投资策略"],
-  authors: [{ name: "Alpha-Quant-Copilot Team" }],
-  creator: "Alpha-Quant-Copilot",
-  publisher: "Alpha-Quant-Copilot",
+  title: "AlphaPercept | 个人投资助理",
+  description: "围绕个人持仓的实时监测、行动条件与 Uzi 深度研判。",
+  keywords: ["个人投资助理", "持仓监测", "股票分析", "Uzi 深度研判"],
+  authors: [{ name: "AlphaPercept" }],
+  creator: "AlphaPercept",
+  publisher: "AlphaPercept",
   robots: {
     index: true,
     follow: true,
@@ -51,7 +48,7 @@ export default function RootLayout({
       }}
     >
       <html lang="zh-CN" suppressHydrationWarning>
-        <body className={`${inter.className} antialiased`}>
+        <body className="antialiased">
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"
