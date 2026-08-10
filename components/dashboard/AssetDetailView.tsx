@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -16,9 +17,21 @@ import {
   type MouseEventParams,
 } from "lightweight-charts";
 import { MACD, Stochastic } from "technicalindicators";
-import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Shield, Save, Pencil, Check, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+  Save,
+  Pencil,
+  Check,
+  X,
+  FileChartColumnIncreasing,
+} from "lucide-react";
 import { StopLossConfig, type StopLossMethod, SL_DEFAULT_PARAMS } from "@/components/portfolio/StopLossConfig";
 import { TakeProfitConfig, type TakeProfitMethod, TP_DEFAULT_PARAMS } from "@/components/portfolio/TakeProfitConfig";
+import { findLatestUziReport, getUziReportViewerPath } from "@/lib/uzi-reports";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -298,6 +311,7 @@ interface TechDataStripProps {
 }
 
 function TechDataStrip({ symbol, stockName, rtPrice, lastKline, onBack }: TechDataStripProps) {
+  const uziReport = findLatestUziReport(symbol);
   const isUp = (rtPrice?.changePercent ?? lastKline?.changePercent ?? 0) > 0;
   const isFlat = (rtPrice?.changePercent ?? lastKline?.changePercent ?? 0) === 0;
   const priceColor = isUp ? "text-[#ef4444]" : isFlat ? "text-gray-200" : "text-[#22c55e]";
@@ -344,6 +358,18 @@ function TechDataStrip({ symbol, stockName, rtPrice, lastKline, onBack }: TechDa
             <span className="text-white text-xs font-bold font-mono tracking-wide shrink-0">{symbol}</span>
             {stockName && <span className="text-gray-500 text-[11px] truncate">{stockName}</span>}
           </div>
+
+          {uziReport && (
+            <Link
+              href={getUziReportViewerPath(uziReport)}
+              className="flex shrink-0 items-center gap-1.5 rounded border border-cyan-400/20 bg-cyan-400/[0.06] px-2 py-1 text-[9px] font-mono text-cyan-300 transition-colors hover:border-cyan-400/40 hover:bg-cyan-400/10"
+              title={`查看 ${uziReport.name} Uzi 深度报告`}
+            >
+              <FileChartColumnIncreasing className="h-3 w-3" />
+              <span className="hidden sm:inline">Uzi 报告</span>
+              <span className="tabular-nums">{uziReport.overallScore?.toFixed(1) ?? "—"}</span>
+            </Link>
+          )}
 
           {/* C-position: current price */}
           <div className="text-right shrink-0">

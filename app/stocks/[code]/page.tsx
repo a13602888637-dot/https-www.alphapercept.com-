@@ -1,16 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, TrendingUp, TrendingDown, AlertTriangle, Plus, Check } from "lucide-react";
+import {
+  ArrowLeft,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Plus,
+  Check,
+  FileChartColumnIncreasing,
+} from "lucide-react";
 import { toast } from "sonner";
 import { StockChart } from "@/components/charts/StockChart";
 import { TechnicalIndicators } from "@/components/charts/TechnicalIndicators";
 import { ChatInterface } from "@/components/ai-chat/ChatInterface";
+import { findLatestUziReport, getUziReportViewerPath } from "@/lib/uzi-reports";
 
 interface StockDetail {
   symbol: string;
@@ -267,6 +277,7 @@ export default function StockDetailPage() {
   // A股惯例：红涨绿跌
   const priceChangeColor = stockDetail.change >= 0 ? "text-red-600" : "text-green-600";
   const priceChangeIcon = stockDetail.change >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />;
+  const uziReport = findLatestUziReport(stockCode);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -276,6 +287,14 @@ export default function StockDetailPage() {
           返回
         </Button>
         <div className="flex gap-2">
+          {uziReport && (
+            <Button asChild variant="outline">
+              <Link href={getUziReportViewerPath(uziReport)}>
+                <FileChartColumnIncreasing className="mr-2 h-4 w-4" />
+                Uzi 报告 {uziReport.overallScore?.toFixed(1) ?? "—"}
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" onClick={handleTriggerAnalysis}>刷新AI分析</Button>
           {!isInWatchlist ? (
             <Button onClick={handleAddToWatchlist} disabled={isAddingToWatchlist}>

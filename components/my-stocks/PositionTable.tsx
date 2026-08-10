@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,9 @@ import {
   Star,
   Plus,
   Pencil,
+  FileChartColumnIncreasing,
 } from "lucide-react";
+import { findLatestUziReport, getUziReportViewerPath } from "@/lib/uzi-reports";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -258,6 +261,7 @@ export function PositionTable({
             ) : (
               positions.map((pos) => {
                 const positive = pos.profitLossPercent >= 0;
+                const uziReport = findLatestUziReport(pos.stockCode);
                 return (
                   <tr
                     key={pos.stockCode}
@@ -308,6 +312,22 @@ export function PositionTable({
                     {/* Actions */}
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-0.5">
+                        {uziReport && (
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300"
+                          >
+                            <Link
+                              href={getUziReportViewerPath(uziReport)}
+                              aria-label={`查看 ${pos.stockName} Uzi 报告`}
+                              title={`Uzi 报告 ${uziReport.overallScore?.toFixed(1) ?? "—"} 分`}
+                            >
+                              <FileChartColumnIncreasing className="h-3 w-3" />
+                            </Link>
+                          </Button>
+                        )}
                         {/* Edit button */}
                         <Button
                           variant="ghost"

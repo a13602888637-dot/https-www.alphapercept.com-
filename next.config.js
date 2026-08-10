@@ -2,6 +2,25 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  // Uzi standalone reports are generated HTML. Keep them in an opaque,
+  // script-capable sandbox so they cannot access Alpha-Quant auth/API state.
+  async headers() {
+    return [
+      {
+        source: '/uzi-assets/reports/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "sandbox allow-scripts allow-popups; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'",
+          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        ],
+      },
+    ];
+  },
+
   // 配置WebSocket支持
   webpack: (config, { isServer }) => {
     // 如果是服务器端，配置WebSocket支持

@@ -3,11 +3,20 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
-import { ArrowLeft, Brain, Briefcase, Globe, LayoutDashboard, LogIn } from "lucide-react";
+import {
+  ArrowLeft,
+  Brain,
+  Briefcase,
+  FileChartColumnIncreasing,
+  Globe,
+  LayoutDashboard,
+  LogIn,
+} from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "交易台", icon: LayoutDashboard },
   { href: "/my-stocks", label: "我的股票", icon: Briefcase },
+  { href: "/uzi-reports", label: "Uzi 研判", icon: FileChartColumnIncreasing },
   { href: "/osint", label: "OSINT 雷达", icon: Globe },
 ];
 
@@ -43,11 +52,14 @@ export function TopNavBar() {
       {/* Nav links */}
       <div className="flex items-center gap-1">
         {NAV_LINKS.map((link) => {
-          const isActive = pathname === link.href;
+          const isActive =
+            pathname === link.href || pathname.startsWith(`${link.href}/`);
           return (
             <Link
               key={link.href}
               href={link.href}
+              aria-label={link.label}
+              title={link.label}
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-medium transition-colors ${
                 isActive
                   ? "bg-blue-600/20 text-blue-400"
@@ -55,7 +67,7 @@ export function TopNavBar() {
               }`}
             >
               <link.icon className="h-3 w-3" />
-              {link.label}
+              <span className="hidden md:inline">{link.label}</span>
             </Link>
           );
         })}

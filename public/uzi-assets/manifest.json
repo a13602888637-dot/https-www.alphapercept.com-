@@ -1,0 +1,677 @@
+{
+  "schemaVersion": "uzi-report-manifest/v1",
+  "syncedAt": "2026-08-10T08:59:11+08:00",
+  "reportCount": 4,
+  "reports": [
+    {
+      "id": "000603.SZ_20260810",
+      "ticker": "000603.SZ",
+      "stockCode": "000603",
+      "market": "A",
+      "name": "盛达资源",
+      "reportDate": "2026-08-10",
+      "reportGeneratedAt": "2026-08-10T08:55:44+08:00",
+      "price": 34.43,
+      "priceAsOf": "2026-08-07",
+      "priceSource": "basic",
+      "overallScore": 65,
+      "verdict": "观望偏多 · 3 派看多 / 3 派看空",
+      "verdictDetail": "基本面 68.5 · 共识 59.7",
+      "conclusion": "盛达资源 · 64 分 · 观望偏多 · 3 派看多 / 3 派看空。51 位大佬里 28 人看多，YTD +113.9%。盛达资源 · ROE 历史与当前估值存在结构性分歧，等待方向明朗。",
+      "fundamentalScore": 68.5,
+      "panelConsensus": 59.7,
+      "agentReviewed": false,
+      "reviewStatus": "mechanical",
+      "quality": {
+        "status": "warning",
+        "selfReview": {
+          "passed": true,
+          "criticalCount": 0,
+          "warningCount": 4,
+          "infoCount": 0,
+          "checksRun": 16
+        },
+        "dimensions": {
+          "total": 21,
+          "full": 5,
+          "partial": 12,
+          "missingMarker": 4,
+          "dataGapCount": 44
+        },
+        "consistencyWarnings": [
+          "score_text_mismatch"
+        ]
+      },
+      "trend": "Stage 2 上升",
+      "battlePlan": {
+        "entry": "¥31.68",
+        "stop": "¥29.27",
+        "target": "¥43.04",
+        "position": "50% 起步"
+      },
+      "signals": {
+        "bullish": 28,
+        "neutral": 15,
+        "bearish": 19,
+        "skip": 4
+      },
+      "votes": {
+        "stronglyBuy": 11,
+        "buy": 17,
+        "watch": 9,
+        "wait": 9,
+        "avoid": 16,
+        "skip": 4
+      },
+      "schools": [
+        {
+          "id": "A",
+          "label": "经典价值派",
+          "consensus": 36.9,
+          "verdict": "谨慎",
+          "bullish": 1,
+          "neutral": 3,
+          "bearish": 2,
+          "skip": 0
+        },
+        {
+          "id": "B",
+          "label": "成长派",
+          "consensus": 14.4,
+          "verdict": "回避",
+          "bullish": 2,
+          "neutral": 0,
+          "bearish": 7,
+          "skip": 0
+        },
+        {
+          "id": "C",
+          "label": "宏观派",
+          "consensus": 56.1,
+          "verdict": "关注",
+          "bullish": 4,
+          "neutral": 0,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "D",
+          "label": "技术派",
+          "consensus": 99.2,
+          "verdict": "重仓",
+          "bullish": 4,
+          "neutral": 0,
+          "bearish": 0,
+          "skip": 0
+        },
+        {
+          "id": "E",
+          "label": "中式价投",
+          "consensus": 60.1,
+          "verdict": "关注",
+          "bullish": 3,
+          "neutral": 2,
+          "bearish": 2,
+          "skip": 0
+        },
+        {
+          "id": "F",
+          "label": "A 股游资",
+          "consensus": 80.1,
+          "verdict": "重仓",
+          "bullish": 12,
+          "neutral": 9,
+          "bearish": 0,
+          "skip": 3
+        },
+        {
+          "id": "G",
+          "label": "量化派",
+          "consensus": 65.2,
+          "verdict": "买入",
+          "bullish": 2,
+          "neutral": 0,
+          "bearish": 1,
+          "skip": 1
+        },
+        {
+          "id": "H",
+          "label": "科技领袖派",
+          "consensus": 6,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 1,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "I",
+          "label": "AI 卡位/瓶颈猎手",
+          "consensus": 0,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 0,
+          "bearish": 1,
+          "skip": 0
+        }
+      ],
+      "panelSize": 66,
+      "reportPath": "/uzi-assets/reports/000603.SZ_20260810.html",
+      "sourceSha256": "2aaa3aff29339b92e444f0877db0e434b88b1cd2508fed3cf3a74cffb3cc25bc",
+      "deployedSha256": "c8aa4f87fdd19ca1acabbc13a45bbfe90cd222b145a2aad8a76531e3e955dec9",
+      "fileSize": 776191,
+      "validation": {
+        "seats": 66,
+        "chatMessages": 66,
+        "sections": {
+          "jury": true,
+          "chat": true,
+          "schoolScores": true
+        },
+        "sourceFileSize": 776946,
+        "sandboxStorageShim": true
+      }
+    },
+    {
+      "id": "002716.SZ_20260810",
+      "ticker": "002716.SZ",
+      "stockCode": "002716",
+      "market": "A",
+      "name": "湖南白银",
+      "reportDate": "2026-08-10",
+      "reportGeneratedAt": "2026-08-10T08:55:44+08:00",
+      "price": 9.09,
+      "priceAsOf": "2026-08-07",
+      "priceSource": "basic",
+      "overallScore": 46.2,
+      "verdict": "谨慎 · 6 派看空",
+      "verdictDetail": "基本面 61.8 · 共识 22.9",
+      "conclusion": "湖南白银 · 46 分 · 谨慎 · 6 派看空。51 位大佬里 7 人看多，YTD +89.8%。湖南白银 · ROE 历史与当前估值存在结构性分歧，等待方向明朗。",
+      "fundamentalScore": 61.8,
+      "panelConsensus": 22.9,
+      "agentReviewed": false,
+      "reviewStatus": "mechanical",
+      "quality": {
+        "status": "warning",
+        "selfReview": {
+          "passed": true,
+          "criticalCount": 0,
+          "warningCount": 4,
+          "infoCount": 0,
+          "checksRun": 16
+        },
+        "dimensions": {
+          "total": 21,
+          "full": 3,
+          "partial": 13,
+          "missingMarker": 5,
+          "dataGapCount": 42
+        },
+        "consistencyWarnings": []
+      },
+      "trend": "Stage 1 底部",
+      "battlePlan": {
+        "entry": "¥8.36",
+        "stop": "¥7.73",
+        "target": "¥11.36",
+        "position": "50% 起步"
+      },
+      "signals": {
+        "bullish": 7,
+        "neutral": 12,
+        "bearish": 43,
+        "skip": 4
+      },
+      "votes": {
+        "stronglyBuy": 3,
+        "buy": 4,
+        "watch": 2,
+        "wait": 18,
+        "avoid": 35,
+        "skip": 4
+      },
+      "schools": [
+        {
+          "id": "A",
+          "label": "经典价值派",
+          "consensus": 26.2,
+          "verdict": "回避",
+          "bullish": 1,
+          "neutral": 2,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "B",
+          "label": "成长派",
+          "consensus": 6.5,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 2,
+          "bearish": 7,
+          "skip": 0
+        },
+        {
+          "id": "C",
+          "label": "宏观派",
+          "consensus": 49.2,
+          "verdict": "谨慎",
+          "bullish": 3,
+          "neutral": 1,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "D",
+          "label": "技术派",
+          "consensus": 31.1,
+          "verdict": "回避",
+          "bullish": 1,
+          "neutral": 1,
+          "bearish": 2,
+          "skip": 0
+        },
+        {
+          "id": "E",
+          "label": "中式价投",
+          "consensus": 42.1,
+          "verdict": "谨慎",
+          "bullish": 1,
+          "neutral": 4,
+          "bearish": 2,
+          "skip": 0
+        },
+        {
+          "id": "F",
+          "label": "A 股游资",
+          "consensus": 0,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 0,
+          "bearish": 21,
+          "skip": 3
+        },
+        {
+          "id": "G",
+          "label": "量化派",
+          "consensus": 49.8,
+          "verdict": "谨慎",
+          "bullish": 1,
+          "neutral": 1,
+          "bearish": 1,
+          "skip": 1
+        },
+        {
+          "id": "H",
+          "label": "科技领袖派",
+          "consensus": 6,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 1,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "I",
+          "label": "AI 卡位/瓶颈猎手",
+          "consensus": 0,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 0,
+          "bearish": 1,
+          "skip": 0
+        }
+      ],
+      "panelSize": 66,
+      "reportPath": "/uzi-assets/reports/002716.SZ_20260810.html",
+      "sourceSha256": "8a381d50e0a0b3b13f8922b33a15563094c181a6be5d53c776cd4687b85b5ad7",
+      "deployedSha256": "df965dc10facd37146a54b7345bc64dd6778f8ced23077124591625b89358238",
+      "fileSize": 766965,
+      "validation": {
+        "seats": 66,
+        "chatMessages": 66,
+        "sections": {
+          "jury": true,
+          "chat": true,
+          "schoolScores": true
+        },
+        "sourceFileSize": 767825,
+        "sandboxStorageShim": true
+      }
+    },
+    {
+      "id": "002842.SZ_20260810",
+      "ticker": "002842.SZ",
+      "stockCode": "002842",
+      "market": "A",
+      "name": "翔鹭钨业",
+      "reportDate": "2026-08-10",
+      "reportGeneratedAt": "2026-08-10T08:59:11+08:00",
+      "price": 38.38,
+      "priceAsOf": "2026-08-07",
+      "priceSource": "basic",
+      "overallScore": 61.4,
+      "verdict": "观望偏多 · 3 派看多 / 3 派看空",
+      "verdictDetail": "基本面 65.4 · 共识 55.3",
+      "conclusion": "翔鹭钨业 · 61 分 · 观望偏多 · 3 派看多 / 3 派看空。51 位大佬里 23 人看多，YTD +286.9%。翔鹭钨业 · ROE 历史与当前估值存在结构性分歧，等待方向明朗。",
+      "fundamentalScore": 65.4,
+      "panelConsensus": 55.3,
+      "agentReviewed": false,
+      "reviewStatus": "mechanical",
+      "quality": {
+        "status": "warning",
+        "selfReview": {
+          "passed": true,
+          "criticalCount": 0,
+          "warningCount": 4,
+          "infoCount": 0,
+          "checksRun": 16
+        },
+        "dimensions": {
+          "total": 21,
+          "full": 4,
+          "partial": 12,
+          "missingMarker": 5,
+          "dataGapCount": 39
+        },
+        "consistencyWarnings": []
+      },
+      "trend": "Stage 2 上升",
+      "battlePlan": {
+        "entry": "¥35.31",
+        "stop": "¥32.62",
+        "target": "¥47.98",
+        "position": "50% 起步"
+      },
+      "signals": {
+        "bullish": 23,
+        "neutral": 17,
+        "bearish": 20,
+        "skip": 6
+      },
+      "votes": {
+        "stronglyBuy": 9,
+        "buy": 14,
+        "watch": 12,
+        "wait": 7,
+        "avoid": 18,
+        "skip": 6
+      },
+      "schools": [
+        {
+          "id": "A",
+          "label": "经典价值派",
+          "consensus": 16.7,
+          "verdict": "回避",
+          "bullish": 1,
+          "neutral": 1,
+          "bearish": 4,
+          "skip": 0
+        },
+        {
+          "id": "B",
+          "label": "成长派",
+          "consensus": 11.1,
+          "verdict": "回避",
+          "bullish": 1,
+          "neutral": 1,
+          "bearish": 7,
+          "skip": 0
+        },
+        {
+          "id": "C",
+          "label": "宏观派",
+          "consensus": 55.8,
+          "verdict": "关注",
+          "bullish": 3,
+          "neutral": 2,
+          "bearish": 2,
+          "skip": 0
+        },
+        {
+          "id": "D",
+          "label": "技术派",
+          "consensus": 97.9,
+          "verdict": "重仓",
+          "bullish": 4,
+          "neutral": 0,
+          "bearish": 0,
+          "skip": 0
+        },
+        {
+          "id": "E",
+          "label": "中式价投",
+          "consensus": 46.4,
+          "verdict": "谨慎",
+          "bullish": 2,
+          "neutral": 2,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "F",
+          "label": "A 股游资",
+          "consensus": 78.6,
+          "verdict": "买入",
+          "bullish": 10,
+          "neutral": 9,
+          "bearish": 0,
+          "skip": 5
+        },
+        {
+          "id": "G",
+          "label": "量化派",
+          "consensus": 65.2,
+          "verdict": "买入",
+          "bullish": 2,
+          "neutral": 0,
+          "bearish": 1,
+          "skip": 1
+        },
+        {
+          "id": "H",
+          "label": "科技领袖派",
+          "consensus": 6,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 1,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "I",
+          "label": "AI 卡位/瓶颈猎手",
+          "consensus": 46.1,
+          "verdict": "谨慎",
+          "bullish": 0,
+          "neutral": 1,
+          "bearish": 0,
+          "skip": 0
+        }
+      ],
+      "panelSize": 66,
+      "reportPath": "/uzi-assets/reports/002842.SZ_20260810.html",
+      "sourceSha256": "4b086e604074d767be8a5a9743668aa5d159d1eb7ffe59f44a9bc92164659aeb",
+      "deployedSha256": "64e8f46b23116513608af4478fea8a39a6289a068d3a775b1b26ddd4d241b06a",
+      "fileSize": 773060,
+      "validation": {
+        "seats": 66,
+        "chatMessages": 66,
+        "sections": {
+          "jury": true,
+          "chat": true,
+          "schoolScores": true
+        },
+        "sourceFileSize": 773855,
+        "sandboxStorageShim": true
+      }
+    },
+    {
+      "id": "600519.SH_20260805",
+      "ticker": "600519.SH",
+      "stockCode": "600519",
+      "market": "A",
+      "name": "贵州茅台",
+      "reportDate": "2026-08-05",
+      "reportGeneratedAt": "2026-08-05T08:52:16+08:00",
+      "price": 1328.36,
+      "priceAsOf": "2026-08-04",
+      "priceSource": "basic",
+      "overallScore": 55,
+      "verdict": "观望中性 · 5 派看空",
+      "verdictDetail": "基本面 63.8 · 共识 41.9",
+      "conclusion": "贵州茅台 · 55 分 · 观望中性 · 5 派看空。51 位大佬里 9 人看多，YTD -5.6%。DCF 认为低估 39%，LBO IRR 22% 也确认 — 双重信号看多。",
+      "fundamentalScore": 63.8,
+      "panelConsensus": 41.9,
+      "agentReviewed": false,
+      "reviewStatus": "mechanical",
+      "quality": {
+        "status": "warning",
+        "selfReview": {
+          "passed": true,
+          "criticalCount": 0,
+          "warningCount": 2,
+          "infoCount": 1,
+          "checksRun": 16
+        },
+        "dimensions": {
+          "total": 23,
+          "full": 3,
+          "partial": 13,
+          "missingMarker": 7,
+          "dataGapCount": 37
+        },
+        "consistencyWarnings": []
+      },
+      "trend": "Stage 4 下跌",
+      "battlePlan": {
+        "entry": "¥1222.09",
+        "stop": "¥1129.11",
+        "target": "¥1660.45",
+        "position": "50% 起步"
+      },
+      "signals": {
+        "bullish": 9,
+        "neutral": 15,
+        "bearish": 19,
+        "skip": 23
+      },
+      "votes": {
+        "stronglyBuy": 6,
+        "buy": 3,
+        "watch": 3,
+        "wait": 18,
+        "avoid": 13,
+        "skip": 23
+      },
+      "schools": [
+        {
+          "id": "A",
+          "label": "经典价值派",
+          "consensus": 54.5,
+          "verdict": "关注",
+          "bullish": 2,
+          "neutral": 3,
+          "bearish": 1,
+          "skip": 0
+        },
+        {
+          "id": "B",
+          "label": "成长派",
+          "consensus": 17.9,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 4,
+          "bearish": 5,
+          "skip": 0
+        },
+        {
+          "id": "C",
+          "label": "宏观派",
+          "consensus": 61,
+          "verdict": "关注",
+          "bullish": 4,
+          "neutral": 0,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "D",
+          "label": "技术派",
+          "consensus": 43.5,
+          "verdict": "谨慎",
+          "bullish": 0,
+          "neutral": 3,
+          "bearish": 1,
+          "skip": 0
+        },
+        {
+          "id": "E",
+          "label": "中式价投",
+          "consensus": 61.1,
+          "verdict": "关注",
+          "bullish": 3,
+          "neutral": 2,
+          "bearish": 2,
+          "skip": 0
+        },
+        {
+          "id": "F",
+          "label": "A 股游资",
+          "consensus": 0,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 0,
+          "bearish": 2,
+          "skip": 22
+        },
+        {
+          "id": "G",
+          "label": "量化派",
+          "consensus": 34.7,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 2,
+          "bearish": 1,
+          "skip": 1
+        },
+        {
+          "id": "H",
+          "label": "科技领袖派",
+          "consensus": 9.1,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 1,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "I",
+          "label": "AI 卡位/瓶颈猎手",
+          "consensus": 0,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 0,
+          "bearish": 1,
+          "skip": 0
+        }
+      ],
+      "panelSize": 66,
+      "reportPath": "/uzi-assets/reports/600519.SH_20260805.html",
+      "sourceSha256": "0b842494b90268bae3e693b5b1dba7c710b77b409c1710fb9506a5d63623c97c",
+      "deployedSha256": "9833b5e1102ca31b4b8ab6b6a19be0564b531f19dbfe552b2d75aea47dbeadf3",
+      "fileSize": 804151,
+      "validation": {
+        "seats": 66,
+        "chatMessages": 66,
+        "sections": {
+          "jury": true,
+          "chat": true,
+          "schoolScores": true
+        },
+        "sourceFileSize": 805373,
+        "sandboxStorageShim": true
+      }
+    }
+  ]
+}
