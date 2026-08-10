@@ -3,9 +3,9 @@ import { UziReportRegistry } from "@/components/uzi/UziReportRegistry";
 import { uziReports } from "@/lib/uzi-reports";
 
 export const metadata: Metadata = {
-  title: "Uzi 深度研判库 | Alpha-Quant-Copilot",
-  description: "已注册的 Uzi 深度报告、九派评分、游资共识与大佬评审。",
-  robots: { index: false, follow: false, archive: false },
+  title: "Uzi 游资研判台 | Alpha-Quant-Copilot",
+  description: "任意 A 股近 30 日龙虎榜快报，以及已注册的 Uzi 深度报告。",
+  robots: { index: false, follow: false, noarchive: true },
 };
 
 export default function UziReportsPage() {

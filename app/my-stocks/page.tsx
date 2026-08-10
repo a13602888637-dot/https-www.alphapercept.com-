@@ -1,29 +1,29 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useAuth } from "@clerk/nextjs";
-import { Briefcase, Calendar, RefreshCw, Loader2 } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { SignInButton, useAuth } from "@clerk/nextjs";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Briefcase,
+  CircleDollarSign,
+  FileChartColumnIncreasing,
+  Loader2,
+  LogIn,
+  Pencil,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Target,
+  Trash2,
+  WifiOff,
+} from "lucide-react";
 import { toast } from "sonner";
-
-import { AccountSummary } from "@/components/my-stocks/AccountSummary";
-import { HealthCheck } from "@/components/my-stocks/HealthCheck";
-import { PositionTable } from "@/components/my-stocks/PositionTable";
-import { AIDiagnosis } from "@/components/my-stocks/AIDiagnosis";
-import { PhaseProgressBar, DEFAULT_PHASES } from "@/components/my-stocks/PhaseProgressBar";
-import { CalendarGrid, type CalendarEvent } from "@/components/my-stocks/CalendarGrid";
-import { DayDetailPanel } from "@/components/my-stocks/DayDetailPanel";
-import { WeeklyTodoList } from "@/components/my-stocks/WeeklyTodoList";
-import { StrategyGenerator } from "@/components/my-stocks/StrategyGenerator";
 import { AddEditPositionDialog } from "@/components/my-stocks/AddEditPositionDialog";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { Button } from "@/components/ui/button";
+import { findLatestUziReport, getUziReportViewerPath, type UziReport } from "@/lib/uzi-reports";
 
 interface Position {
   id: string;
@@ -31,762 +31,453 @@ interface Position {
   stockName: string;
   quantity: number;
   avgCost: number;
-  currentPrice: number;
-  marketValue: number;
-  profitLoss: number;
-  profitLossPercent: number;
-  weight: number;
+  currentPrice: number | null;
+  priceAvailable: boolean;
+  priceSource: string;
+  priceAsOf: string | null;
+  marketValue: number | null;
+  profitLoss: number | null;
+  profitLossPercent: number | null;
+  weight: number | null;
 }
 
-interface HealthRule {
-  id: string;
-  name: string;
-  pass: boolean;
-  value: string;
-  message: string;
-}
-
-interface TriggerItem {
+interface WatchlistItem {
   id: string;
   stockCode: string;
-  stockName: string;
-  currentPrice: number;
-  triggerLow: number;
-  triggerHigh: number;
-  triggered: boolean;
-  direction: "above" | "below" | "in_range";
-  logic: string;
+  stopLossPrice: number | null;
+  targetPrice: number | null;
+  stopLossMethod: string | null;
+  takeProfitMethod: string | null;
+  computeStatus: string | null;
+  lastComputedAt: string | null;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getCurrentPhaseIndex(): number {
-  const now = new Date();
-  const day = now.getDate();
-  const month = now.getMonth() + 1;
-  if (month !== 4) return 0;
-  if (day <= 6) return 0;
-  if (day <= 11) return 1;
-  if (day <= 18) return 2;
-  return 3;
+interface PortfolioSummary {
+  totalMarketValue: number;
+  totalCost: number;
+  pricedCost: number;
+  totalProfitLoss: number;
+  totalProfitLossPercent: number | null;
+  positionCount: number;
+  pricedPositionCount: number;
+  hasCompletePricing: boolean;
+  priceSource: string;
+  priceTimestamp: string | null;
 }
 
-function pad(n: number): string {
-  return n.toString().padStart(2, "0");
+const EMPTY_SUMMARY: PortfolioSummary = {
+  totalMarketValue: 0,
+  totalCost: 0,
+  pricedCost: 0,
+  totalProfitLoss: 0,
+  totalProfitLossPercent: null,
+  positionCount: 0,
+  pricedPositionCount: 0,
+  hasCompletePricing: true,
+  priceSource: "unavailable",
+  priceTimestamp: null,
+};
+
+function money(value: number): string {
+  if (Math.abs(value) >= 100_000_000) return `${(value / 100_000_000).toFixed(2)}亿`;
+  if (Math.abs(value) >= 10_000) return `${(value / 10_000).toFixed(2)}万`;
+  return value.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+function percent(value: number | null): string {
+  if (value === null) return "--";
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
 
-export default function MyStocksPage() {
-  const { getToken, isSignedIn } = useAuth();
+function pnlTone(value: number | null): string {
+  if (value === null || value === 0) return "text-slate-300";
+  return value > 0 ? "text-[#ef6a72]" : "text-[#49c78e]";
+}
 
-  // Tab 1 state — raw data
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [healthRules, setHealthRules] = useState<HealthRule[]>([]);
-  const [healthScore, setHealthScore] = useState(100);
-  const [triggers, setTriggers] = useState<TriggerItem[]>([]);
-  const [portfolioLoading, setPortfolioLoading] = useState(true);
-  const [healthLoading, setHealthLoading] = useState(true);
-  const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set());
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
+function sourceLabel(source: string): string {
+  return ({ sina: "新浪", tencent: "腾讯", database: "历史缓存", unavailable: "不可用" } as Record<string, string>)[source] || source;
+}
 
-  // Editable cash & reverse repo — persisted in localStorage
-  const [cashBalance, setCashBalance] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("my-stocks-cash");
-      return saved ? Number(saved) : 0;
-    }
-    return 0;
-  });
-  const [reverseRepo, setReverseRepo] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("my-stocks-repo");
-      return saved ? Number(saved) : 0;
-    }
-    return 0;
-  });
-  const [showCashEditor, setShowCashEditor] = useState(false);
+function isLivePrice(position: Position): boolean {
+  return position.priceAvailable && (position.priceSource === "sina" || position.priceSource === "tencent");
+}
 
-  // ─── Derived data (single source of truth) ──────────────────────────────
-  const derived = useMemo(() => {
-    const totalMarketValue = positions.reduce((s, p) => s + p.currentPrice * p.quantity, 0);
-    const totalCost = positions.reduce((s, p) => s + p.avgCost * p.quantity, 0);
-    const totalAssets = totalMarketValue + cashBalance + reverseRepo;
-    const totalPnL = totalMarketValue - totalCost;
-    const totalPnLPercent = totalCost > 0 ? (totalPnL / totalCost) * 100 : 0;
-    const cashRatio = totalAssets > 0 ? ((cashBalance + reverseRepo) / totalAssets) * 100 : 0;
+function isRiskLevelActionable(plan: WatchlistItem | undefined, kind: "stop" | "target"): boolean {
+  if (!plan) return false;
+  const value = kind === "stop" ? plan.stopLossPrice : plan.targetPrice;
+  const method = kind === "stop" ? plan.stopLossMethod : plan.takeProfitMethod;
+  if (!value || value <= 0) return false;
+  // Manually entered/fixed price levels remain valid until the user changes
+  // them. Dynamic levels must come from a recent successful calculation.
+  if (!method || method === "fixed") return true;
+  if (plan.computeStatus !== "live" || !plan.lastComputedAt) return false;
+  const computedAt = new Date(plan.lastComputedAt).getTime();
+  return Number.isFinite(computedAt) && Date.now() - computedAt <= 96 * 60 * 60 * 1000;
+}
 
-    // Recompute weights relative to totalAssets
-    const positionsWithWeight = positions.map((p) => ({
-      ...p,
-      marketValue: p.currentPrice * p.quantity,
-      profitLoss: (p.currentPrice - p.avgCost) * p.quantity,
-      profitLossPercent: p.avgCost > 0 ? ((p.currentPrice - p.avgCost) / p.avgCost) * 100 : 0,
-      weight: totalAssets > 0 ? ((p.currentPrice * p.quantity) / totalAssets) * 100 : 0,
-    }));
+function reportAgeDays(report: UziReport): number {
+  const time = new Date(`${report.reportDate}T00:00:00+08:00`).getTime();
+  return Number.isFinite(time) ? Math.floor((Date.now() - time) / 86_400_000) : 999;
+}
 
-    const maxStockRatio = positionsWithWeight.length > 0
-      ? Math.max(...positionsWithWeight.map((p) => p.weight))
-      : 0;
+function DecisionRail({ positions, watchlistByCode, summary }: {
+  positions: Position[];
+  watchlistByCode: Map<string, WatchlistItem>;
+  summary: PortfolioSummary;
+}) {
+  const unavailable = positions.filter((position) => !position.priceAvailable).length;
+  const cached = positions.filter((position) => position.priceAvailable && !isLivePrice(position)).length;
+  const stopHits = positions.filter((position) => {
+    const plan = watchlistByCode.get(position.stockCode);
+    const stop = plan?.stopLossPrice;
+    return isLivePrice(position) && isRiskLevelActionable(plan, "stop") && position.currentPrice !== null && stop !== null && stop !== undefined && position.currentPrice <= stop;
+  }).length;
+  const targetHits = positions.filter((position) => {
+    const plan = watchlistByCode.get(position.stockCode);
+    const target = plan?.targetPrice;
+    return isLivePrice(position) && isRiskLevelActionable(plan, "target") && position.currentPrice !== null && target !== null && target !== undefined && position.currentPrice >= target;
+  }).length;
+  const missingRiskPlan = positions.filter((position) => {
+    const plan = watchlistByCode.get(position.stockCode);
+    return !isRiskLevelActionable(plan, "stop") || !isRiskLevelActionable(plan, "target");
+  }).length;
+  const staleReports = positions.filter((position) => {
+    const report = findLatestUziReport(position.stockCode);
+    return report && reportAgeDays(report) > 7;
+  }).length;
 
-    return { totalAssets, totalMarketValue, totalCost, totalPnL, totalPnLPercent, cashRatio, maxStockRatio, positionsWithWeight };
-  }, [positions, cashBalance, reverseRepo]);
-
-  // Tab 2 state
-  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(() => new Date().getMonth() + 1);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [allNotes, setAllNotes] = useState<CalendarEvent[]>([]);
-  const [calendarLoading, setCalendarLoading] = useState(true);
-
-  // ─── Data fetchers ────────────────────────────────────────────────────────
-
-  const fetchWithAuth = useCallback(
-    async (url: string, options?: RequestInit) => {
-      const token = await getToken();
-      return fetch(url, {
-        ...options,
-        headers: {
-          ...options?.headers,
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
+  const items = [
+    {
+      label: "行情状态",
+      value: unavailable > 0 ? `${unavailable} 只缺价` : cached > 0 ? `${cached} 只用缓存` : "全部在线",
+      detail: unavailable > 0 ? "不计算缺价股票盈亏" : cached > 0 ? "缓存价不触发今日风控" : `${sourceLabel(summary.priceSource)} · 同一快照`,
+      tone: unavailable > 0 || cached > 0 ? "text-amber-300" : "text-cyan-200",
+      icon: unavailable > 0 || cached > 0 ? WifiOff : Activity,
     },
-    [getToken]
-  );
-
-  const fetchPortfolio = useCallback(async () => {
-    setPortfolioLoading(true);
-    try {
-      const res = await fetchWithAuth("/api/portfolio");
-      const data = await res.json();
-      if (data.success && data.portfolio) {
-        const rawPositions = data.portfolio.map((p: Record<string, unknown>) => ({
-          id: p.id as string,
-          stockCode: p.stockCode as string,
-          stockName: p.stockName as string,
-          quantity: Number(p.quantity),
-          avgCost: Number(p.avgCost),
-          currentPrice: Number(p.avgCost), // fallback, will be overwritten
-          marketValue: 0,
-          profitLoss: 0,
-          profitLossPercent: 0,
-          weight: 0,
-        }));
-
-        // Client-side fetch real-time prices (bypasses Vercel server-to-server issue)
-        const codes = rawPositions.map((p: Position) => p.stockCode).join(",");
-        if (codes) {
-          try {
-            const priceRes = await fetch(`/api/stock-prices?symbols=${codes}`);
-            const priceData = await priceRes.json();
-            if (priceData.success && priceData.prices) {
-              for (const pos of rawPositions) {
-                const p = priceData.prices[pos.stockCode];
-                if (p && p.price > 0) {
-                  pos.currentPrice = p.price;
-                }
-              }
-            }
-          } catch (e) {
-            console.warn("[my-stocks] price fetch failed, using avgCost:", e);
-          }
-        }
-
-        setPositions(rawPositions);
-      }
-    } catch (e) {
-      console.error("[my-stocks] portfolio fetch error:", e);
-    } finally {
-      setPortfolioLoading(false);
-    }
-  }, [fetchWithAuth]);
-
-  const fetchHealthCheck = useCallback(async () => {
-    setHealthLoading(true);
-    try {
-      const res = await fetchWithAuth(
-        `/api/portfolio/health-check?cash=${cashBalance}&reverseRepo=${reverseRepo}&monthlyTrades=2`
-      );
-      const data = await res.json();
-      if (data.success) {
-        setHealthRules(data.rules || []);
-        setHealthScore(data.score || 0);
-      }
-    } catch (e) {
-      console.error("[my-stocks] health check error:", e);
-    } finally {
-      setHealthLoading(false);
-    }
-  }, [fetchWithAuth, cashBalance, reverseRepo]);
-
-  const fetchTriggers = useCallback(async () => {
-    try {
-      const res = await fetchWithAuth("/api/personal-notes?type=strategy&status=active");
-      const data = await res.json();
-      if (data.success && data.notes) {
-        const strategies = data.notes as Array<{
-          id: string;
-          stockCode?: string;
-          metadata?: { stockCode?: string; stockName?: string; triggerPrice?: { low: number; high: number }; logic?: string };
-        }>;
-
-        const stockCodes = strategies
-          .map((s) => s.metadata?.stockCode || s.stockCode)
-          .filter(Boolean) as string[];
-
-        let priceMap: Record<string, { price: number }> = {};
-        if (stockCodes.length > 0) {
-          try {
-            const priceRes = await fetch(`/api/stock-prices?symbols=${stockCodes.join(",")}`);
-            const priceData = await priceRes.json();
-            if (priceData.success && priceData.prices) {
-              priceMap = priceData.prices;
-            }
-          } catch {}
-        }
-
-        const items: TriggerItem[] = strategies
-          .filter((s) => s.metadata?.triggerPrice)
-          .map((s) => {
-            const code = s.metadata!.stockCode || s.stockCode || "";
-            const price = priceMap[code]?.price || 0;
-            const low = s.metadata!.triggerPrice!.low;
-            const high = s.metadata!.triggerPrice!.high;
-            const triggered = price >= low && price <= high;
-            const direction = price > high ? "above" as const : price < low ? "below" as const : "in_range" as const;
-            return {
-              id: s.id,
-              stockCode: code,
-              stockName: s.metadata?.stockName || code,
-              currentPrice: price,
-              triggerLow: low,
-              triggerHigh: high,
-              triggered,
-              direction,
-              logic: s.metadata?.logic || "",
-            };
-          });
-        setTriggers(items);
-      }
-    } catch (e) {
-      console.error("[my-stocks] triggers fetch error:", e);
-    }
-  }, [fetchWithAuth]);
-
-  const fetchWatchlist = useCallback(async () => {
-    try {
-      const res = await fetchWithAuth("/api/watchlist");
-      const data = await res.json();
-      if (data.success && data.watchlist) {
-        setWatchlistCodes(new Set(data.watchlist.map((w: { stockCode: string }) => w.stockCode)));
-      }
-    } catch {}
-  }, [fetchWithAuth]);
-
-  const fetchCalendarEvents = useCallback(async () => {
-    setCalendarLoading(true);
-    try {
-      const from = `${calYear}-${pad(calMonth)}-01`;
-      const lastDay = new Date(calYear, calMonth, 0).getDate();
-      const to = `${calYear}-${pad(calMonth)}-${pad(lastDay)}`;
-      const res = await fetchWithAuth(`/api/personal-notes?type=calendar&from=${from}&to=${to}`);
-      const data = await res.json();
-      if (data.success) {
-        setCalendarEvents(data.notes || []);
-      }
-
-      const allRes = await fetchWithAuth("/api/personal-notes?type=calendar&status=active");
-      const allData = await allRes.json();
-      if (allData.success) {
-        setAllNotes(allData.notes || []);
-      }
-    } catch (e) {
-      console.error("[my-stocks] calendar fetch error:", e);
-    } finally {
-      setCalendarLoading(false);
-    }
-  }, [fetchWithAuth, calYear, calMonth]);
-
-  // ─── Effects ──────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (isSignedIn === undefined) return;
-    fetchPortfolio();
-    fetchHealthCheck();
-    fetchTriggers();
-    fetchCalendarEvents();
-    fetchWatchlist();
-  }, [isSignedIn, fetchPortfolio, fetchHealthCheck, fetchTriggers, fetchCalendarEvents, fetchWatchlist]);
-
-  // ─── Handlers ─────────────────────────────────────────────────────────────
-
-  async function handleDeleteTrigger(id: string) {
-    try {
-      const res = await fetchWithAuth(`/api/personal-notes/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        setTriggers((prev) => prev.filter((t) => t.id !== id));
-        toast.success("已删除监控标的");
-      }
-    } catch {
-      toast.error("删除失败");
-    }
-  }
-
-  async function handleAddToWatchlist(stockCode: string, stockName: string) {
-    try {
-      const res = await fetchWithAuth("/api/watchlist", {
-        method: "POST",
-        body: JSON.stringify({ stockCode, stockName }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWatchlistCodes(prev => new Set([...prev, stockCode]));
-        toast.success(`${stockName} 已加入自选`);
-      }
-    } catch {
-      toast.error("添加失败");
-    }
-  }
-
-  async function handleRemoveFromWatchlist(stockCode: string) {
-    try {
-      // Need to find watchlist item id - fetch then delete
-      const res = await fetchWithAuth(`/api/watchlist`);
-      const data = await res.json();
-      if (data.success && data.watchlist) {
-        const item = data.watchlist.find((w: { stockCode: string }) => w.stockCode === stockCode);
-        if (item) {
-          await fetchWithAuth(`/api/watchlist?id=${item.id}`, { method: "DELETE" });
-          setWatchlistCodes(prev => {
-            const next = new Set(prev);
-            next.delete(stockCode);
-            return next;
-          });
-          toast.success("已移出自选");
-        }
-      }
-    } catch {
-      toast.error("删除失败");
-    }
-  }
-
-  async function handleDeletePosition(id: string) {
-    try {
-      const res = await fetchWithAuth(`/api/portfolio?id=${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("持仓已删除");
-        fetchPortfolio();
-        fetchHealthCheck();
-      } else {
-        toast.error(data.error || "删除失败");
-      }
-    } catch {
-      toast.error("删除失败");
-    }
-  }
-
-  async function handleSaveCalendarEvent(event: Partial<CalendarEvent>) {
-    try {
-      const res = await fetchWithAuth("/api/personal-notes", {
-        method: "POST",
-        body: JSON.stringify({
-          type: "calendar",
-          title: event.title,
-          content: event.content,
-          effectiveDate: event.effectiveDate,
-          stockCode: event.stockCode,
-          priority: event.priority,
-          metadata: event.metadata,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("事件已添加");
-        fetchCalendarEvents();
-      }
-    } catch {
-      toast.error("添加失败");
-    }
-  }
-
-  async function handleUpdateCalendarEvent(id: string, updates: Partial<CalendarEvent>) {
-    try {
-      const res = await fetchWithAuth(`/api/personal-notes/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(updates),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("事件已更新");
-        fetchCalendarEvents();
-      }
-    } catch {
-      toast.error("更新失败");
-    }
-  }
-
-  async function handleDeleteCalendarEvent(id: string) {
-    try {
-      const res = await fetchWithAuth(`/api/personal-notes/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("事件已删除");
-        fetchCalendarEvents();
-      }
-    } catch {
-      toast.error("删除失败");
-    }
-  }
-
-  async function handleToggleTodo(id: string, completed: boolean) {
-    try {
-      const res = await fetchWithAuth(`/api/personal-notes/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ status: completed ? "completed" : "active" }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchCalendarEvents();
-      }
-    } catch {
-      toast.error("更新失败");
-    }
-  }
-
-  // Called after AI strategy is saved — refresh all data
-  function handleStrategySaved() {
-    fetchCalendarEvents();
-    fetchTriggers();
-    toast.success("策略已保存到日历");
-  }
-
-  function handleNavigateMonth(dir: -1 | 1) {
-    setCalMonth((prev) => {
-      let m = prev + dir;
-      if (m < 1) { setCalYear((y) => y - 1); m = 12; }
-      if (m > 12) { setCalYear((y) => y + 1); m = 1; }
-      return m;
-    });
-    setSelectedDate(null);
-  }
-
-  // ─── Cash editor save ──────────────────────────────────────────────────────
-
-  function saveCashSettings(newCash: number, newRepo: number) {
-    setCashBalance(newCash);
-    setReverseRepo(newRepo);
-    localStorage.setItem("my-stocks-cash", String(newCash));
-    localStorage.setItem("my-stocks-repo", String(newRepo));
-    setShowCashEditor(false);
-    toast.success("现金设置已更新");
-    // Refresh health check with new values (will be picked up via dependency)
-    setTimeout(() => fetchHealthCheck(), 100);
-  }
-
-  // ─── Build AI context ─────────────────────────────────────────────────────
-
-  const portfolioContext = [
-    `== 持仓数据 ==`,
-    `总资产: ¥${derived.totalAssets.toFixed(0)}, 现金: ¥${cashBalance}, 逆回购: ¥${reverseRepo}`,
-    ...derived.positionsWithWeight.map(
-      (p) => `${p.stockName}(${p.stockCode}): ${p.quantity}股, 成本${p.avgCost.toFixed(2)}, 现价${p.currentPrice.toFixed(2)}, 盈亏${p.profitLossPercent.toFixed(2)}%, 占比${p.weight.toFixed(1)}%`
-    ),
-    `== 健康度 ${healthScore}分 ==`,
-    ...healthRules.map((r) => `${r.pass ? "✅" : "⚠️"} ${r.name}: ${r.value} — ${r.message}`),
-    `== 监控清单 ==`,
-    ...triggers.map(
-      (t) => `${t.stockName}(${t.stockCode}): 现价${t.currentPrice}, 触发区间${t.triggerLow}-${t.triggerHigh}, ${t.triggered ? "已触发" : "未触发"}`
-    ),
-  ].join("\n");
-
-  // ─── Selected date events ─────────────────────────────────────────────────
-
-  const selectedDateEvents = selectedDate
-    ? calendarEvents.filter((ev) => ev.effectiveDate?.toString().slice(0, 10) === selectedDate)
-    : [];
-
-  // ─── Refresh handler ──────────────────────────────────────────────────────
-
-  const [refreshing, setRefreshing] = useState(false);
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    await Promise.all([fetchPortfolio(), fetchHealthCheck(), fetchTriggers()]);
-    setRefreshing(false);
-    toast.success("数据已刷新");
-  }
-
-  // ─── Render ───────────────────────────────────────────────────────────────
+    {
+      label: "今日触发",
+      value: `${stopHits} 止损 / ${targetHits} 止盈`,
+      detail: stopHits + targetHits > 0 ? "请优先核对交易纪律" : "暂无价格触发",
+      tone: stopHits > 0 ? "text-rose-300" : targetHits > 0 ? "text-amber-300" : "text-slate-200",
+      icon: Target,
+    },
+    {
+      label: "待补齐",
+      value: `${missingRiskPlan} 风控 / ${staleReports} 旧报告`,
+      detail: missingRiskPlan > 0 ? "先补止损与目标位" : "风控计划已登记",
+      tone: missingRiskPlan + staleReports > 0 ? "text-amber-200" : "text-slate-200",
+      icon: ShieldCheck,
+    },
+  ];
 
   return (
-    <div className="p-4 md:p-6 bg-[#060a12] min-h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white">我的股票</h1>
-          <p className="text-sm text-gray-400 mt-1">个人持仓管理与交易策略中心</p>
+    <div className="grid overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b1118] md:grid-cols-3">
+      {items.map((item, index) => (
+        <div key={item.label} className={`flex items-center gap-4 px-5 py-4 ${index > 0 ? "border-t border-white/[0.07] md:border-l md:border-t-0" : ""}`}>
+          <item.icon className="h-5 w-5 shrink-0 text-slate-600" />
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-600">{item.label}</p>
+            <p className={`mt-1 font-mono text-base font-semibold ${item.tone}`}>{item.value}</p>
+            <p className="mt-1 truncate text-[10px] text-slate-600">{item.detail}</p>
+          </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="text-gray-400 hover:text-white"
-        >
-          {refreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-        </Button>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="portfolio-strategy">
-        <TabsList className="bg-[#0d1321] border border-[#1a2035]">
-          <TabsTrigger
-            value="portfolio-strategy"
-            className="data-[state=active]:bg-[#1a2035] data-[state=active]:text-white gap-1.5"
-          >
-            <Briefcase className="h-4 w-4" />
-            持仓策略
-          </TabsTrigger>
-          <TabsTrigger
-            value="trading-calendar"
-            className="data-[state=active]:bg-[#1a2035] data-[state=active]:text-white gap-1.5"
-          >
-            <Calendar className="h-4 w-4" />
-            交易日历
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ═══ Tab 1: 持仓策略 ═══ */}
-        <TabsContent value="portfolio-strategy">
-          <div className="space-y-4 mt-4">
-            {/* 账户总览 */}
-            <AccountSummary
-              totalAssets={derived.totalAssets}
-              totalPnL={derived.totalPnL}
-              totalPnLPercent={derived.totalPnLPercent}
-              cashRatio={derived.cashRatio}
-              maxSingleStockRatio={derived.maxStockRatio}
-              loading={portfolioLoading}
-            />
-
-            {/* 健康度检查 */}
-            <HealthCheck rules={healthRules} score={healthScore} loading={healthLoading} />
-
-            {/* 持仓列表 + 监控清单 */}
-            <PositionTable
-              positions={derived.positionsWithWeight}
-              triggers={triggers}
-              loading={portfolioLoading}
-              onDeleteTrigger={handleDeleteTrigger}
-              watchlistCodes={watchlistCodes}
-              onAddToWatchlist={handleAddToWatchlist}
-              onRemoveFromWatchlist={handleRemoveFromWatchlist}
-              onAddPosition={() => setShowAddDialog(true)}
-              onEditPosition={(pos) => setEditingPosition(pos)}
-              onDeletePosition={handleDeletePosition}
-              cashBalance={cashBalance}
-              reverseRepo={reverseRepo}
-              totalAssets={derived.totalAssets}
-              onEditCash={() => setShowCashEditor(true)}
-            />
-
-            {/* AI 持仓诊断 */}
-            <AIDiagnosis portfolioContext={portfolioContext} />
-          </div>
-
-          {/* Add Position Dialog */}
-          <AddEditPositionDialog
-            open={showAddDialog}
-            onOpenChange={setShowAddDialog}
-            onSave={async (data) => {
-              const res = await fetchWithAuth("/api/portfolio", {
-                method: "POST",
-                body: JSON.stringify(data),
-              });
-              const result = await res.json();
-              if (result.success) {
-                toast.success(`已添加 ${data.stockName}`);
-                setShowAddDialog(false);
-                fetchPortfolio();
-                fetchHealthCheck();
-              } else {
-                toast.error(result.error || "添加失败");
-              }
-            }}
-          />
-
-          {/* Edit Position Dialog */}
-          {editingPosition && (
-            <AddEditPositionDialog
-              open={!!editingPosition}
-              onOpenChange={(v) => { if (!v) setEditingPosition(null); }}
-              editData={editingPosition}
-              onSave={async (data) => {
-                const res = await fetchWithAuth("/api/portfolio", {
-                  method: "PUT",
-                  body: JSON.stringify({ id: editingPosition.id, ...data }),
-                });
-                const result = await res.json();
-                if (result.success) {
-                  toast.success("持仓已更新");
-                  setEditingPosition(null);
-                  fetchPortfolio();
-                  fetchHealthCheck();
-                } else {
-                  toast.error(result.error || "更新失败");
-                }
-              }}
-            />
-          )}
-        </TabsContent>
-
-        {/* ═══ Tab 2: 交易日历 ═══ */}
-        <TabsContent value="trading-calendar">
-          <div className="space-y-4 mt-4">
-            {/* AI 策略生成 */}
-            <StrategyGenerator
-              positions={derived.positionsWithWeight}
-              healthRules={healthRules}
-              watchlistCodes={watchlistCodes}
-              totalAssets={derived.totalAssets}
-              cashBalance={cashBalance}
-              reverseRepo={reverseRepo}
-              onStrategySaved={handleStrategySaved}
-              targetYear={calYear}
-              targetMonth={calMonth}
-            />
-
-            {/* 阶段进度条 */}
-            <Card className="bg-[#0d1117] border-[#1a2035] p-4">
-              <PhaseProgressBar phases={DEFAULT_PHASES} currentPhaseIndex={getCurrentPhaseIndex()} />
-            </Card>
-
-            {/* 月历 + 日期详情 */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <Card className="bg-[#0d1117] border-[#1a2035] p-4 lg:col-span-2">
-                {calendarLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <Loader2 className="size-6 animate-spin text-gray-500" />
-                  </div>
-                ) : (
-                  <CalendarGrid
-                    year={calYear}
-                    month={calMonth}
-                    events={calendarEvents}
-                    selectedDate={selectedDate}
-                    onSelectDate={setSelectedDate}
-                    onNavigateMonth={handleNavigateMonth}
-                  />
-                )}
-              </Card>
-
-              <div className="space-y-4">
-                {selectedDate ? (
-                  <DayDetailPanel
-                    selectedDate={selectedDate}
-                    events={selectedDateEvents}
-                    onSaveEvent={handleSaveCalendarEvent}
-                    onUpdateEvent={handleUpdateCalendarEvent}
-                    onDeleteEvent={handleDeleteCalendarEvent}
-                  />
-                ) : (
-                  <Card className="bg-[#0d1117] border-[#1a2035] flex items-center justify-center min-h-[200px]">
-                    <span className="text-sm text-gray-500">点击日期查看详情</span>
-                  </Card>
-                )}
-
-                {/* 本周待办 */}
-                <WeeklyTodoList events={allNotes} onToggleComplete={handleToggleTodo} />
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* ═══ Cash / Reverse Repo Editor Dialog ═══ */}
-      <CashEditorDialog
-        open={showCashEditor}
-        onOpenChange={setShowCashEditor}
-        cashBalance={cashBalance}
-        reverseRepo={reverseRepo}
-        onSave={saveCashSettings}
-      />
+      ))}
     </div>
   );
 }
 
-// ─── Cash Editor Dialog ─────────────────────────────────────────────────────
+function RiskCell({ position, watchlist }: { position: Position; watchlist?: WatchlistItem }) {
+  const stop = watchlist?.stopLossPrice ?? null;
+  const target = watchlist?.targetPrice ?? null;
+  const livePrice = isLivePrice(position);
+  const stopActionable = isRiskLevelActionable(watchlist, "stop");
+  const targetActionable = isRiskLevelActionable(watchlist, "target");
+  const hitStop = livePrice && stopActionable && position.currentPrice !== null && stop !== null && position.currentPrice <= stop;
+  const hitTarget = livePrice && targetActionable && position.currentPrice !== null && target !== null && position.currentPrice >= target;
 
-function CashEditorDialog({
-  open,
-  onOpenChange,
-  cashBalance,
-  reverseRepo,
-  onSave,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  cashBalance: number;
-  reverseRepo: number;
-  onSave: (cash: number, repo: number) => void;
-}) {
-  const [cash, setCash] = useState(String(cashBalance));
-  const [repo, setRepo] = useState(String(reverseRepo));
-
-  useEffect(() => {
-    if (open) {
-      setCash(String(cashBalance));
-      setRepo(String(reverseRepo));
-    }
-  }, [open, cashBalance, reverseRepo]);
+  if (stop === null && target === null) {
+    return (
+      <Link href="/portfolio" className="inline-flex items-center gap-1 text-[10px] text-amber-200/70 hover:text-amber-200">
+        未设置 <ArrowRight className="h-3 w-3" />
+      </Link>
+    );
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0d1117] border-[#1a2035] max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="text-white text-sm">编辑现金 & 逆回购</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 mt-2">
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">账户现金 (元)</label>
-            <Input
-              type="number"
-              value={cash}
-              onChange={(e) => setCash(e.target.value)}
-              className="bg-[#060a12] border-[#1a2035] font-mono"
-              step="100"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">国债逆回购 (元)</label>
-            <Input
-              type="number"
-              value={repo}
-              onChange={(e) => setRepo(e.target.value)}
-              className="bg-[#060a12] border-[#1a2035] font-mono"
-              step="1000"
-              min="0"
-            />
+    <div className="min-w-[120px] text-[10px]">
+      <div className="flex items-center justify-between gap-3">
+        <span className={hitStop ? "font-medium text-rose-300" : "text-slate-500"}>止损</span>
+        <span className={hitStop ? "font-mono font-semibold text-rose-300" : "font-mono text-slate-300"}>{stop?.toFixed(2) ?? "--"}</span>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-3">
+        <span className={hitTarget ? "font-medium text-amber-300" : "text-slate-500"}>目标</span>
+        <span className={hitTarget ? "font-mono font-semibold text-amber-300" : "font-mono text-slate-300"}>{target?.toFixed(2) ?? "--"}</span>
+      </div>
+      {(!stopActionable || !targetActionable) && (
+        <Link href="/portfolio" className="mt-1.5 inline-flex items-center gap-1 text-[9px] text-amber-200/70 hover:text-amber-200">
+          {watchlist?.computeStatus === "awaiting_data" ? "等待数据" : "风控线待刷新"} <ArrowRight className="h-2.5 w-2.5" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function ResearchCell({ position }: { position: Position }) {
+  const report = findLatestUziReport(position.stockCode);
+  if (!report) {
+    return (
+      <Link href={`/uzi-reports?symbol=${position.stockCode}`} className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] px-2.5 py-1.5 text-[10px] text-slate-400 hover:border-cyan-300/20 hover:text-cyan-200">
+        查游资 <ArrowRight className="h-3 w-3" />
+      </Link>
+    );
+  }
+
+  return (
+    <Link href={getUziReportViewerPath(report)} className="group/report block min-w-[160px]">
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-lg font-semibold text-cyan-200">{report.overallScore?.toFixed(1) ?? "--"}</span>
+        <span className={`rounded border px-1.5 py-0.5 text-[9px] ${report.agentReviewed ? "border-emerald-300/20 text-emerald-300" : "border-amber-300/15 text-amber-200/70"}`}>
+          {report.agentReviewed ? "已复核" : "机械"}
+        </span>
+      </div>
+      <p className="mt-1 max-w-[220px] truncate text-[10px] text-slate-500 group-hover/report:text-slate-300">{report.verdict}</p>
+    </Link>
+  );
+}
+
+export default function MyStocksPage() {
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [summary, setSummary] = useState<PortfolioSummary>(EMPTY_SUMMARY);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
+
+  const fetchWithAuth = useCallback(async (url: string, options?: RequestInit) => {
+    const token = await getToken();
+    if (!token) throw new Error("登录状态尚未就绪");
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options?.headers,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }, [getToken]);
+
+  const loadData = useCallback(async (manual = false) => {
+    if (isSignedIn !== true) return;
+    manual ? setRefreshing(true) : setLoading(true);
+    setError("");
+    try {
+      await fetchWithAuth("/api/users/sync", { method: "POST", body: "{}" });
+      const [portfolioResponse, watchlistResponse] = await Promise.all([
+        fetchWithAuth("/api/portfolio"),
+        fetchWithAuth("/api/watchlist"),
+      ]);
+      const [portfolioPayload, watchlistPayload] = await Promise.all([
+        portfolioResponse.json(),
+        watchlistResponse.json(),
+      ]);
+      if (!portfolioResponse.ok || !portfolioPayload.success) {
+        throw new Error(portfolioPayload.error || "持仓读取失败");
+      }
+      setPositions(portfolioPayload.portfolio || []);
+      setSummary({ ...EMPTY_SUMMARY, ...(portfolioPayload.summary || {}) });
+      setWatchlist(watchlistPayload.success && Array.isArray(watchlistPayload.watchlist) ? watchlistPayload.watchlist : []);
+      if (!watchlistResponse.ok) setError("持仓已读取，止盈止损数据暂不可用");
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "数据读取失败");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [fetchWithAuth, isSignedIn]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (isSignedIn) void loadData();
+    else setLoading(false);
+  }, [isLoaded, isSignedIn, loadData]);
+
+  const watchlistByCode = useMemo(
+    () => new Map(watchlist.map((item) => [item.stockCode, item])),
+    [watchlist]
+  );
+  const pricedPositions = positions.filter((position) => position.priceAvailable && position.marketValue !== null);
+  const totalMarketValue = pricedPositions.reduce((sum, position) => sum + (position.marketValue || 0), 0);
+  const totalProfitLoss = pricedPositions.reduce((sum, position) => sum + (position.profitLoss || 0), 0);
+  const pricedCost = pricedPositions.reduce((sum, position) => sum + position.avgCost * position.quantity, 0);
+  const totalProfitPercent = pricedCost > 0 ? totalProfitLoss / pricedCost * 100 : null;
+
+  async function savePosition(data: { stockCode: string; stockName: string; quantity: number; avgCost: number; industry?: string }) {
+    const editing = editingPosition !== null;
+    const response = await fetchWithAuth("/api/portfolio", {
+      method: editing ? "PUT" : "POST",
+      body: JSON.stringify(editing ? { id: editingPosition.id, ...data } : data),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(payload.error || "保存失败");
+    toast.success(editing ? "持仓已更新" : `已添加 ${data.stockName}`);
+    setEditingPosition(null);
+    setShowAddDialog(false);
+    await loadData(true);
+  }
+
+  async function deletePosition(position: Position) {
+    if (!window.confirm(`确认删除 ${position.stockName}（${position.stockCode}）持仓？`)) return;
+    try {
+      const response = await fetchWithAuth(`/api/portfolio?id=${encodeURIComponent(position.id)}`, { method: "DELETE" });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || "删除失败");
+      toast.success("持仓已删除");
+      await loadData(true);
+    } catch (deleteError) {
+      toast.error(deleteError instanceof Error ? deleteError.message : "删除失败");
+    }
+  }
+
+  if (!isLoaded || loading) {
+    return (
+      <main className="grid min-h-[calc(100vh-2.5rem)] place-items-center bg-[#06090d]">
+        <div className="text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-cyan-300" /><p className="mt-3 text-xs text-slate-500">正在连接持仓与实时行情</p></div>
+      </main>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <main className="grid min-h-[calc(100vh-2.5rem)] place-items-center bg-[#06090d] px-6 text-center text-slate-100">
+        <div className="max-w-lg">
+          <Briefcase className="mx-auto h-9 w-9 text-slate-700" />
+          <h1 className="mt-5 text-2xl font-bold text-white">登录后读取真实持仓</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-500">未登录时不再伪装成“空持仓”。登录后会把数量、成本、实时价、止盈止损和 Uzi 报告合到一张决策表。</p>
+          <div className="mt-6 flex justify-center gap-3">
+            <SignInButton mode="redirect" forceRedirectUrl="/my-stocks">
+              <button className="inline-flex items-center gap-2 rounded-md bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-[#061016]"><LogIn className="h-4 w-4" /> 登录同步</button>
+            </SignInButton>
+            <Link href="/uzi-reports" className="inline-flex items-center gap-2 rounded-md border border-white/[0.1] px-4 py-2.5 text-sm text-slate-300">先查游资</Link>
           </div>
         </div>
-        <DialogFooter className="mt-4">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
-            onClick={() => onSave(Number(cash) || 0, Number(repo) || 0)}
-          >
-            保存
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-[calc(100vh-2.5rem)] bg-[#06090d] text-slate-100">
+      <div className="mx-auto w-full max-w-[1920px] px-4 py-5 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-4 border-b border-white/[0.07] pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-cyan-300/70"><Briefcase className="h-3.5 w-3.5" /> Position desk</div>
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">今日持仓</h1>
+            <p className="mt-2 text-xs text-slate-500">一张表只回答三件事：真实盈亏、是否触发风控、研究是否够新。</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => void loadData(true)} disabled={refreshing} className="inline-flex h-9 items-center gap-2 rounded-md border border-white/[0.09] px-3 text-[11px] text-slate-400 hover:bg-white/[0.04] hover:text-white disabled:opacity-40">
+              {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} 刷新行情
+            </button>
+            <button onClick={() => setShowAddDialog(true)} className="inline-flex h-9 items-center gap-2 rounded-md bg-cyan-300 px-3 text-[11px] font-semibold text-[#061016] hover:bg-cyan-200"><Plus className="h-3.5 w-3.5" /> 添加持仓</button>
+          </div>
+        </header>
+
+        {error && (
+          <div className="mt-4 flex items-center gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.04] px-4 py-3 text-xs text-amber-100/70"><AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" /> {error}</div>
+        )}
+
+        {positions.length > 0 && (
+          <>
+            <section className="grid gap-3 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <DecisionRail positions={positions} watchlistByCode={watchlistByCode} summary={summary} />
+              <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b1118]">
+                <div className="px-5 py-4">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-slate-600">已定价市值</p>
+                  <p className="mt-2 font-mono text-xl font-semibold text-white">¥{money(totalMarketValue)}</p>
+                  <p className="mt-1 text-[10px] text-slate-600">{pricedPositions.length}/{positions.length} 只实时价</p>
+                </div>
+                <div className="border-l border-white/[0.07] px-5 py-4">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-slate-600">已定价盈亏</p>
+                  <p className={`mt-2 font-mono text-xl font-semibold ${pnlTone(totalProfitLoss)}`}>{totalProfitLoss > 0 ? "+" : ""}{money(totalProfitLoss)}</p>
+                  <p className={`mt-1 font-mono text-[10px] ${pnlTone(totalProfitPercent)}`}>{percent(totalProfitPercent)}</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b1118]">
+              <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
+                <div><h2 className="text-sm font-semibold text-white">持仓决策表</h2><p className="mt-1 text-[10px] text-slate-600">缺失价格一律显示 --，不会用成本价补位。</p></div>
+                <span className="font-mono text-[10px] text-slate-600">{summary.priceTimestamp ? new Date(summary.priceTimestamp).toLocaleString("zh-CN", { hour12: false }) : "无行情时间"}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1080px] text-left text-xs">
+                  <thead className="border-b border-white/[0.07] text-[9px] uppercase tracking-wider text-slate-600">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">股票</th>
+                      <th className="px-4 py-3 text-right font-medium">持仓</th>
+                      <th className="px-4 py-3 text-right font-medium">实时价</th>
+                      <th className="px-4 py-3 text-right font-medium">持仓盈亏</th>
+                      <th className="px-4 py-3 font-medium">止损 / 目标</th>
+                      <th className="px-4 py-3 font-medium">Uzi 研判</th>
+                      <th className="px-4 py-3 text-right font-medium">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.055]">
+                    {positions.map((position) => (
+                      <tr key={position.id} className="transition-colors hover:bg-white/[0.02]">
+                        <td className="px-4 py-4">
+                          <Link href={`/stocks/${position.stockCode}`} className="font-medium text-white hover:text-cyan-200">{position.stockName}</Link>
+                          <p className="mt-1 font-mono text-[10px] text-slate-600">{position.stockCode}</p>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <p className="font-mono text-slate-200">{position.quantity.toLocaleString()} 股</p>
+                          <p className="mt-1 font-mono text-[10px] text-slate-600">成本 {position.avgCost.toFixed(2)}</p>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          {position.priceAvailable && position.currentPrice !== null ? (
+                            <><p className="font-mono text-sm font-semibold text-white">{position.currentPrice.toFixed(2)}</p><p className="mt-1 text-[9px] text-slate-600">{sourceLabel(position.priceSource)}</p></>
+                          ) : (
+                            <><p className="font-mono text-sm text-slate-500">--</p><p className="mt-1 text-[9px] text-amber-300/70">行情不可用</p></>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          {position.profitLoss !== null ? (
+                            <><p className={`font-mono text-sm font-semibold ${pnlTone(position.profitLoss)}`}>{position.profitLoss > 0 ? "+" : ""}{money(position.profitLoss)}</p><p className={`mt-1 font-mono text-[10px] ${pnlTone(position.profitLossPercent)}`}>{percent(position.profitLossPercent)}</p></>
+                          ) : <span className="text-slate-600">--</span>}
+                        </td>
+                        <td className="px-4 py-4"><RiskCell position={position} watchlist={watchlistByCode.get(position.stockCode)} /></td>
+                        <td className="px-4 py-4"><ResearchCell position={position} /></td>
+                        <td className="px-4 py-4">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon-xs" onClick={() => setEditingPosition(position)} className="text-slate-500 hover:bg-cyan-300/[0.06] hover:text-cyan-200" aria-label={`编辑 ${position.stockName}`}><Pencil className="h-3.5 w-3.5" /></Button>
+                            <Button variant="ghost" size="icon-xs" onClick={() => void deletePosition(position)} className="text-slate-600 hover:bg-rose-300/[0.06] hover:text-rose-300" aria-label={`删除 ${position.stockName}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )}
+
+        {positions.length === 0 && !error && (
+          <section className="mt-5 grid min-h-[420px] place-items-center rounded-xl border border-dashed border-white/[0.09] bg-[radial-gradient(circle_at_50%_0%,rgba(43,199,217,0.07),transparent_48%)] px-6 text-center">
+            <div><CircleDollarSign className="mx-auto h-8 w-8 text-slate-700" /><h2 className="mt-4 text-base font-semibold text-white">先录入真实持仓</h2><p className="mt-2 max-w-md text-xs leading-5 text-slate-500">数量和成本只用于你的账户决策表；录入后会立即连接实时行情、风控线和 Uzi 研判。</p><button onClick={() => setShowAddDialog(true)} className="mt-5 inline-flex items-center gap-2 rounded-md bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-[#061016]"><Plus className="h-4 w-4" /> 添加第一只持仓</button></div>
+          </section>
+        )}
+
+        <footer className="mt-5 flex flex-col gap-3 rounded-lg border border-white/[0.07] bg-white/[0.018] px-4 py-3 text-[10px] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+          <span className="inline-flex items-center gap-2"><FileChartColumnIncreasing className="h-3.5 w-3.5" /> Uzi 报告是研究证据，不替代止损纪律。</span>
+          <div className="flex gap-3"><Link href="/portfolio" className="text-slate-400 hover:text-white">管理止盈止损</Link><Link href="/uzi-reports" className="text-cyan-200/70 hover:text-cyan-200">扫描游资</Link></div>
+        </footer>
+      </div>
+
+      <AddEditPositionDialog open={showAddDialog} onOpenChange={setShowAddDialog} onSave={savePosition} />
+      {editingPosition && <AddEditPositionDialog open={true} onOpenChange={(open) => { if (!open) setEditingPosition(null); }} editData={editingPosition} onSave={savePosition} />}
+    </main>
   );
 }

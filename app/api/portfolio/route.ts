@@ -2,6 +2,21 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { getAuthUserId } from "@/lib/auth-helpers"
 
+interface PortfolioRecord {
+  id: string
+  stockCode: string
+  stockName: string
+  industry: string | null
+  quantity: number
+  avgCost: unknown
+  status: string
+  tradeType: string
+  tradeStatus: string
+  notes: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 // GET: Get user's portfolio with real-time prices
 export async function GET(req: Request) {
   try {
@@ -20,26 +35,46 @@ export async function GET(req: Request) {
     const portfolioItems = await prisma.portfolio.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
-    })
+    }) as PortfolioRecord[]
 
     // Fetch real-time prices for all stocks
     const stockCodes = portfolioItems.map(p => p.stockCode)
-    let priceMap: Record<string, { currentPrice: number; change: number; changePercent: number }> = {}
+    let priceMap: Record<string, {
+      currentPrice: number
+      change: number
+      changePercent: number
+      lastUpdate: string | null
+      source: string
+      available: boolean
+    }> = {}
+    let priceSource = 'unavailable'
+    let priceTimestamp: string | null = null
 
     if (stockCodes.length > 0) {
       try {
         const priceResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/stock-prices?codes=${stockCodes.join(',')}`,
+          `${new URL(req.url).origin}/api/stock-prices?symbols=${stockCodes.join(',')}`,
           { cache: 'no-store' }
         )
         if (priceResponse.ok) {
           const priceData = await priceResponse.json()
-          if (priceData.success && priceData.data) {
-            for (const stock of priceData.data) {
-              priceMap[stock.code] = {
-                currentPrice: stock.price || 0,
-                change: stock.change || 0,
-                changePercent: stock.changePercent || 0,
+          if (priceData.success && priceData.prices) {
+            priceSource = priceData.source || (priceData.isFallback ? 'fallback' : 'unknown')
+            priceTimestamp = priceData.timestamp || null
+            for (const [stockCode, stock] of Object.entries(priceData.prices) as Array<[string, {
+              price?: number
+              change?: number
+              changePercent?: number
+              lastUpdate?: string
+            }]>) {
+              const currentPrice = Number(stock.price)
+              priceMap[stockCode] = {
+                currentPrice: Number.isFinite(currentPrice) ? currentPrice : 0,
+                change: Number(stock.change) || 0,
+                changePercent: Number(stock.changePercent) || 0,
+                lastUpdate: stock.lastUpdate || priceTimestamp,
+                source: priceSource,
+                available: currentPrice > 0 && priceSource !== 'unavailable',
               }
             }
           }
@@ -52,18 +87,25 @@ export async function GET(req: Request) {
     // Calculate portfolio metrics
     let totalMarketValue = 0
     let totalCost = 0
+    let pricedCost = 0
+    let pricedPositionCount = 0
 
     const enrichedPortfolio = portfolioItems.map(item => {
       const avgCost = Number(item.avgCost)
       const prices = priceMap[item.stockCode]
-      const currentPrice = prices?.currentPrice || avgCost
-      const marketValue = currentPrice * item.quantity
+      const priceAvailable = prices?.available === true
+      const currentPrice = priceAvailable ? prices.currentPrice : null
+      const marketValue = currentPrice === null ? null : currentPrice * item.quantity
       const cost = avgCost * item.quantity
-      const profitLoss = marketValue - cost
-      const profitLossPercent = cost > 0 ? (profitLoss / cost) * 100 : 0
+      const profitLoss = marketValue === null ? null : marketValue - cost
+      const profitLossPercent = profitLoss === null || cost <= 0 ? null : (profitLoss / cost) * 100
 
-      totalMarketValue += marketValue
       totalCost += cost
+      if (marketValue !== null) {
+        totalMarketValue += marketValue
+        pricedCost += cost
+        pricedPositionCount += 1
+      }
 
       return {
         id: item.id,
@@ -73,6 +115,9 @@ export async function GET(req: Request) {
         quantity: item.quantity,
         avgCost,
         currentPrice,
+        priceAvailable,
+        priceSource: prices?.source || 'unavailable',
+        priceAsOf: prices?.lastUpdate || priceTimestamp,
         marketValue,
         profitLoss,
         profitLossPercent,
@@ -90,8 +135,11 @@ export async function GET(req: Request) {
     // Calculate weights
     const portfolio = enrichedPortfolio.map(item => ({
       ...item,
-      weight: totalMarketValue > 0 ? (item.marketValue / totalMarketValue) * 100 : 0,
+      weight: totalMarketValue > 0 && item.marketValue !== null ? (item.marketValue / totalMarketValue) * 100 : null,
     }))
+
+    const hasCompletePricing = pricedPositionCount === portfolio.length
+    const totalProfitLoss = totalMarketValue - pricedCost
 
     return NextResponse.json({
       success: true,
@@ -99,9 +147,14 @@ export async function GET(req: Request) {
       summary: {
         totalMarketValue,
         totalCost,
-        totalProfitLoss: totalMarketValue - totalCost,
-        totalProfitLossPercent: totalCost > 0 ? ((totalMarketValue - totalCost) / totalCost) * 100 : 0,
+        pricedCost,
+        totalProfitLoss,
+        totalProfitLossPercent: pricedCost > 0 ? (totalProfitLoss / pricedCost) * 100 : null,
         positionCount: portfolio.length,
+        pricedPositionCount,
+        hasCompletePricing,
+        priceSource,
+        priceTimestamp,
       },
     })
   } catch (error) {

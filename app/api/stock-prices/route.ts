@@ -210,7 +210,7 @@ export async function GET(req: Request) {
             return null;
           })
         );
-        const validResults = dbResults.filter((r): r is MarketData => r !== null);
+        const validResults = dbResults.filter((r) => r !== null) as MarketData[];
         if (validResults.length > 0) {
           marketData = validResults;
           source = 'database';
@@ -281,7 +281,8 @@ export async function GET(req: Request) {
       timestamp: new Date().toISOString(),
       count: marketData.length,
       totalRequested: symbolList.length,
-      isFallback
+      isFallback,
+      source,
     });
   } catch (error) {
     console.error("Error fetching stock prices:", error);
