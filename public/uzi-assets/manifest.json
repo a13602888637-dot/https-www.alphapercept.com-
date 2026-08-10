@@ -158,8 +158,8 @@
       "panelSize": 66,
       "reportPath": "/uzi-assets/reports/000603.SZ_20260810.html",
       "sourceSha256": "2aaa3aff29339b92e444f0877db0e434b88b1cd2508fed3cf3a74cffb3cc25bc",
-      "deployedSha256": "c8aa4f87fdd19ca1acabbc13a45bbfe90cd222b145a2aad8a76531e3e955dec9",
-      "fileSize": 776191,
+      "deployedSha256": "9fe1f26809d19d7cd176efedda915b8a36b48197fcb9154574e5c79ba944f044",
+      "fileSize": 775858,
       "validation": {
         "seats": 66,
         "chatMessages": 66,
@@ -325,8 +325,8 @@
       "panelSize": 66,
       "reportPath": "/uzi-assets/reports/002716.SZ_20260810.html",
       "sourceSha256": "8a381d50e0a0b3b13f8922b33a15563094c181a6be5d53c776cd4687b85b5ad7",
-      "deployedSha256": "df965dc10facd37146a54b7345bc64dd6778f8ced23077124591625b89358238",
-      "fileSize": 766965,
+      "deployedSha256": "d00e8a6c470bc06598c8b03c11b478ff8ff72ea8e3dc8e81384f0f5779c56bdd",
+      "fileSize": 766283,
       "validation": {
         "seats": 66,
         "chatMessages": 66,
@@ -492,8 +492,8 @@
       "panelSize": 66,
       "reportPath": "/uzi-assets/reports/002842.SZ_20260810.html",
       "sourceSha256": "4b086e604074d767be8a5a9743668aa5d159d1eb7ffe59f44a9bc92164659aeb",
-      "deployedSha256": "64e8f46b23116513608af4478fea8a39a6289a068d3a775b1b26ddd4d241b06a",
-      "fileSize": 773060,
+      "deployedSha256": "c48798e496e1097f2402d16a8b9a09128cedc6aa4538cf86a6ed0d468c4b8980",
+      "fileSize": 772727,
       "validation": {
         "seats": 66,
         "chatMessages": 66,
@@ -659,8 +659,8 @@
       "panelSize": 66,
       "reportPath": "/uzi-assets/reports/600519.SH_20260805.html",
       "sourceSha256": "0b842494b90268bae3e693b5b1dba7c710b77b409c1710fb9506a5d63623c97c",
-      "deployedSha256": "9833b5e1102ca31b4b8ab6b6a19be0564b531f19dbfe552b2d75aea47dbeadf3",
-      "fileSize": 804151,
+      "deployedSha256": "d8ec591d9c7f7864afe5b1e70dfb24db241a05779e2754ac980b255c382ab78f",
+      "fileSize": 803818,
       "validation": {
         "seats": 66,
         "chatMessages": 66,

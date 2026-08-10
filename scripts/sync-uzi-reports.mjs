@@ -132,7 +132,13 @@ function hardenForSandbox(sourceHtml) {
   };
 `;
 
-  let hardened = sourceHtml.replace(/localStorage\./g, "uziSafeStorage.");
+  let hardened = sourceHtml
+    .replace(/<link\b[^>]*href=["']https:\/\/fonts\.googleapis\.com[^>]*>\s*/gi, "")
+    .replace(/<link\b[^>]*href=["']https:\/\/fonts\.gstatic\.com[^>]*>\s*/gi, "")
+    .replace(/<path\b[^>]*\bd=["'][^"']*\bnan\b[^"']*["'][^>]*\/?>(?:<\/path>)?/gi, "")
+    .replace(/<circle\b[^>]*(?:\bcx|\bcy)=["']nan["'][^>]*\/?>(?:<\/circle>)?/gi, "")
+    .replace(/→\s*nan\b/gi, "→ 数据不足")
+    .replace(/localStorage\./g, "uziSafeStorage.");
   const scriptStart = hardened.indexOf("<script>");
   if (scriptStart === -1) fail("standalone HTML 未找到内联脚本");
   const insertAt = scriptStart + "<script>".length;
