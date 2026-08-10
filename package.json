@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "dev": "next dev",
     "dev:deepseek": "ts-node skills/deepseek_agent.ts",
     "verify": "bash scripts/verify_milestone.sh",
