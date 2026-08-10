@@ -46,30 +46,6 @@ const nodePath = process.execPath;
 const codexPath = execFileSync("sh", ["-lc", "command -v codex"], { encoding: "utf8" }).trim();
 const pathValue = [dirname(nodePath), dirname(codexPath), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":");
 const workerId = `mac-${hostname()}`.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 64);
-const proxyKeys = [
-  "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
-  "http_proxy", "https_proxy", "all_proxy", "no_proxy",
-];
-const proxyEnvironment = proxyKeys.flatMap((key) => {
-  const value = process.env[key];
-  if (!value) return [];
-  if (!key.toLowerCase().includes("no_proxy")) {
-    try {
-      const url = new URL(value);
-      if (url.username || url.password) {
-        console.warn(`跳过带账号信息的 ${key}，不会把代理凭证写入 LaunchAgent`);
-        return [];
-      }
-    } catch {
-      return [];
-    }
-  }
-  return [[key, value]];
-});
-const proxyArguments = proxyEnvironment.length > 0 ? "    <string>--use-env-proxy</string>\n" : "";
-const proxyVariables = proxyEnvironment
-  .map(([key, value]) => `    <key>${xml(key)}</key><string>${xml(value)}</string>`)
-  .join("\n");
 const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -78,7 +54,7 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
   <key>ProgramArguments</key>
   <array>
     <string>${xml(nodePath)}</string>
-${proxyArguments}    <string>${xml(INSTALLED_WORKER_PATH)}</string>
+    <string>${xml(INSTALLED_WORKER_PATH)}</string>
   </array>
   <key>WorkingDirectory</key><string>${xml(INSTALL_ROOT)}</string>
   <key>EnvironmentVariables</key>
@@ -86,7 +62,6 @@ ${proxyArguments}    <string>${xml(INSTALLED_WORKER_PATH)}</string>
     <key>PATH</key><string>${xml(pathValue)}</string>
     <key>ALPHAPERCEPT_WORKER_HOME</key><string>${xml(STATE_ROOT)}</string>
     <key>ALPHAPERCEPT_WORKER_ID</key><string>${xml(workerId)}</string>
-${proxyVariables}
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

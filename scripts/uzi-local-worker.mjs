@@ -6,7 +6,7 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 const PROJECT_ROOT = resolve(import.meta.dirname, "..");
 const STATE_ROOT = resolve(process.env.ALPHAPERCEPT_WORKER_HOME || join(homedir(), ".local", "share", "alphapercept-worker"));
 const SECRET_PATH = resolve(process.env.ALPHAPERCEPT_WORKER_SECRET_FILE || join(STATE_ROOT, "worker-secret"));
@@ -41,8 +41,6 @@ function log(message) {
 function codexEnvironment() {
   const allowed = [
     "HOME", "PATH", "LANG", "LC_ALL", "TMPDIR", "CODEX_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR",
-    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
-    "http_proxy", "https_proxy", "all_proxy", "no_proxy",
   ];
   const env = Object.fromEntries(allowed.flatMap((key) => process.env[key] ? [[key, process.env[key]]] : []));
   return {
