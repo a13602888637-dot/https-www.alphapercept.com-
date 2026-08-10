@@ -33,6 +33,7 @@ interface Position {
   avgCost: number;
   currentPrice: number | null;
   priceAvailable: boolean;
+  priceIsLive: boolean;
   priceSource: string;
   priceAsOf: string | null;
   marketValue: number | null;
@@ -99,7 +100,20 @@ function sourceLabel(source: string): string {
 }
 
 function isLivePrice(position: Position): boolean {
-  return position.priceAvailable && (position.priceSource === "sina" || position.priceSource === "tencent");
+  return position.priceIsLive === true;
+}
+
+function priceTime(value: string | null): string {
+  if (!value) return "时间未知";
+  const time = new Date(value);
+  if (!Number.isFinite(time.getTime())) return "时间未知";
+  return time.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function isRiskLevelActionable(plan: WatchlistItem | undefined, kind: "stop" | "target"): boolean {
@@ -308,10 +322,10 @@ export default function MyStocksPage() {
     () => new Map(watchlist.map((item) => [item.stockCode, item])),
     [watchlist]
   );
-  const pricedPositions = positions.filter((position) => position.priceAvailable && position.marketValue !== null);
-  const totalMarketValue = pricedPositions.reduce((sum, position) => sum + (position.marketValue || 0), 0);
-  const totalProfitLoss = pricedPositions.reduce((sum, position) => sum + (position.profitLoss || 0), 0);
-  const pricedCost = pricedPositions.reduce((sum, position) => sum + position.avgCost * position.quantity, 0);
+  const livePositions = positions.filter((position) => isLivePrice(position) && position.marketValue !== null);
+  const totalMarketValue = livePositions.reduce((sum, position) => sum + (position.marketValue || 0), 0);
+  const totalProfitLoss = livePositions.reduce((sum, position) => sum + (position.profitLoss || 0), 0);
+  const pricedCost = livePositions.reduce((sum, position) => sum + position.avgCost * position.quantity, 0);
   const totalProfitPercent = pricedCost > 0 ? totalProfitLoss / pricedCost * 100 : null;
 
   async function savePosition(data: { stockCode: string; stockName: string; quantity: number; avgCost: number; industry?: string }) {
@@ -396,7 +410,7 @@ export default function MyStocksPage() {
                 <div className="px-5 py-4">
                   <p className="text-[10px] uppercase tracking-[0.14em] text-slate-600">已定价市值</p>
                   <p className="mt-2 font-mono text-xl font-semibold text-white">¥{money(totalMarketValue)}</p>
-                  <p className="mt-1 text-[10px] text-slate-600">{pricedPositions.length}/{positions.length} 只实时价</p>
+                  <p className="mt-1 text-[10px] text-slate-600">{livePositions.length}/{positions.length} 只实时价</p>
                 </div>
                 <div className="border-l border-white/[0.07] px-5 py-4">
                   <p className="text-[10px] uppercase tracking-[0.14em] text-slate-600">已定价盈亏</p>
@@ -417,7 +431,7 @@ export default function MyStocksPage() {
                     <tr>
                       <th className="px-4 py-3 font-medium">股票</th>
                       <th className="px-4 py-3 text-right font-medium">持仓</th>
-                      <th className="px-4 py-3 text-right font-medium">实时价</th>
+                      <th className="px-4 py-3 text-right font-medium">行情价</th>
                       <th className="px-4 py-3 text-right font-medium">持仓盈亏</th>
                       <th className="px-4 py-3 font-medium">止损 / 目标</th>
                       <th className="px-4 py-3 font-medium">Uzi 研判</th>
@@ -437,14 +451,14 @@ export default function MyStocksPage() {
                         </td>
                         <td className="px-4 py-4 text-right">
                           {position.priceAvailable && position.currentPrice !== null ? (
-                            <><p className="font-mono text-sm font-semibold text-white">{position.currentPrice.toFixed(2)}</p><p className="mt-1 text-[9px] text-slate-600">{sourceLabel(position.priceSource)}</p></>
+                            <><p className="font-mono text-sm font-semibold text-white">{position.currentPrice.toFixed(2)}</p><p className={`mt-1 text-[9px] ${isLivePrice(position) ? "text-slate-600" : "text-amber-300/70"}`}>{sourceLabel(position.priceSource)} · {priceTime(position.priceAsOf)}</p></>
                           ) : (
                             <><p className="font-mono text-sm text-slate-500">--</p><p className="mt-1 text-[9px] text-amber-300/70">行情不可用</p></>
                           )}
                         </td>
                         <td className="px-4 py-4 text-right">
                           {position.profitLoss !== null ? (
-                            <><p className={`font-mono text-sm font-semibold ${pnlTone(position.profitLoss)}`}>{position.profitLoss > 0 ? "+" : ""}{money(position.profitLoss)}</p><p className={`mt-1 font-mono text-[10px] ${pnlTone(position.profitLossPercent)}`}>{percent(position.profitLossPercent)}</p></>
+                            <><p className={`font-mono text-sm font-semibold ${pnlTone(position.profitLoss)}`}>{position.profitLoss > 0 ? "+" : ""}{money(position.profitLoss)}</p><p className={`mt-1 font-mono text-[10px] ${pnlTone(position.profitLossPercent)}`}>{percent(position.profitLossPercent)}{!isLivePrice(position) ? " · 缓存估算" : ""}</p></>
                           ) : <span className="text-slate-600">--</span>}
                         </td>
                         <td className="px-4 py-4"><RiskCell position={position} watchlist={watchlistByCode.get(position.stockCode)} /></td>

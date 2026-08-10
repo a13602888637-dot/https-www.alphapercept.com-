@@ -1,18 +1,43 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, verifyToken } from "@clerk/nextjs/server";
 import { NextRequest } from "next/server";
 
+const STATIC_AUTHORIZED_PARTIES = [
+  "https://www.alphapercept.com",
+  "https://alphapercept.com",
+  "http://localhost:3000",
+  "http://localhost:3100",
+];
+
+function toOrigin(value: string | undefined): string | null {
+  if (!value) return null;
+
+  try {
+    const withProtocol = value.startsWith("http://") || value.startsWith("https://")
+      ? value
+      : `https://${value}`;
+    return new URL(withProtocol).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getAuthorizedParties(): string[] {
+  const configuredOrigins = [
+    toOrigin(process.env.NEXT_PUBLIC_APP_URL),
+    toOrigin(process.env.VERCEL_URL),
+    toOrigin(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+  ].filter((origin): origin is string => Boolean(origin));
+
+  return Array.from(new Set([...STATIC_AUTHORIZED_PARTIES, ...configuredOrigins]));
+}
+
 /**
- * 统一鉴权：Bearer Token 优先，auth() 兜底
- *
- * auth() 在 Vercel serverless 上可能因 middleware context 丢失而抛异常，
- * Bearer Token 不依赖 middleware context，更可靠。
+ * 统一鉴权：已验签的 Bearer Token 优先，Clerk middleware auth() 兜底。
  */
 export async function getAuthUserId(req: Request | NextRequest): Promise<string | null> {
-  // 1. 优先从 Bearer Token 解析
   const bearerUserId = await getUserIdFromRequest(req);
   if (bearerUserId) return bearerUserId;
 
-  // 2. 兜底：Clerk auth()（cookie-based，依赖 middleware context）
   try {
     const authResult = await auth();
     return authResult.userId;
@@ -22,78 +47,46 @@ export async function getAuthUserId(req: Request | NextRequest): Promise<string 
 }
 
 /**
- * 从请求中获取Clerk userId（使用Bearer Token标准鉴权）
+ * 从 Authorization Bearer Header 获取经 Clerk 验签的 userId。
  *
- * 前端通过Authorization头显式传递Bearer Token
- * 后端从Authorization头提取token并解析userId
+ * 不直接解码 JWT payload：只有签名、时效和来源全部通过 Clerk 校验后，
+ * 才能信任 token 的 sub claim。
  */
 export async function getUserIdFromRequest(req: Request | NextRequest): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+
+  const token = authHeader.slice(7).trim();
+  if (!token || !process.env.CLERK_SECRET_KEY) {
+    if (!process.env.CLERK_SECRET_KEY) {
+      console.error("[auth-helpers] Clerk token verification is not configured");
+    }
+    return null;
+  }
+
   try {
-    // 1. 从Authorization头获取Bearer Token
-    const authHeader = req.headers.get('Authorization');
-    console.log('[auth-helpers] Authorization Header:', authHeader ? 'Exists' : 'Missing');
+    const verifiedToken = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY,
+      authorizedParties: getAuthorizedParties(),
+    });
 
-    if (!authHeader) {
-      console.log('[auth-helpers] No Authorization header found');
-      return null;
-    }
-
-    // 2. 提取Bearer Token
-    if (!authHeader.startsWith('Bearer ')) {
-      console.log('[auth-helpers] Invalid Authorization header format (must start with "Bearer ")');
-      return null;
-    }
-
-    const token = authHeader.substring(7); // 移除 "Bearer " 前缀
-    console.log('[auth-helpers] Found bearer token:', token.substring(0, 50) + '...');
-
-    // 3. 从JWT token中解析userId
-    // JWT格式: header.payload.signature
-    // payload中包含sub (subject) = userId
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      console.log('[auth-helpers] Invalid JWT format (expected 3 parts)');
-      return null;
-    }
-
-    try {
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
-      console.log('[auth-helpers] Decoded payload:', {
-        sub: payload.sub,
-        sid: payload.sid,
-        exp: payload.exp,
-        iat: payload.iat
-      });
-
-      // 检查token是否过期
-      const now = Math.floor(Date.now() / 1000);
-      if (payload.exp && payload.exp < now) {
-        console.log('[auth-helpers] Token expired');
-        return null;
-      }
-
-      // 返回userId (sub claim)
-      const userId = payload.sub;
-      console.log('[auth-helpers] Extracted userId:', userId);
-      return userId || null;
-    } catch (parseError) {
-      console.error('[auth-helpers] Failed to parse JWT payload:', parseError);
-      return null;
-    }
-  } catch (error) {
-    console.error('[auth-helpers] Error getting userId from request:', error);
+    return typeof verifiedToken.sub === "string" && verifiedToken.sub
+      ? verifiedToken.sub
+      : null;
+  } catch {
+    console.warn("[auth-helpers] Rejected invalid bearer token");
     return null;
   }
 }
 
 /**
- * 验证用户是否已认证（用于API路由）
+ * 验证用户是否已认证（用于仅支持 Bearer Token 的 API 路由）。
  */
 export async function requireAuth(req: Request | NextRequest): Promise<string> {
   const userId = await getUserIdFromRequest(req);
 
   if (!userId) {
-    throw new Error('Authentication required');
+    throw new Error("Authentication required");
   }
 
   return userId;

@@ -275,10 +275,20 @@ export async function GET(req: Request) {
       return acc;
     }, {} as Record<string, any>);
 
+    const sourceTimestamp = source === 'unavailable'
+      ? null
+      : marketData
+          .map((item) => item.lastUpdateTime)
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .at(-1) || null;
+
     return NextResponse.json({
       success: true,
       prices: priceData,
-      timestamp: new Date().toISOString(),
+      // 行情时间必须来自数据本身；数据库降级时不能用请求时间冒充实时快照。
+      timestamp: sourceTimestamp,
+      requestedAt: new Date().toISOString(),
       count: marketData.length,
       totalRequested: symbolList.length,
       isFallback,

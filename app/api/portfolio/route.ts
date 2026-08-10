@@ -46,6 +46,7 @@ export async function GET(req: Request) {
       lastUpdate: string | null
       source: string
       available: boolean
+      live: boolean
     }> = {}
     let priceSource = 'unavailable'
     let priceTimestamp: string | null = null
@@ -75,6 +76,7 @@ export async function GET(req: Request) {
                 lastUpdate: stock.lastUpdate || priceTimestamp,
                 source: priceSource,
                 available: currentPrice > 0 && priceSource !== 'unavailable',
+                live: currentPrice > 0 && (priceSource === 'sina' || priceSource === 'tencent'),
               }
             }
           }
@@ -94,6 +96,7 @@ export async function GET(req: Request) {
       const avgCost = Number(item.avgCost)
       const prices = priceMap[item.stockCode]
       const priceAvailable = prices?.available === true
+      const priceIsLive = prices?.live === true
       const currentPrice = priceAvailable ? prices.currentPrice : null
       const marketValue = currentPrice === null ? null : currentPrice * item.quantity
       const cost = avgCost * item.quantity
@@ -101,7 +104,7 @@ export async function GET(req: Request) {
       const profitLossPercent = profitLoss === null || cost <= 0 ? null : (profitLoss / cost) * 100
 
       totalCost += cost
-      if (marketValue !== null) {
+      if (priceIsLive && marketValue !== null) {
         totalMarketValue += marketValue
         pricedCost += cost
         pricedPositionCount += 1
@@ -116,6 +119,7 @@ export async function GET(req: Request) {
         avgCost,
         currentPrice,
         priceAvailable,
+        priceIsLive,
         priceSource: prices?.source || 'unavailable',
         priceAsOf: prices?.lastUpdate || priceTimestamp,
         marketValue,
