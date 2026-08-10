@@ -6,7 +6,7 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const PROJECT_ROOT = resolve(import.meta.dirname, "..");
 const STATE_ROOT = resolve(process.env.ALPHAPERCEPT_WORKER_HOME || join(homedir(), ".local", "share", "alphapercept-worker"));
 const SECRET_PATH = resolve(process.env.ALPHAPERCEPT_WORKER_SECRET_FILE || join(STATE_ROOT, "worker-secret"));
@@ -196,7 +196,7 @@ function prepareJobWorkspace(ticker, resumeRequested = false) {
     timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date()).replaceAll("-", "");
   const reportDirName = `${ticker}_${compactDate}`;
-  const canResume = resumeRequested && existsSync(cacheDir);
+  const canResume = resumeRequested && existsSync(join(cacheDir, "raw_data.json"));
   if (!canResume) {
     rmSync(cacheDir, { recursive: true, force: true });
     rmSync(join(scriptsRoot, "reports", reportDirName), { recursive: true, force: true });
@@ -221,7 +221,7 @@ async function runUziResearch(job, pythonPath) {
   const resultPath = join(STATE_ROOT, "logs", `${job.id}-uzi-result.json`);
   const logPath = join(STATE_ROOT, "logs", `${job.id}-uzi.log`);
   await runLogged(CODEX_BIN, [
-    "exec", "--ephemeral", "--json", "--approve-for-me",
+    "exec", "--ephemeral", "--json",
     "-C", UZI_ROOT, "-o", resultPath, "-",
   ], { cwd: UZI_ROOT, input: uziPrompt(job, pythonPath), logPath, env: codexEnvironment() });
 }
