@@ -64,14 +64,14 @@ function QualityBadge({ report }: { report: UziReport }) {
   if (report.agentReviewed) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[10px] text-emerald-300">
-        <ShieldCheck className="h-3 w-3" /> 分析师复核
+        <ShieldCheck className="h-3 w-3" /> AI Agent 深度复核
       </span>
     );
   }
 
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-1 text-[10px] text-amber-200">
-      <Bot className="h-3 w-3" /> 机械评审
+      <Bot className="h-3 w-3" /> 规则机械生成
     </span>
   );
 }
@@ -157,6 +157,11 @@ function ReportCard({ report }: { report: UziReport }) {
             )}
             自检 {warningCount} 警告
           </span>
+          {report.quality.consistencyWarnings.length > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-1 text-[10px] text-rose-200">
+              <AlertTriangle className="h-3 w-3" /> 评分正文不一致
+            </span>
+          )}
           <span className="font-mono text-[9px] text-slate-600">
             {report.validation.seats} 评委 · {report.quality.dimensions.full}/{report.quality.dimensions.total} 维完整
           </span>
@@ -228,7 +233,7 @@ export function UziReportRegistry({ reports }: { reports: UziReport[] }) {
               </div>
               <div className="border-x border-white/[0.06] px-3 py-4 text-center">
                 <p className="font-mono text-xl font-bold text-white">{reviewedCount}</p>
-                <p className="mt-1 text-[9px] text-slate-600">分析师复核</p>
+                <p className="mt-1 text-[9px] text-slate-600">AI Agent 复核</p>
               </div>
               <div className="px-3 py-4 text-center">
                 <p className="font-mono text-xs font-bold text-white">{latestDate.slice(5)}</p>

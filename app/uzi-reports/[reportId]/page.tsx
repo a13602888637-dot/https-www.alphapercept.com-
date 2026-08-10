@@ -23,8 +23,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     ? {
         title: `${report.name} Uzi 深度报告 | Alpha-Quant-Copilot`,
         description: `${report.ticker} · ${report.overallScore ?? "—"} 分 · ${report.verdict}`,
+        robots: { index: false, follow: false, archive: false },
       }
-    : { title: "Uzi 报告未找到 | Alpha-Quant-Copilot" };
+    : {
+        title: "Uzi 报告未找到 | Alpha-Quant-Copilot",
+        robots: { index: false, follow: false, archive: false },
+      };
 }
 
 export default async function UziReportViewerPage({
@@ -72,11 +76,11 @@ export default async function UziReportViewerPage({
           </span>
           {report.agentReviewed ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[9px] text-emerald-300">
-              <ShieldCheck className="h-3 w-3" /> 分析师复核
+              <ShieldCheck className="h-3 w-3" /> AI Agent 深度复核
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-1 text-[9px] text-amber-200">
-              <Bot className="h-3 w-3" /> 机械评审
+              <Bot className="h-3 w-3" /> 规则机械生成
             </span>
           )}
           <a
@@ -90,10 +94,11 @@ export default async function UziReportViewerPage({
         </div>
       </header>
 
-      {report.quality.status !== "pass" && (
+      {(report.quality.status !== "pass" || report.quality.consistencyWarnings.length > 0) && (
         <div className="flex shrink-0 items-center gap-2 border-b border-amber-400/10 bg-amber-400/[0.04] px-4 py-1.5 text-[9px] text-amber-200/70">
           <AlertTriangle className="h-3 w-3 shrink-0 text-amber-300" />
-          报告自检有 {report.quality.selfReview?.warningCount ?? 0} 项警告；价格基准为 {report.priceAsOf ?? "未知日期"}，不是实时行情。
+          报告自检有 {report.quality.selfReview?.warningCount ?? 0} 项警告
+          {report.quality.consistencyWarnings.length > 0 ? "，且评分正文不一致" : ""}；价格基准为 {report.priceAsOf ?? "未知日期"}，不是实时行情。
         </div>
       )}
 
