@@ -1,8 +1,176 @@
 {
   "schemaVersion": "uzi-report-manifest/v1",
-  "syncedAt": "2026-08-10T08:59:11+08:00",
-  "reportCount": 4,
+  "syncedAt": "2026-08-11T09:51:09+08:00",
+  "reportCount": 5,
   "reports": [
+    {
+      "id": "000603.SZ_20260811",
+      "ticker": "000603.SZ",
+      "stockCode": "000603",
+      "market": "A",
+      "name": "盛达资源",
+      "reportDate": "2026-08-11",
+      "reportGeneratedAt": "2026-08-11T09:51:09+08:00",
+      "price": 37.12,
+      "priceAsOf": "2026-08-10",
+      "priceSource": "basic",
+      "overallScore": 53.4,
+      "verdict": "观望偏空 · 3 派看空",
+      "verdictDetail": "基本面 62.5 · 共识 39.8",
+      "conclusion": "盛达资源处于贵金属景气和产能释放驱动的业绩上行期，但66位评委共识仅39.2分，结论为谨慎观察。当前价37.12元已包含强增长预期，技术过热、治理调查与资本密集现金流缺口使安全边际不足。",
+      "fundamentalScore": 62.5,
+      "panelConsensus": 39.8,
+      "agentReviewed": true,
+      "reviewStatus": "agent-reviewed",
+      "quality": {
+        "status": "pass",
+        "agentAnalysisPresent": true,
+        "selfReview": {
+          "passed": true,
+          "criticalCount": 0,
+          "warningCount": 0,
+          "infoCount": 1,
+          "checksRun": 16
+        },
+        "dimensions": {
+          "total": 23,
+          "full": 0,
+          "partial": 0,
+          "missingMarker": 23,
+          "dataGapCount": 0
+        },
+        "consistencyWarnings": []
+      },
+      "trend": "Stage 1→2 过渡/突破候选（未确认）",
+      "battlePlan": {
+        "entry": "¥34.15",
+        "stop": "¥31.55",
+        "target": "¥46.4",
+        "position": "50% 起步"
+      },
+      "signals": {
+        "bullish": 4,
+        "neutral": 29,
+        "bearish": 20,
+        "skip": 13
+      },
+      "votes": {
+        "stronglyBuy": 0,
+        "buy": 4,
+        "watch": 17,
+        "wait": 26,
+        "avoid": 6,
+        "skip": 13
+      },
+      "schools": [
+        {
+          "id": "A",
+          "label": "经典价值派",
+          "consensus": 6.9,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 1,
+          "bearish": 5,
+          "skip": 0
+        },
+        {
+          "id": "B",
+          "label": "成长派",
+          "consensus": 32.5,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 3,
+          "bearish": 2,
+          "skip": 4
+        },
+        {
+          "id": "C",
+          "label": "宏观派",
+          "consensus": 42.1,
+          "verdict": "谨慎",
+          "bullish": 1,
+          "neutral": 3,
+          "bearish": 3,
+          "skip": 0
+        },
+        {
+          "id": "D",
+          "label": "技术派",
+          "consensus": 35,
+          "verdict": "谨慎",
+          "bullish": 0,
+          "neutral": 2,
+          "bearish": 2,
+          "skip": 0
+        },
+        {
+          "id": "E",
+          "label": "中式价投",
+          "consensus": 29.8,
+          "verdict": "回避",
+          "bullish": 0,
+          "neutral": 3,
+          "bearish": 3,
+          "skip": 1
+        },
+        {
+          "id": "F",
+          "label": "A 股游资",
+          "consensus": 50.7,
+          "verdict": "关注",
+          "bullish": 3,
+          "neutral": 13,
+          "bearish": 5,
+          "skip": 3
+        },
+        {
+          "id": "G",
+          "label": "量化派",
+          "consensus": 54.5,
+          "verdict": "关注",
+          "bullish": 0,
+          "neutral": 2,
+          "bearish": 0,
+          "skip": 2
+        },
+        {
+          "id": "H",
+          "label": "科技领袖派",
+          "consensus": 44.8,
+          "verdict": "谨慎",
+          "bullish": 0,
+          "neutral": 2,
+          "bearish": 0,
+          "skip": 2
+        },
+        {
+          "id": "I",
+          "label": "AI 卡位/瓶颈猎手",
+          "consensus": 0,
+          "verdict": "不适合",
+          "bullish": 0,
+          "neutral": 0,
+          "bearish": 0,
+          "skip": 1
+        }
+      ],
+      "panelSize": 66,
+      "reportPath": "/uzi-assets/reports/000603.SZ_20260811.html",
+      "sourceSha256": "e62cee941a1927608dfa2ec58b0c68d85f4f5fab58f2a7aff3b04b85aac238aa",
+      "deployedSha256": "1002305f39499d98e41dc2dda1a525f69dfbf7f878d78c0f001ac71bb45528d1",
+      "fileSize": 710492,
+      "validation": {
+        "seats": 66,
+        "chatMessages": 66,
+        "sections": {
+          "jury": true,
+          "chat": true,
+          "schoolScores": true
+        },
+        "sourceFileSize": 712676,
+        "sandboxStorageShim": true
+      }
+    },
     {
       "id": "000603.SZ_20260810",
       "ticker": "000603.SZ",
