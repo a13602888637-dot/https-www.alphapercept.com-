@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RefreshCw, Radio } from "lucide-react";
+import { AlertTriangle, CalendarDays, RefreshCw, Radio } from "lucide-react";
 import type { MarketSnapshot, OsintContext, OsintMarket } from "@/lib/osint/contracts";
 import { MarketBoard } from "./MarketBoard";
 import { LhbBoard } from "./LhbBoard";
@@ -110,6 +111,9 @@ export function SituationScreen() {
           <button type="button" onClick={() => void loadMarkets()} disabled={isRefreshing} className="inline-flex min-h-8 items-center gap-1.5 rounded border border-[#1F2A3A] px-2.5 hover:bg-[#101927] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] disabled:opacity-50">
             <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin motion-reduce:animate-none" : ""}`} />刷新
           </button>
+          <Link href="/osint/reports" className="inline-flex min-h-8 items-center gap-1.5 rounded border border-[#2EC4C7]/35 bg-[#2EC4C7]/10 px-2.5 text-[#9DE7E8] hover:bg-[#2EC4C7]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7]">
+            <CalendarDays className="h-3 w-3" />每日复盘
+          </Link>
         </div>
       </header>
 

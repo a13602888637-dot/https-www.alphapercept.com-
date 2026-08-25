@@ -62,6 +62,8 @@ assert.equal(worldBriefing.includes("cachedSnapshot"), true);
 assert.equal(situationScreen.includes('/api/osint/v1/markets'), true);
 assert.equal(situationScreen.includes('/api/osint/v1/context'), false);
 assert.equal(situationScreen.includes("30_000"), true);
+assert.equal(situationScreen.includes('href="/osint/reports"'), true);
+assert.equal(situationScreen.includes("每日复盘"), true);
 for (const timeSource of [marketBoard, worldBriefing, statusBar]) {
   assert.equal(timeSource.includes('timeZone: "Asia/Shanghai"'), true);
 }
