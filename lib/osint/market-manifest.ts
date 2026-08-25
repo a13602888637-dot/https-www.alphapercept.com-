@@ -11,11 +11,11 @@ const entries: MarketManifestEntry[] = [
   { symbol: "^DAX", name: "德国DAX", category: "index", instrumentType: "index", region: "eu", provider: "yahoo", providerSymbol: "^GDAXI" },
   { symbol: "GEISAC.FGI", name: "富时全球", category: "index", instrumentType: "index", region: "global", provider: "yahoo", providerSymbol: "GEISAC.FGI" },
 
-  { symbol: "000001", name: "上证指数", category: "index", instrumentType: "index", region: "cn", provider: "eastmoney", providerSymbol: "1.000001" },
-  { symbol: "399001", name: "深证成指", category: "index", instrumentType: "index", region: "cn", provider: "eastmoney", providerSymbol: "0.399001" },
-  { symbol: "399006", name: "创业板指", category: "index", instrumentType: "index", region: "cn", provider: "eastmoney", providerSymbol: "0.399006" },
-  { symbol: "000300", name: "沪深300", category: "index", instrumentType: "index", region: "cn", provider: "eastmoney", providerSymbol: "1.000300" },
-  { symbol: "000905", name: "中证500", category: "index", instrumentType: "index", region: "cn", provider: "eastmoney", providerSymbol: "1.000905" },
+  { symbol: "000001", name: "上证指数", category: "index", instrumentType: "index", region: "cn", provider: "yahoo", providerSymbol: "000001.SS" },
+  { symbol: "399001", name: "深证成指", category: "index", instrumentType: "index", region: "cn", provider: "yahoo", providerSymbol: "399001.SZ" },
+  { symbol: "399006", name: "创业板指", category: "index", instrumentType: "index", region: "cn", provider: "yahoo", providerSymbol: "399006.SZ" },
+  { symbol: "000300", name: "沪深300", category: "index", instrumentType: "index", region: "cn", provider: "yahoo", providerSymbol: "000300.SS" },
+  { symbol: "000905", name: "中证500", category: "index", instrumentType: "index", region: "cn", provider: "yahoo", providerSymbol: "000905.SS" },
 
   { symbol: "NQ=F", name: "纳斯达克100期指连续", category: "future", instrumentType: "future", region: "us", provider: "yahoo", providerSymbol: "NQ=F" },
   { symbol: "ES=F", name: "标普500期指连续", category: "future", instrumentType: "future", region: "us", provider: "yahoo", providerSymbol: "ES=F" },

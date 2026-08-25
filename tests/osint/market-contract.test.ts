@@ -30,6 +30,9 @@ assert.equal(MARKET_MANIFEST["BZ=F"].name, "Brent原油");
 assert.equal(MARKET_MANIFEST["^VIX"].instrumentType, "index");
 assert.equal(MARKET_MANIFEST["^VIX"].category, "risk");
 assert.equal(MARKET_MANIFEST["UST10Y"].category, "yield");
+assert.equal(MARKET_MANIFEST["000001"].provider, "yahoo");
+assert.equal(MARKET_MANIFEST["000001"].providerSymbol, "000001.SS");
+assert.equal(MARKET_MANIFEST["399006"].providerSymbol, "399006.SZ");
 assert.equal(
   new Set(Object.keys(MARKET_MANIFEST)).size,
   Object.keys(MARKET_MANIFEST).length
