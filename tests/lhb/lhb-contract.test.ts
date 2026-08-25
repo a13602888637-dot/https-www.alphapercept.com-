@@ -3,6 +3,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { getLhbSnapshot, normalizeLhbSnapshot } from "../../lib/lhb/service";
+import { EXACT_SEAT_ALIASES } from "../../lib/lhb/seat-aliases";
+
+assert.ok(Object.keys(EXACT_SEAT_ALIASES).length >= 30);
+assert.equal(EXACT_SEAT_ALIASES["国泰海通证券股份有限公司上海江苏路证券营业部"]?.label, "章盟主观察席");
+assert.equal(EXACT_SEAT_ALIASES["华泰证券股份有限公司浙江分公司"]?.label, "消闲派观察席");
 
 const summaryRows = [
   {
