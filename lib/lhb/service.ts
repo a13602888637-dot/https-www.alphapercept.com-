@@ -26,6 +26,10 @@ function tradeIdForRow(row: RawRow): string {
   return stringValue(row.TRADE_ID) || `${stringValue(row.SECURITY_CODE)}|${stringValue(row.EXPLANATION)}`;
 }
 
+function isMultiSessionReason(reason: string): boolean {
+  return /连续.{0,12}(?:三个|3个?)交易日|(?:三个|3个?)交易日.{0,12}累计/.test(reason);
+}
+
 function classifySeat(name: string): Pick<LhbSeat, "label" | "category" | "aliasConfidence"> {
   if (name.includes("机构专用")) return { label: "机构专用", category: "institution", aliasConfidence: null };
   if (name.includes("沪股通专用") || name.includes("深股通专用")) {
@@ -148,7 +152,7 @@ export function normalizeLhbSnapshot(
   const hotMoneyByLabel = new Map<string, LhbHotMoneyFlow & { stocksByCode: Map<string, LhbHotMoneyStock> }>();
   const confidenceRank = { A: 0, B: 1, C: 2 } as const;
   for (const seat of seatFlows) {
-    if (seat.category !== "known-seat" || !seat.aliasConfidence || seat.buyAmount <= 0) continue;
+    if (seat.category !== "known-seat" || !seat.aliasConfidence || seat.buyAmount <= 0 || isMultiSessionReason(seat.reason)) continue;
     const flow = hotMoneyByLabel.get(seat.label) ?? {
       label: seat.label,
       confidence: seat.aliasConfidence,
@@ -214,7 +218,7 @@ export function normalizeLhbSnapshot(
     stocks,
     seatFlows,
     hotMoneyFlows,
-    disclaimer: "龙虎榜金额来自公开盘后数据；游资别名仅为民间观察映射，不代表真实账户身份。",
+    disclaimer: "龙虎榜金额来自公开盘后数据；游资别名仅为民间观察映射，不代表真实账户身份；连续多日榜不与单日榜加总。",
   };
 }
 

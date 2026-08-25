@@ -81,6 +81,15 @@ const buyRows = [
     TRADE_ID: 200400463,
   },
   {
+    SECURITY_CODE: "000620",
+    OPERATEDEPT_CODE: "10026937",
+    OPERATEDEPT_NAME: "国泰海通证券股份有限公司武汉紫阳东路证券营业部",
+    BUY: 300000000,
+    SELL: 0,
+    NET: 300000000,
+    TRADE_ID: 200400463,
+  },
+  {
     SECURITY_CODE: "002580",
     OPERATEDEPT_CODE: "10026937",
     OPERATEDEPT_NAME: "国泰海通证券股份有限公司武汉紫阳东路证券营业部",
@@ -146,7 +155,7 @@ assert.equal(snapshot.seatFlows.find((seat) => seat.departmentCode === "0")?.cat
 assert.equal(snapshot.seatFlows.find((seat) => seat.departmentCode === "0")?.netAmount, -15029416);
 const secondWindow = snapshot.stocks.find((stock) => stock.tradeId === "200400463");
 assert.equal(secondWindow?.netAmount, -197500000);
-assert.deepEqual(secondWindow?.buySeats.map((seat) => seat.departmentCode), ["trade-2-buy"]);
+assert.deepEqual(secondWindow?.buySeats.map((seat) => seat.departmentCode), ["10026937", "trade-2-buy"]);
 assert.deepEqual(secondWindow?.sellSeats.map((seat) => seat.departmentCode), ["trade-2-sell"]);
 assert.equal(snapshot.hotMoneyFlows.length, 1);
 assert.equal(snapshot.hotMoneyFlows[0].label, "武汉紫阳东路");
@@ -155,6 +164,8 @@ assert.equal(snapshot.hotMoneyFlows[0].totalSellAmount, 20085042);
 assert.equal(snapshot.hotMoneyFlows[0].totalNetAmount, 254407078.33);
 assert.deepEqual(snapshot.hotMoneyFlows[0].departmentNames, ["国泰海通证券股份有限公司武汉紫阳东路证券营业部"]);
 assert.deepEqual(snapshot.hotMoneyFlows[0].stocks.map((stock) => stock.code), ["000620", "002580"]);
+assert.equal(snapshot.hotMoneyFlows[0].stocks.find((stock) => stock.code === "000620")?.buyAmount, 174492120.33);
+assert.equal(snapshot.disclaimer.includes("连续多日榜不与单日榜加总"), true);
 const dashboard = toLhbDashboardSnapshot(snapshot);
 assert.equal(dashboard.stocks.length, 3);
 assert.equal("buySeats" in dashboard.stocks[0], false);

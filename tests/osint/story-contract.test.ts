@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildStorySnapshot, getStorySnapshot, isGlobalMarketHeadline, parsePublishedAt, sliceStorySnapshot, type RawStory } from "../../lib/osint/story-service";
+import { parseStoryRequest } from "../../app/api/osint/v1/stories/route";
 
 const rawStories: RawStory[] = [
   {
@@ -40,6 +41,10 @@ const rawStories: RawStory[] = [
 ];
 
 async function verifyStories() {
+  assert.equal(parseStoryRequest(new URLSearchParams("limit=1")).pageSize, 1);
+  assert.equal(parseStoryRequest(new URLSearchParams("limit=50")).pageSize, 50);
+  assert.equal(parseStoryRequest(new URLSearchParams("page=2&pageSize=20&topic=能源")).page, 2);
+  assert.equal(parseStoryRequest(new URLSearchParams("page=2&pageSize=20&topic=能源")).topic, "能源");
   const snapshot = await buildStorySnapshot(rawStories, {
     apiKey: null,
     now: new Date("2026-08-24T11:00:00.000Z"),
