@@ -83,7 +83,14 @@ export interface MarketSnapshot {
 export interface StorySnapshot {
   schemaVersion: "1.0";
   generatedAt: string;
+  windowHours: number;
   stories: OsintStory[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
   advice: {
     text: string;
     confidence: "high" | "medium" | "low";

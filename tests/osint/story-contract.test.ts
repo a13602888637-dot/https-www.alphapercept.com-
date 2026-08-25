@@ -43,6 +43,7 @@ async function verifyStories() {
   const snapshot = await buildStorySnapshot(rawStories, {
     apiKey: null,
     now: new Date("2026-08-24T11:00:00.000Z"),
+    windowHours: 24,
   });
 
   assert.equal(snapshot.stories.length, 2);
@@ -112,6 +113,30 @@ async function verifyStories() {
   assert.equal(parsePublishedAt("not-a-date"), null);
   assert.equal(parsePublishedAt("20260825T091500Z"), "2026-08-25T09:15:00.000Z");
 
+  const pagingNow = new Date("2026-08-25T12:00:00.000Z");
+  const energyStories: RawStory[] = Array.from({ length: 55 }, (_, index) => ({
+    sourceId: `energy-${index}`,
+    sourceName: index % 2 === 0 ? "Bloomberg" : "Reuters",
+    sourceUrl: `https://example.com/energy-${index}`,
+    title: `Oil supply market update number ${String(index).padStart(2, "0")}`,
+    description: "Crude oil and listed energy stocks react to supply changes.",
+    publishedAt: new Date(pagingNow.getTime() - index * 45 * 60_000).toISOString(),
+  }));
+  const energyPage = await buildStorySnapshot(energyStories, {
+    apiKey: null,
+    now: pagingNow,
+    windowHours: 72,
+    page: 2,
+    pageSize: 20,
+    topic: "能源",
+  });
+  assert.equal(energyPage.pagination.page, 2);
+  assert.equal(energyPage.pagination.pageSize, 20);
+  assert.equal(energyPage.pagination.total, 55);
+  assert.equal(energyPage.pagination.totalPages, 3);
+  assert.equal(energyPage.stories.length, 20);
+  assert.equal(energyPage.stories.every((story) => story.tags.topic.includes("能源")), true);
+
   const manyRaw: RawStory[] = Array.from({ length: 13 }, (_, index) => ({
     sourceId: `many-${index}`,
     sourceName: "BBC World",
@@ -178,10 +203,14 @@ async function verifyStories() {
     globalThis.fetch = originalFetch;
   }
   const serviceSource = readFileSync(resolve("lib/osint/story-service.ts"), "utf8");
+  const routeSource = readFileSync(resolve("app/api/osint/v1/stories/route.ts"), "utf8");
   assert.equal(serviceSource.includes("AbortSignal.timeout(10_000)"), true);
-  for (const sourceName of ["Google News", "新浪财经", "东方财富"]) {
+  for (const sourceName of ["Bloomberg", "Reuters", "Wind公开资讯", "CNBC Markets", "WSJ Markets", "新浪财经", "东方财富"]) {
     assert.equal(serviceSource.includes(sourceName), true);
   }
+  assert.equal(routeSource.includes('searchParams.get("page")'), true);
+  assert.equal(routeSource.includes('searchParams.get("pageSize")'), true);
+  assert.equal(routeSource.includes('searchParams.get("topic")'), true);
   console.log("STORY_CONTRACT_OK");
 }
 

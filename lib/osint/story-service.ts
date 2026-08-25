@@ -16,6 +16,9 @@ interface BuildStoryOptions {
   now?: Date;
   limit?: number;
   windowHours?: number;
+  page?: number;
+  pageSize?: number;
+  topic?: string | null;
 }
 
 interface SourceResult {
@@ -25,7 +28,8 @@ interface SourceResult {
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1_000;
-let storyCache: { snapshot: StorySnapshot; timestamp: number } | null = null;
+let sourceCache: { results: SourceResult[]; timestamp: number } | null = null;
+const pageCache = new Map<string, { snapshot: StorySnapshot; timestamp: number }>();
 
 function decodeXml(value: string): string {
   return value
@@ -92,7 +96,11 @@ const GLOBAL_MARKET_HEADLINE_WORDS = [
   "央行", "利率", "通胀", "就业", "消费者信心", "gdp", "关税", "制裁", "冲突", "战争", "停火",
   "海峡", "原油", "石油", "天然气", "黄金", "美元", "美债", "股指", "全球", "美国", "欧洲", "欧盟",
   "日本", "韩国", "中东", "伊朗", "以色列", "监管", "政策", "供应链", "航运", "港口", "地震", "海啸",
-  "台风", "洪水", "人工智能法", "芯片禁令", "半导体出口", "军工", "国防",
+  "台风", "洪水", "人工智能法", "芯片禁令", "半导体出口", "军工", "国防", "股票", "股市",
+  "上市公司", "财报", "业绩", "营收", "利润", "并购", "收购", "回购", "增持", "减持", "ipo",
+  "半导体", "芯片", "银行", "保险", "房地产", "汽车", "有色", "钢铁", "制造业", "出口", "进口",
+  "stock", "shares", "market", "earnings", "revenue", "profit", "merger", "acquisition", "treasury",
+  "bond", "dollar", "investor", "semiconductor", "chip", "bank", "company",
 ];
 
 export function isGlobalMarketHeadline(title: string): boolean {
@@ -282,14 +290,23 @@ function fallbackAdvice(stories: OsintStory[]): string {
 
 export async function buildStorySnapshot(rawStories: RawStory[], options: BuildStoryOptions = {}): Promise<StorySnapshot> {
   const now = options.now ?? new Date();
-  const limit = Math.min(50, Math.max(1, options.limit ?? 20));
-  const windowMs = Math.max(1, options.windowHours ?? 24) * 60 * 60 * 1_000;
+  const windowHours = Math.max(1, options.windowHours ?? 72);
+  const windowMs = windowHours * 60 * 60 * 1_000;
+  const pageSize = Math.min(50, Math.max(1, options.pageSize ?? options.limit ?? 20));
+  const requestedPage = Math.max(1, Math.floor(options.page ?? 1));
   const currentStories = rawStories.filter((story) => {
     const publishedAt = new Date(story.publishedAt).getTime();
     const age = now.getTime() - publishedAt;
     return Number.isFinite(publishedAt) && age >= -5 * 60 * 1_000 && age <= windowMs;
   });
-  let stories = mergeStories(currentStories, now).slice(0, limit);
+  const canonicalStories = mergeStories(currentStories, now).slice(0, 200);
+  const filteredStories = options.topic
+    ? canonicalStories.filter((story) => story.tags.topic.includes(options.topic!))
+    : canonicalStories;
+  const total = filteredStories.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  let stories = filteredStories.slice((page - 1) * pageSize, page * pageSize);
   let advice = fallbackAdvice(stories);
   let adviceConfidence: "high" | "medium" | "low" = "low";
   let generatedAt: string | null = null;
@@ -309,7 +326,9 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
   return {
     schemaVersion: "1.0",
     generatedAt: now.toISOString(),
+    windowHours,
     stories,
+    pagination: { page, pageSize, total, totalPages },
     advice: { text: advice, confidence: adviceConfidence, generatedAt },
     sources: [...sourceCounts.entries()].map(([name, count]) => ({ name, ok: count > 0, count })),
   };
@@ -317,7 +336,12 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
 
 export function sliceStorySnapshot(snapshot: StorySnapshot, limit: number): StorySnapshot {
   const safeLimit = Math.min(50, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 20));
-  return { ...snapshot, stories: snapshot.stories.slice(0, safeLimit) };
+  const total = snapshot.pagination?.total ?? snapshot.stories.length;
+  return {
+    ...snapshot,
+    stories: snapshot.stories.slice(0, safeLimit),
+    pagination: { page: 1, pageSize: safeLimit, total, totalPages: Math.max(1, Math.ceil(total / safeLimit)) },
+  };
 }
 
 async function fetchText(url: string, fetchImpl: typeof fetch): Promise<string> {
@@ -329,7 +353,12 @@ async function fetchText(url: string, fetchImpl: typeof fetch): Promise<string> 
   return response.text();
 }
 
-async function fetchRss(name: string, url: string, fetchImpl: typeof fetch): Promise<SourceResult> {
+async function fetchRss(
+  name: string,
+  url: string,
+  fetchImpl: typeof fetch,
+  options: { maxItems?: number; marketOnly?: boolean } = {}
+): Promise<SourceResult> {
   try {
     const xml = await fetchText(url, fetchImpl);
     const stories = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)].map((match, index) => {
@@ -344,11 +373,18 @@ async function fetchRss(name: string, url: string, fetchImpl: typeof fetch): Pro
         description: xmlTag(block, "description"),
         publishedAt: parsePublishedAt(xmlTag(block, "pubDate")) ?? "",
       };
-    }).filter((story) => story.title && story.sourceUrl).slice(0, 20);
+    }).filter((story) => story.title && story.sourceUrl)
+      .filter((story) => !options.marketOnly || isGlobalMarketHeadline(`${story.title} ${story.description}`))
+      .slice(0, options.maxItems ?? 20);
     return { name, stories, ok: stories.length > 0 };
   } catch {
     return { name, stories: [], ok: false };
   }
+}
+
+async function fetchGoogleNewsIndex(name: string, query: string, fetchImpl: typeof fetch): Promise<SourceResult> {
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:3d`)}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans`;
+  return fetchRss(name, url, fetchImpl, { maxItems: 50, marketOnly: true });
 }
 
 async function fetchGdelt(fetchImpl: typeof fetch): Promise<SourceResult> {
@@ -471,27 +507,60 @@ async function fetchEastMoneyNews(fetchImpl: typeof fetch): Promise<SourceResult
   }
 }
 
-export async function getStorySnapshot(options: { window?: "24h"; limit?: number; fetchImpl?: typeof fetch } = {}): Promise<StorySnapshot> {
+export async function getStorySnapshot(options: {
+  window?: "24h" | "72h";
+  limit?: number;
+  page?: number;
+  pageSize?: number;
+  topic?: string | null;
+  fetchImpl?: typeof fetch;
+} = {}): Promise<StorySnapshot> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const requestedLimit = Math.min(50, Math.max(1, options.limit ?? 20));
-  if (fetchImpl === fetch && storyCache && Date.now() - storyCache.timestamp < CACHE_TTL_MS) {
-    return sliceStorySnapshot(storyCache.snapshot, requestedLimit);
+  const pageSize = Math.min(50, Math.max(1, options.pageSize ?? options.limit ?? 20));
+  const page = Math.max(1, Math.floor(options.page ?? 1));
+  const windowHours = options.window === "24h" ? 24 : 72;
+  const topic = options.topic?.trim() || null;
+  const pageKey = `${windowHours}|${page}|${pageSize}|${topic ?? "全部"}`;
+  const cachedPage = pageCache.get(pageKey);
+  if (fetchImpl === fetch && cachedPage && Date.now() - cachedPage.timestamp < CACHE_TTL_MS) {
+    return cachedPage.snapshot;
   }
-  const results = await Promise.all([
-    fetchRss("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", fetchImpl),
-    fetchRss("Google News", "https://news.google.com/rss/search?q=geopolitics%20OR%20central%20bank%20OR%20oil%20OR%20markets&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", fetchImpl),
-    fetchGdelt(fetchImpl),
-    fetchReliefWeb(fetchImpl),
-    fetchChineseFinance(fetchImpl),
-    fetchSinaFinance(fetchImpl),
-    fetchEastMoneyNews(fetchImpl),
-  ]);
-  const canonicalSnapshot = await buildStorySnapshot(results.flatMap((result) => result.stories), {
+
+  let results = fetchImpl === fetch && sourceCache && Date.now() - sourceCache.timestamp < CACHE_TTL_MS
+    ? sourceCache.results
+    : null;
+  if (!results) {
+    results = await Promise.all([
+      fetchGoogleNewsIndex("Bloomberg", "site:bloomberg.com (stocks OR markets OR economy OR earnings OR bonds OR oil)", fetchImpl),
+      fetchGoogleNewsIndex("Reuters", "site:reuters.com (stocks OR markets OR economy OR companies OR commodities)", fetchImpl),
+      fetchGoogleNewsIndex("Wind公开资讯", "site:wind.com.cn (股票 OR 市场 OR 宏观 OR 行业 OR 公司)", fetchImpl),
+      fetchRss("CNBC Markets", "https://www.cnbc.com/id/100003114/device/rss/rss.html", fetchImpl, { maxItems: 40, marketOnly: true }),
+      fetchRss("WSJ Markets", "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", fetchImpl, { maxItems: 40, marketOnly: true }),
+      fetchRss("Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", fetchImpl, { maxItems: 30, marketOnly: true }),
+      fetchRss("SEC", "https://www.sec.gov/news/pressreleases.rss", fetchImpl, { maxItems: 30, marketOnly: true }),
+      fetchRss("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", fetchImpl, { maxItems: 30, marketOnly: true }),
+      fetchGoogleNewsIndex("Google News", "(stock market OR central bank OR oil OR sanctions OR semiconductor OR earnings)", fetchImpl),
+      fetchGdelt(fetchImpl),
+      fetchReliefWeb(fetchImpl),
+      fetchChineseFinance(fetchImpl),
+      fetchSinaFinance(fetchImpl),
+      fetchEastMoneyNews(fetchImpl),
+    ]);
+    if (fetchImpl === fetch) {
+      sourceCache = { results, timestamp: Date.now() };
+      pageCache.clear();
+    }
+  }
+
+  const snapshot = await buildStorySnapshot(results.flatMap((result) => result.stories), {
     apiKey: process.env.DEEPSEEK_API_KEY ?? null,
     fetchImpl,
-    limit: 50,
+    windowHours,
+    page,
+    pageSize,
+    topic,
   });
-  canonicalSnapshot.sources = results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length }));
-  if (fetchImpl === fetch && canonicalSnapshot.stories.length > 0) storyCache = { snapshot: canonicalSnapshot, timestamp: Date.now() };
-  return sliceStorySnapshot(canonicalSnapshot, requestedLimit);
+  snapshot.sources = results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length }));
+  if (fetchImpl === fetch && snapshot.stories.length > 0) pageCache.set(pageKey, { snapshot, timestamp: Date.now() });
+  return snapshot;
 }
