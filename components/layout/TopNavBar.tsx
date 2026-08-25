@@ -6,7 +6,6 @@ import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
 import {
   ArrowLeft,
   Aperture,
-  Briefcase,
   FileChartColumnIncreasing,
   Globe,
   LayoutDashboard,
@@ -15,9 +14,8 @@ import {
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "今日", icon: LayoutDashboard },
-  { href: "/my-stocks", label: "持仓", icon: Briefcase },
-  { href: "/uzi-reports", label: "深研", icon: FileChartColumnIncreasing },
-  { href: "/osint", label: "情报", icon: Globe },
+  { href: "/uzi-reports", label: "深度研究", icon: FileChartColumnIncreasing },
+  { href: "/osint", label: "OSINT 情报", icon: Globe },
 ];
 
 export function TopNavBar() {

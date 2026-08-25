@@ -38,4 +38,19 @@ const contextRoute = readFileSync(resolve("app/api/osint/v1/context/route.ts"), 
 assert.equal(storiesRoute.includes("getStorySnapshot"), true);
 assert.equal(contextRoute.includes("composePublicContext"), true);
 assert.equal(/watchlist|portfolio|clerk/i.test(contextRoute), false);
+
+const situationScreen = readFileSync(resolve("components/osint-v2/SituationScreen.tsx"), "utf8");
+const marketBoard = readFileSync(resolve("components/osint-v2/MarketBoard.tsx"), "utf8");
+const worldBriefing = readFileSync(resolve("components/osint-v2/WorldBriefing.tsx"), "utf8");
+const topNav = readFileSync(resolve("components/layout/TopNavBar.tsx"), "utf8");
+for (const removed of ["GeoMapBase", "AISituationBrain", "useAuth", "/api/watchlist"]) {
+  assert.equal(situationScreen.includes(removed), false);
+}
+assert.equal(situationScreen.includes("MarketBoard"), true);
+assert.equal(situationScreen.includes("WorldBriefing"), true);
+assert.equal(marketBoard.includes("暂无"), true);
+assert.equal(worldBriefing.includes("过去24小时"), true);
+assert.equal(topNav.includes('label: "我的股票"'), false);
+assert.equal(topNav.includes('label: "今日"'), true);
+assert.equal(topNav.includes('label: "深度研究"'), true);
 console.log("PUBLIC_CONTEXT_OK");
