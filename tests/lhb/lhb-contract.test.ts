@@ -170,7 +170,12 @@ assert.equal(routeSource.includes("toLhbDashboardSnapshot"), true);
 const boardSource = readFileSync(resolve("components/osint-v2/LhbBoard.tsx"), "utf8");
 const screenSource = readFileSync(resolve("components/osint-v2/SituationScreen.tsx"), "utf8");
 assert.equal(boardSource.includes("资金龙虎榜"), true);
-assert.equal(boardSource.includes("/api/osint/v1/lhb"), true);
+assert.equal(boardSource.includes("/api/osint/v1/lhb?view=dashboard"), true);
+assert.equal(boardSource.includes("个股资金榜"), true);
+assert.equal(boardSource.includes("席位资金榜"), true);
+assert.equal(boardSource.includes("买入前五"), false);
+assert.equal(boardSource.includes("selectedTradeId"), false);
+assert.equal(boardSource.includes("游资买入股票"), true);
 assert.equal(screenSource.includes("LhbBoard"), true);
 
 async function verifyUnavailable() {
