@@ -95,15 +95,15 @@ export function WorldBriefing() {
             <h2 className="text-sm font-semibold tracking-wide text-[#D6DEE8]">财经热点 · 过去3天</h2>
             <p className="mt-0.5 text-[11px] text-[#718096]">{pagination.total} 条去重事件 · 服务端分类后分页 · 摘要与标签可供 Agent 分析</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <select aria-label="新闻来源" value={source} onChange={(event) => setSource(event.target.value)} className="h-9 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-2 text-[11px] text-[#D6DEE8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7]">
+          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+            <select aria-label="新闻来源" value={source} onChange={(event) => setSource(event.target.value)} className="h-10 w-full rounded-md border border-[#1F2A3A] bg-[#0D1420] px-2 text-sm text-[#D6DEE8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] sm:h-9 sm:w-auto sm:text-[11px]">
               {sourceNames.map((name) => <option key={name} value={name}>{name === "全部" ? "来源：全部" : name}</option>)}
             </select>
-            <label className="flex h-9 min-w-44 items-center gap-2 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-3 focus-within:ring-2 focus-within:ring-[#2EC4C7]">
+            <label className="flex h-10 w-full min-w-0 items-center gap-2 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-3 focus-within:ring-2 focus-within:ring-[#2EC4C7] sm:h-9 sm:min-w-44 sm:flex-1">
               <Search className="h-3.5 w-3.5 text-[#718096]" /><span className="sr-only">搜索热点</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索事件、资产、标签" className="min-w-0 flex-1 bg-transparent text-[11px] text-[#D6DEE8] outline-none placeholder:text-[#4b586b]" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索事件、资产、标签" className="min-w-0 flex-1 bg-transparent text-sm text-[#D6DEE8] outline-none placeholder:text-[#4b586b] sm:text-[11px]" />
             </label>
-            <button type="button" onClick={() => void loadStories()} disabled={loading} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-3 text-[10px] text-[#718096] hover:text-[#D6DEE8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] disabled:opacity-50">
+            <button type="button" onClick={() => void loadStories()} disabled={loading} className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-3 text-xs text-[#718096] hover:text-[#D6DEE8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] disabled:opacity-50 sm:h-9 sm:w-auto sm:text-[10px]">
               <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`} />刷新新闻
             </button>
           </div>
@@ -119,8 +119,8 @@ export function WorldBriefing() {
 
       {error && <div className="border-b border-red-500/20 bg-red-500/[0.06] px-4 py-2 text-[11px] text-red-300">本次新闻刷新失败（{error}），继续显示最近成功数据。</div>}
 
-      <div className="mx-4 mt-3 flex items-center justify-between gap-4 rounded-md border border-[#F2B84B]/35 bg-[#F2B84B]/[0.07] px-4 py-3">
-        <p className="text-xs font-medium text-[#F6C968]">今日建议：{snapshot?.advice.text || "等待足够数据后再判断。"}</p>
+      <div className="mx-4 mt-3 flex flex-col items-start gap-2 rounded-md border border-[#F2B84B]/35 bg-[#F2B84B]/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <p className="text-sm font-medium leading-6 text-[#F6C968] sm:text-xs sm:leading-5">今日建议：{snapshot?.advice.text || "等待足够数据后再判断。"}</p>
         <span className="shrink-0 font-mono text-[10px] text-[#9f8656]">DeepSeek · {snapshot?.advice.generatedAt ? new Date(snapshot.advice.generatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" }) : "规则摘要"}</span>
       </div>
 
@@ -130,16 +130,16 @@ export function WorldBriefing() {
         ) : visibleStories.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center gap-1 text-xs text-[#718096]"><span>过去3天暂无“{topic}”分类新闻</span><span className="text-[10px] text-[#4b586b]">可切换分类、来源或清空搜索</span></div>
         ) : (
-          <div className="relative space-y-2 before:absolute before:bottom-0 before:left-[61px] before:top-0 before:w-px before:bg-[#263348]">
+          <div className="relative space-y-2 before:absolute before:bottom-0 before:left-[51px] before:top-0 before:w-px before:bg-[#263348] sm:before:left-[61px]">
             {visibleStories.map((story) => {
               const published = timeLabel(story.publishedAt);
               return (
-                <article key={story.id} className="relative grid grid-cols-[52px_1fr] gap-4">
-                  <div className="pt-3 text-right font-mono"><div className="text-[11px] text-[#AAB5C4]">{published.time}</div><div className="text-[9px] text-[#536177]">{published.age}</div></div>
-                  <div className="relative rounded-md border border-[#1F2A3A] bg-[#0D1420] px-4 py-3 transition-colors hover:border-[#314158] hover:bg-[#101927]">
-                    <span className="absolute -left-[21px] top-4 h-2.5 w-2.5 rounded-full border-2 border-[#070B12] bg-[#2EC4C7]" />
+                <article key={story.id} className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 sm:grid-cols-[52px_minmax(0,1fr)] sm:gap-4">
+                  <div className="pt-3 text-right font-mono"><div className="text-xs text-[#AAB5C4] sm:text-[11px]">{published.time}</div><div className="text-[10px] text-[#536177] sm:text-[9px]">{published.age}</div></div>
+                  <div className="relative min-w-0 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-3 py-3 transition-colors hover:border-[#314158] hover:bg-[#101927] sm:px-4">
+                    <span className="absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-[#070B12] bg-[#2EC4C7] sm:-left-[21px]" />
                     <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0"><h3 className="text-[13px] font-medium leading-5 text-[#D6DEE8]">{story.title}</h3>{story.translationStatus === "translated" && story.originalTitle !== story.title && <p className="mt-0.5 truncate text-[9px] text-[#536177]" title={story.originalTitle}>{story.originalTitle}</p>}<p className="mt-1 text-[11px] leading-5 text-[#8B98AA]">{story.summary}</p></div>
+                      <div className="min-w-0"><h3 className="text-sm font-medium leading-5 text-[#D6DEE8] sm:text-[13px]">{story.title}</h3>{story.translationStatus === "translated" && story.originalTitle !== story.title && <p className="mt-0.5 truncate text-[10px] text-[#536177] sm:text-[9px]" title={story.originalTitle}>{story.originalTitle}</p>}<p className="mt-1 text-sm leading-6 text-[#8B98AA] sm:text-[11px] sm:leading-5">{story.summary}</p></div>
                       <span className="shrink-0 font-mono text-[10px] text-[#F2B84B]">重要度 {story.importance.toFixed(1)}/10</span>
                     </div>
                     <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
