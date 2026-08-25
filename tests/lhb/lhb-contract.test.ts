@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { getLhbSnapshot, normalizeLhbSnapshot } from "../../lib/lhb/service";
+import { getLhbSnapshot, normalizeLhbSnapshot, toLhbDashboardSnapshot } from "../../lib/lhb/service";
 import { EXACT_SEAT_ALIASES } from "../../lib/lhb/seat-aliases";
 
 assert.ok(Object.keys(EXACT_SEAT_ALIASES).length >= 30);
@@ -39,6 +39,17 @@ const summaryRows = [
     EXPLANATION: "测试",
     TRADE_ID: 999,
   },
+  {
+    TRADE_DATE: "2026-08-24 00:00:00",
+    SECURITY_CODE: "002580",
+    SECURITY_NAME_ABBR: "圣阳股份",
+    BILLBOARD_NET_AMT: 80000000,
+    BILLBOARD_BUY_AMT: 100000000,
+    BILLBOARD_SELL_AMT: 20000000,
+    EXPLANATION: "日换手率达到20%的前5只证券",
+    CHANGE_RATE: 9.9,
+    TRADE_ID: 300400463,
+  },
 ];
 
 const buyRows = [
@@ -68,6 +79,15 @@ const buyRows = [
     SELL: 0,
     NET: 10000000,
     TRADE_ID: 200400463,
+  },
+  {
+    SECURITY_CODE: "002580",
+    OPERATEDEPT_CODE: "10026937",
+    OPERATEDEPT_NAME: "国泰海通证券股份有限公司武汉紫阳东路证券营业部",
+    BUY: 100000000,
+    SELL: 20000000,
+    NET: 80000000,
+    TRADE_ID: 300400463,
   },
 ];
 
@@ -114,7 +134,7 @@ const snapshot = normalizeLhbSnapshot("2026-08-24", summaryRows, buyRows, sellRo
 assert.equal(snapshot.schemaVersion, "1.0");
 assert.equal(snapshot.status, "live");
 assert.equal(snapshot.invalidRowCount, 1);
-assert.equal(snapshot.stocks.length, 2);
+assert.equal(snapshot.stocks.length, 3);
 assert.equal(snapshot.stocks[0].netAmount, 372709471.19);
 assert.equal(snapshot.stocks[0].tradeId, "100400463");
 assert.equal(snapshot.stocks[0].buySeats.length, 2);
@@ -128,10 +148,25 @@ const secondWindow = snapshot.stocks.find((stock) => stock.tradeId === "20040046
 assert.equal(secondWindow?.netAmount, -197500000);
 assert.deepEqual(secondWindow?.buySeats.map((seat) => seat.departmentCode), ["trade-2-buy"]);
 assert.deepEqual(secondWindow?.sellSeats.map((seat) => seat.departmentCode), ["trade-2-sell"]);
+assert.equal(snapshot.hotMoneyFlows.length, 1);
+assert.equal(snapshot.hotMoneyFlows[0].label, "武汉紫阳东路");
+assert.equal(snapshot.hotMoneyFlows[0].totalBuyAmount, 274492120.33);
+assert.equal(snapshot.hotMoneyFlows[0].totalSellAmount, 20085042);
+assert.equal(snapshot.hotMoneyFlows[0].totalNetAmount, 254407078.33);
+assert.deepEqual(snapshot.hotMoneyFlows[0].departmentNames, ["国泰海通证券股份有限公司武汉紫阳东路证券营业部"]);
+assert.deepEqual(snapshot.hotMoneyFlows[0].stocks.map((stock) => stock.code), ["000620", "002580"]);
+const dashboard = toLhbDashboardSnapshot(snapshot);
+assert.equal(dashboard.stocks.length, 3);
+assert.equal("buySeats" in dashboard.stocks[0], false);
+assert.equal("sellSeats" in dashboard.stocks[0], false);
+assert.equal(dashboard.hotMoneyFlows.length, 1);
+assert.equal("seatFlows" in dashboard, false);
 
 const routeSource = readFileSync(resolve("app/api/osint/v1/lhb/route.ts"), "utf8");
 assert.equal(routeSource.includes("getLhbSnapshot"), true);
 assert.equal(routeSource.includes("status: 503"), true);
+assert.equal(routeSource.includes('view === "dashboard"'), true);
+assert.equal(routeSource.includes("toLhbDashboardSnapshot"), true);
 const boardSource = readFileSync(resolve("components/osint-v2/LhbBoard.tsx"), "utf8");
 const screenSource = readFileSync(resolve("components/osint-v2/SituationScreen.tsx"), "utf8");
 assert.equal(boardSource.includes("资金龙虎榜"), true);

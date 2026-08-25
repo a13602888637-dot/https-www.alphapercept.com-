@@ -32,6 +32,25 @@ export interface LhbSeatFlow extends LhbSeat {
   stocks: Array<{ tradeId: string; code: string; name: string; reason: string; buyAmount: number; sellAmount: number; netAmount: number }>;
 }
 
+export interface LhbHotMoneyStock {
+  code: string;
+  name: string;
+  reasons: string[];
+  buyAmount: number;
+  sellAmount: number;
+  netAmount: number;
+}
+
+export interface LhbHotMoneyFlow {
+  label: string;
+  confidence: Exclude<LhbAliasConfidence, null>;
+  departmentNames: string[];
+  totalBuyAmount: number;
+  totalSellAmount: number;
+  totalNetAmount: number;
+  stocks: LhbHotMoneyStock[];
+}
+
 export interface LhbSnapshot {
   schemaVersion: "1.0";
   status: "live" | "degraded" | "unavailable";
@@ -46,5 +65,12 @@ export interface LhbSnapshot {
   seatCount: number;
   stocks: LhbStock[];
   seatFlows: LhbSeatFlow[];
+  hotMoneyFlows: LhbHotMoneyFlow[];
   disclaimer: string;
 }
+
+export type LhbStockRank = Omit<LhbStock, "buySeats" | "sellSeats">;
+
+export type LhbDashboardSnapshot = Omit<LhbSnapshot, "stocks" | "seatFlows"> & {
+  stocks: LhbStockRank[];
+};

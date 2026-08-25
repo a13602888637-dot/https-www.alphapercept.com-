@@ -1,4 +1,4 @@
-import type { LhbSeat, LhbSeatFlow, LhbSnapshot, LhbStock } from "./contracts";
+import type { LhbDashboardSnapshot, LhbHotMoneyFlow, LhbHotMoneyStock, LhbSeat, LhbSeatFlow, LhbSnapshot, LhbStock } from "./contracts";
 import { EXACT_SEAT_ALIASES } from "./seat-aliases";
 
 type RawRow = Record<string, unknown>;
@@ -14,6 +14,10 @@ function numberValue(value: unknown): number {
 
 function stringValue(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+function moneyValue(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 function tradeIdForRow(row: RawRow): string {
@@ -139,6 +143,59 @@ export function normalizeLhbSnapshot(
     flows.set(flowKey, flow);
   }
   const seatFlows = [...flows.values()].sort((left, right) => Math.abs(right.netAmount) - Math.abs(left.netAmount));
+  const hotMoneyByLabel = new Map<string, LhbHotMoneyFlow & { stocksByCode: Map<string, LhbHotMoneyStock> }>();
+  const confidenceRank = { A: 0, B: 1, C: 2 } as const;
+  for (const seat of seatFlows) {
+    if (seat.category !== "known-seat" || !seat.aliasConfidence || seat.buyAmount <= 0) continue;
+    const flow = hotMoneyByLabel.get(seat.label) ?? {
+      label: seat.label,
+      confidence: seat.aliasConfidence,
+      departmentNames: [],
+      totalBuyAmount: 0,
+      totalSellAmount: 0,
+      totalNetAmount: 0,
+      stocks: [],
+      stocksByCode: new Map<string, LhbHotMoneyStock>(),
+    };
+    if (confidenceRank[seat.aliasConfidence] < confidenceRank[flow.confidence]) flow.confidence = seat.aliasConfidence;
+    if (!flow.departmentNames.includes(seat.departmentName)) flow.departmentNames.push(seat.departmentName);
+    flow.totalBuyAmount += seat.buyAmount;
+    flow.totalSellAmount += seat.sellAmount;
+    flow.totalNetAmount += seat.netAmount;
+    for (const stock of seat.stocks) {
+      const current = flow.stocksByCode.get(stock.code) ?? {
+        code: stock.code,
+        name: stock.name,
+        reasons: [],
+        buyAmount: 0,
+        sellAmount: 0,
+        netAmount: 0,
+      };
+      current.buyAmount += stock.buyAmount;
+      current.sellAmount += stock.sellAmount;
+      current.netAmount += stock.netAmount;
+      if (stock.reason && !current.reasons.includes(stock.reason)) current.reasons.push(stock.reason);
+      flow.stocksByCode.set(stock.code, current);
+    }
+    hotMoneyByLabel.set(seat.label, flow);
+  }
+  const hotMoneyFlows = [...hotMoneyByLabel.values()]
+    .map(({ stocksByCode, ...flow }) => ({
+      ...flow,
+      totalBuyAmount: moneyValue(flow.totalBuyAmount),
+      totalSellAmount: moneyValue(flow.totalSellAmount),
+      totalNetAmount: moneyValue(flow.totalNetAmount),
+      departmentNames: [...flow.departmentNames].sort(),
+      stocks: [...stocksByCode.values()]
+        .map((stock) => ({
+          ...stock,
+          buyAmount: moneyValue(stock.buyAmount),
+          sellAmount: moneyValue(stock.sellAmount),
+          netAmount: moneyValue(stock.netAmount),
+        }))
+        .sort((left, right) => right.buyAmount - left.buyAmount),
+    }))
+    .sort((left, right) => right.totalBuyAmount - left.totalBuyAmount);
 
   return {
     schemaVersion: "1.0",
@@ -154,7 +211,16 @@ export function normalizeLhbSnapshot(
     seatCount: seatFlows.length,
     stocks,
     seatFlows,
+    hotMoneyFlows,
     disclaimer: "龙虎榜金额来自公开盘后数据；游资别名仅为民间观察映射，不代表真实账户身份。",
+  };
+}
+
+export function toLhbDashboardSnapshot(snapshot: LhbSnapshot): LhbDashboardSnapshot {
+  const { seatFlows: _seatFlows, stocks, ...metadata } = snapshot;
+  return {
+    ...metadata,
+    stocks: stocks.map(({ buySeats: _buySeats, sellSeats: _sellSeats, ...stock }) => stock),
   };
 }
 
