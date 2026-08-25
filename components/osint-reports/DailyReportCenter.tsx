@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Loader2, Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CalendarDays, Loader2, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { OsintDailyReportSummary } from "@/lib/osint/daily-report/contracts";
 
@@ -20,7 +20,6 @@ const STATUS_LABELS = {
 export function DailyReportCenter() {
   const [reports, setReports] = useState<OsintDailyReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const loadReports = useCallback(async () => {
@@ -43,28 +42,6 @@ export function DailyReportCenter() {
     void loadReports();
   }, [loadReports]);
 
-  async function generateReport() {
-    setGenerating(true);
-    setMessage(null);
-    try {
-      const response = await fetch("/api/osint/v1/reports/generate", {
-        method: "POST",
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(
-          response.status === 403 ? "当前账号没有共享日报生成权限" : payload.error || "日报生成失败"
-        );
-      }
-      setMessage("今日复盘已归档为新版本，旧版本不会被覆盖。");
-      await loadReports();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "日报生成失败");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   return (
     <main className="h-full overflow-y-auto bg-[#070B12] text-base text-[#D6DEE8]">
       <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6 sm:py-8">
@@ -78,10 +55,7 @@ export function DailyReportCenter() {
               <h1 className="text-2xl font-semibold text-white sm:text-3xl">每日复盘中心</h1>
               <p className="mt-2 text-base leading-7 text-[#8B98AA]">把行情、世界热点和龙虎榜锁定为可回看的当日快照。</p>
             </div>
-            <button type="button" disabled={generating} onClick={generateReport} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#2EC4C7] px-5 font-medium text-[#071018] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">
-              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              生成今日复盘
-            </button>
+            <div className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#2EC4C7]/30 bg-[#2EC4C7]/10 px-4 text-sm text-[#9DE7E8]"><ShieldCheck className="h-4 w-4" />后台每日自动归档</div>
           </div>
         </header>
 

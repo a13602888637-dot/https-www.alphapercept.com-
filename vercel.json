@@ -16,6 +16,14 @@
     {
       "path": "/api/crons/watchlist-refresh",
       "schedule": "45 7 * * 1-5"
+    },
+    {
+      "path": "/api/osint/v1/reports/generate?edition=close",
+      "schedule": "30 10 * * 1-5"
+    },
+    {
+      "path": "/api/osint/v1/reports/generate?edition=global",
+      "schedule": "15 0 * * 2-6"
     }
   ]
 }

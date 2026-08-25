@@ -20,7 +20,7 @@ const migrationFiles = readdirSync(resolve("prisma/migrations"), {
   .map((entry) => resolve("prisma/migrations", entry.name, "migration.sql"))
   .filter(existsSync);
 const migrations = migrationFiles.map((path) => readFileSync(path, "utf8")).join("\n");
-assert.match(migrations, /CREATE TABLE "OsintDailyReport"/);
+assert.match(migrations, /CREATE TABLE IF NOT EXISTS "OsintDailyReport"/);
 assert.match(migrations, /"payload" JSONB NOT NULL/);
 assert.match(migrations, /"edition" TEXT NOT NULL/);
 assert.match(migrations, /"version" INTEGER NOT NULL/);
@@ -41,9 +41,10 @@ const detailRoute = read("app/api/osint/v1/reports/[reportId]/route.ts");
 const exportRoute = read("app/api/osint/v1/reports/[reportId]/export/route.ts");
 assert.equal(listRoute.includes("listDailyReports"), true);
 assert.equal(generateRoute.includes("generateAndSaveDailyReport"), true);
-assert.equal(generateRoute.includes("auth()"), true);
 assert.equal(generateRoute.includes("CRON_SECRET"), true);
-assert.equal(generateRoute.includes("OSINT_REPORT_ADMIN_USER_IDS"), true);
+assert.equal(generateRoute.includes("currentUser"), false);
+assert.equal(generateRoute.includes("export async function POST"), false);
+assert.equal(generateRoute.includes("previousShanghaiDate"), true);
 assert.equal(detailRoute.includes("getDailyReport"), true);
 assert.equal(exportRoute.includes("hasRequiredExportNotices"), true);
 assert.equal(exportRoute.includes("text/html; charset=utf-8"), true);
@@ -59,6 +60,8 @@ assert.equal(center.includes("日复盘"), true);
 assert.equal(center.includes("周复盘"), true);
 assert.equal(center.includes("月复盘"), true);
 assert.equal(center.includes("text-base"), true);
+assert.equal(center.includes("生成今日复盘"), false);
+assert.equal(center.includes("后台每日自动归档"), true);
 assert.equal(view.includes("text-base"), true);
 assert.equal(view.includes("snapshot.lhb.hotMoneyFlows"), true);
 assert.equal(view.includes("另有"), true);
@@ -81,5 +84,9 @@ assert.doesNotMatch(exportHtml, /\.report-disclaimer\{[^}]*display:none/);
 
 assert.equal(existsSync(resolve("app/osint/reports/page.tsx")), true);
 assert.equal(existsSync(resolve("app/osint/reports/[reportId]/page.tsx")), true);
+
+const vercelConfig = JSON.parse(read("vercel.json"));
+assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=close" && cron.schedule === "30 10 * * 1-5"), true);
+assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=global" && cron.schedule === "15 0 * * 2-6"), true);
 
 console.log("DAILY_REPORT_SURFACE_OK");

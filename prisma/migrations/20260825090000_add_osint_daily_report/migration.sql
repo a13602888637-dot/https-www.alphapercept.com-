@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "OsintDailyReport" (
+CREATE TABLE IF NOT EXISTS "OsintDailyReport" (
     "id" TEXT NOT NULL,
     "reportDate" TEXT NOT NULL,
     "edition" TEXT NOT NULL DEFAULT 'close',
@@ -16,9 +16,9 @@ CREATE TABLE "OsintDailyReport" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "OsintDailyReport_reportDate_edition_version_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "OsintDailyReport_reportDate_edition_version_key"
 ON "OsintDailyReport"("reportDate", "edition", "version");
 
 -- CreateIndex
-CREATE INDEX "OsintDailyReport_reportDate_edition_status_idx"
+CREATE INDEX IF NOT EXISTS "OsintDailyReport_reportDate_edition_status_idx"
 ON "OsintDailyReport"("reportDate", "edition", "status");
