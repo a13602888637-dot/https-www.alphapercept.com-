@@ -90,7 +90,7 @@ export function LhbBoard() {
           </div>
         ) : (
           <div className="grid gap-3 xl:grid-cols-2">
-            {snapshot.hotMoneyFlows.map((flow) => <HotMoneyCard key={flow.label} flow={flow} />)}
+            {snapshot.hotMoneyFlows.map((flow) => <HotMoneyCard key={flow.flowId} flow={flow} />)}
           </div>
         )}
       </div>
@@ -123,7 +123,9 @@ function HotMoneyCard({ flow }: { flow: LhbHotMoneyFlow }) {
       <div className="border-b border-[#1F2A3A] px-3 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0"><h3 className="text-[13px] font-semibold text-[#D6DEE8]">{flow.label}</h3><p className="mt-1 truncate text-[9px] text-[#536177]" title={flow.departmentNames.join(" / ")}>{flow.departmentNames.join(" / ")}</p></div>
-          <span className="shrink-0 rounded border border-[#2EC4C7]/30 bg-[#2EC4C7]/10 px-2 py-1 font-mono text-[9px] text-[#9DE7E8]">观察可信度 {flow.confidence}</span>
+          <span className="shrink-0 rounded border border-[#2EC4C7]/30 bg-[#2EC4C7]/10 px-2 py-1 font-mono text-[9px] text-[#9DE7E8]">
+            {flow.kind === "known" ? `观察可信度 ${flow.confidence ?? "C"}` : "活跃席位"}
+          </span>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-right font-mono text-[10px]">
           <div><span className="block text-[9px] text-[#536177]">买入</span><span className="text-[#F35A5A]">{formatAmount(flow.totalBuyAmount)}</span></div>
@@ -141,6 +143,7 @@ function HotMoneyCard({ flow }: { flow: LhbHotMoneyFlow }) {
             </div>
           ))}
         </div>
+        {flow.stockCount > flow.stocks.length && <p className="pt-2 text-right text-[9px] text-[#536177]">另有 {flow.stockCount - flow.stocks.length} 只买入股票</p>}
       </div>
     </article>
   );

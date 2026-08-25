@@ -57,6 +57,8 @@ assert.equal(worldBriefing.includes("过去3天"), true);
 assert.equal(worldBriefing.includes("pageSize=20"), true);
 assert.equal(worldBriefing.includes("上一页"), true);
 assert.equal(worldBriefing.includes("下一页"), true);
+assert.equal(worldBriefing.includes("snapshotCacheRef"), true);
+assert.equal(worldBriefing.includes("cachedSnapshot"), true);
 assert.equal(situationScreen.includes('/api/osint/v1/markets'), true);
 assert.equal(situationScreen.includes('/api/osint/v1/context'), false);
 assert.equal(situationScreen.includes("30_000"), true);

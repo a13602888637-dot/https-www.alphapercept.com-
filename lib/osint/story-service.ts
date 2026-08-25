@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { OsintStory, StorySnapshot, StoryTags } from "./contracts";
+import { fetchAihotItemsV1 } from "./aihot-v1";
 
 export interface RawStory {
   sourceId: string;
@@ -8,6 +9,11 @@ export interface RawStory {
   title: string;
   description: string;
   publishedAt: string;
+  originalTitle?: string;
+  additionalSources?: Array<{ name: string; url: string }>;
+  topicHints?: string[];
+  preAnalyzed?: boolean;
+  importanceHint?: number | null;
 }
 
 interface BuildStoryOptions {
@@ -28,8 +34,10 @@ interface SourceResult {
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1_000;
+const ENRICHMENT_TTL_MS = 30 * 60 * 1_000;
 let sourceCache: { results: SourceResult[]; timestamp: number } | null = null;
 const pageCache = new Map<string, { snapshot: StorySnapshot; timestamp: number }>();
+const enrichmentCache = new Map<string, { story: OsintStory; timestamp: number }>();
 
 function decodeXml(value: string): string {
   return value
@@ -136,7 +144,10 @@ const ASSET_RULES: Array<[string, string[]]> = [
 
 function deterministicTags(story: { title: string; description: string; sources: RawStory[] }): StoryTags {
   const text = `${story.title} ${story.description}`;
-  const topic = TOPIC_RULES.filter(([, words]) => matchesAny(text, words)).map(([tag]) => tag);
+  const topic = [
+    ...TOPIC_RULES.filter(([, words]) => matchesAny(text, words)).map(([tag]) => tag),
+    ...story.sources.flatMap((source) => source.topicHints ?? []),
+  ];
   const region = REGION_RULES.filter(([, words]) => matchesAny(text, words)).map(([tag]) => tag);
   const assets = ASSET_RULES.filter(([, words]) => matchesAny(text, words)).map(([tag]) => tag);
   const riskOff = matchesAny(text, ["冲突", "战争", "制裁", "短缺", "预警", "衰退", "下跌", "risk-off", "earthquake"]);
@@ -155,7 +166,7 @@ function deterministicTags(story: { title: string; description: string; sources:
 
 function sourceTier(sourceName: string): number {
   if (matchesAny(sourceName, ["ReliefWeb", "UN", "官方", "央行", "Federal Reserve", "SEC"])) return 3;
-  if (matchesAny(sourceName, ["Bloomberg", "Reuters", "CNBC", "WSJ", "Wind", "BBC", "财联社", "新浪财经", "东方财富"])) return 2;
+  if (matchesAny(sourceName, ["AIHOT", "Bloomberg", "Reuters", "CNBC", "WSJ", "Wind", "BBC", "财联社", "新浪财经", "东方财富"])) return 2;
   return 1;
 }
 
@@ -177,24 +188,31 @@ function mergeStories(rawStories: RawStory[], now: Date): OsintStory[] {
   }
 
   return groups.map((items) => {
-    const primary = [...items].sort((a, b) => b.description.length - a.description.length)[0];
+    const primary = [...items].sort((a, b) => Number(Boolean(b.preAnalyzed)) - Number(Boolean(a.preAnalyzed)) || b.description.length - a.description.length)[0];
     const latestPublishedAt = items.map((item) => item.publishedAt).sort().at(-1) ?? primary.publishedAt;
     const tags = deterministicTags({ title: primary.title, description: primary.description, sources: items });
-    const sources = [...new Map(items.map((item) => [`${item.sourceName}|${item.sourceUrl}`, { name: item.sourceName, url: item.sourceUrl }])).values()];
+    const sources = [...new Map(items.flatMap((item) => [
+      { name: item.sourceName, url: item.sourceUrl },
+      ...(item.additionalSources ?? []),
+    ]).map((source) => [`${source.name}|${source.url}`, source])).values()];
+    const originalTitle = cleanText(primary.originalTitle) || primary.title;
+    const language = storyLanguage(originalTitle);
+    const alreadyTranslated = originalTitle !== primary.title;
     const story: OsintStory = {
       id: storyId(primary.title),
       publishedAt: latestPublishedAt,
       title: primary.title,
-      originalTitle: primary.title,
-      language: storyLanguage(primary.title),
-      translationStatus: storyLanguage(primary.title) === "zh" ? "native" : "fallback",
+      originalTitle,
+      language,
+      translationStatus: alreadyTranslated ? "translated" : language === "zh" ? "native" : "fallback",
       summary: cleanText(primary.description || primary.title).slice(0, 120),
       importance: 0,
       sources,
       tags,
-      analysisStatus: "fallback",
+      analysisStatus: primary.preAnalyzed ? "complete" : "fallback",
     };
-    story.importance = importance({ publishedAt: story.publishedAt, sources: items, tags }, now);
+    const importanceHint = Math.max(...items.map((item) => item.importanceHint ?? 0));
+    story.importance = Math.max(importance({ publishedAt: story.publishedAt, sources: items, tags }, now), importanceHint);
     return story;
   }).sort((left, right) => right.importance - left.importance || right.publishedAt.localeCompare(left.publishedAt));
 }
@@ -267,16 +285,53 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
 }
 
 async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch): Promise<{ stories: OsintStory[]; advice: string } | null> {
+  const now = Date.now();
+  const preparedStories = stories.map((story) => {
+    if (story.analysisStatus === "complete") return story;
+    const cached = enrichmentCache.get(story.id);
+    if (!cached || now - cached.timestamp >= ENRICHMENT_TTL_MS) return story;
+    return {
+      ...story,
+      title: cached.story.title,
+      originalTitle: story.originalTitle,
+      translationStatus: cached.story.translationStatus,
+      summary: cached.story.summary,
+      tags: { ...cached.story.tags, verification: story.tags.verification },
+      analysisStatus: cached.story.analysisStatus,
+    };
+  });
+  const pendingStories = preparedStories.filter((story) => story.analysisStatus !== "complete");
+  if (pendingStories.length === 0) return { stories: preparedStories, advice: "" };
   const batches: OsintStory[][] = [];
-  for (let index = 0; index < stories.length; index += 12) batches.push(stories.slice(index, index + 12));
+  for (let index = 0; index < pendingStories.length; index += 12) batches.push(pendingStories.slice(index, index + 12));
   const results = await Promise.all(batches.map((batch) => enrichStoryBatch(batch, apiKey, fetchImpl)));
   const successful = results.filter((result): result is { stories: OsintStory[]; advice: string } => result !== null);
-  if (successful.length === 0) return null;
+  if (successful.length === 0) return preparedStories.some((story) => story.analysisStatus === "complete")
+    ? { stories: preparedStories, advice: "" }
+    : null;
   const enrichedById = new Map(successful.flatMap((result) => result.stories).map((story) => [story.id, story]));
+  for (const story of enrichedById.values()) {
+    if (story.analysisStatus === "complete") enrichmentCache.set(story.id, { story, timestamp: now });
+  }
+  if (enrichmentCache.size > 500) {
+    for (const [id, cached] of enrichmentCache) {
+      if (now - cached.timestamp >= ENRICHMENT_TTL_MS) enrichmentCache.delete(id);
+    }
+  }
   return {
-    stories: stories.map((story) => enrichedById.get(story.id) ?? story),
+    stories: preparedStories.map((story) => enrichedById.get(story.id) ?? story),
     advice: successful.find((result) => result.advice)?.advice ?? "",
   };
+}
+
+async function fetchAihotTechnology(fetchImpl: typeof fetch): Promise<SourceResult> {
+  const name = "AIHOT v1";
+  try {
+    const stories = await fetchAihotItemsV1({ fetchImpl });
+    return { name, stories, ok: stories.length > 0 };
+  } catch {
+    return { name, stories: [], ok: false };
+  }
 }
 
 function fallbackAdvice(stories: OsintStory[]): string {
@@ -516,6 +571,7 @@ export async function getStorySnapshot(options: {
   page?: number;
   pageSize?: number;
   topic?: string | null;
+  apiKey?: string | null;
   fetchImpl?: typeof fetch;
 } = {}): Promise<StorySnapshot> {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -534,6 +590,7 @@ export async function getStorySnapshot(options: {
     : null;
   if (!results) {
     results = await Promise.all([
+      fetchAihotTechnology(fetchImpl),
       fetchRss("Bloomberg Markets", "https://www.bloomberg.com/feeds/markets/news.rss", fetchImpl, { maxItems: 50, marketOnly: true }),
       fetchRss("Bloomberg Economics", "https://www.bloomberg.com/feeds/economics/news.rss", fetchImpl, { maxItems: 40, marketOnly: true }),
       fetchRss("Bloomberg Technology", "https://www.bloomberg.com/feeds/technology/news.rss", fetchImpl, { maxItems: 40, marketOnly: true }),
@@ -557,14 +614,17 @@ export async function getStorySnapshot(options: {
     }
   }
 
-  const snapshot = await buildStorySnapshot(results.flatMap((result) => result.stories), {
-    apiKey: process.env.DEEPSEEK_API_KEY ?? null,
+  const warmFirstPage = page === 1 && pageSize === 20 && topic === null && options.limit === undefined;
+  const buildPageSize = warmFirstPage ? 50 : pageSize;
+  const builtSnapshot = await buildStorySnapshot(results.flatMap((result) => result.stories), {
+    apiKey: options.apiKey === undefined ? process.env.DEEPSEEK_API_KEY ?? null : options.apiKey,
     fetchImpl,
     windowHours,
     page,
-    pageSize,
+    pageSize: buildPageSize,
     topic,
   });
+  const snapshot = warmFirstPage ? sliceStorySnapshot(builtSnapshot, pageSize) : builtSnapshot;
   snapshot.sources = results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length }));
   if (fetchImpl === fetch && snapshot.stories.length > 0) pageCache.set(pageKey, { snapshot, timestamp: Date.now() });
   return snapshot;

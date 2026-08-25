@@ -12,6 +12,7 @@
 
 - 不调用 `/api/public/*`，不复用任何旧 AIHOT cursor 或 ETag。
 - 不新增 PDF npm 依赖；不执行生产迁移、不修改生产 cron。
+- 所有PDF/分享图片必须包含不可关闭的 `AlphaPercept · 仅供参考` 水印和固定免责声明；缺失时导出测试失败。
 - 个人游资名称必须带“观察席”；普通营业部必须标“活跃席位”。
 - 日报中的每个行情保留 source/status/asOf，失败显示 unavailable。
 
@@ -96,9 +97,9 @@ assert.equal(source.includes("/api/public/"), false);
 - Modify: `components/osint-v2/SituationScreen.tsx`
 - Test: `tests/osint/daily-report-ui.test.ts`
 
-- [ ] 写失败测试：综合/行情/热点/游资、完整PDF/三类PDF、过去日报、移动端16px和 print media 均存在。
+- [ ] 写失败测试：综合/行情/热点/游资、完整PDF/三类PDF、过去日报、移动端16px、print media、水印和免责声明均存在；缺任一项禁止导出。
 - [ ] 实现移动端归档与单日报告，375px 单列，桌面再增强。
-- [ ] 实现 section query 和 `window.print()`；打印样式 A4、分页、隐藏导航。
+- [ ] 实现 section query 和 `window.print()`；打印样式 A4、分页、隐藏导航；每页重复烧录 `AlphaPercept · 仅供参考` 水印并保留固定免责声明。
 - [ ] OSINT 主页面增加“每日复盘”入口，但不改变 Agent API。
 - [ ] 运行 UI 契约和 production build。
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { OsintStory, StorySnapshot } from "@/lib/osint/contracts";
 
 const TOPICS = ["全部", "地缘", "宏观", "能源", "科技"] as const;
@@ -34,14 +34,24 @@ export function WorldBriefing() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const snapshotCacheRef = useRef(new Map<string, StorySnapshot>());
 
   const loadStories = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
+    const cacheKey = `${topic}|${page}`;
+    const cachedSnapshot = snapshotCacheRef.current.get(cacheKey);
+    if (cachedSnapshot) {
+      setSnapshot(cachedSnapshot);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
       const topicParam = topic === "全部" ? "" : `&topic=${encodeURIComponent(topic)}`;
       const response = await fetch(`/api/osint/v1/stories?page=${page}&pageSize=20${topicParam}`, { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setSnapshot((await response.json()) as StorySnapshot);
+      const nextSnapshot = (await response.json()) as StorySnapshot;
+      snapshotCacheRef.current.set(cacheKey, nextSnapshot);
+      setSnapshot(nextSnapshot);
       setError(null);
     } catch (loadError) {
       if (loadError instanceof DOMException && loadError.name === "AbortError") return;

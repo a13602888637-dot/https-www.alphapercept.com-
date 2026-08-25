@@ -118,6 +118,36 @@ async function verifyStories() {
   assert.equal(parsePublishedAt("not-a-date"), null);
   assert.equal(parsePublishedAt("20260825T091500Z"), "2026-08-25T09:15:00.000Z");
 
+  let aihotDeepSeekCalls = 0;
+  const aihotSnapshot = await buildStorySnapshot([{
+    sourceId: "aihot-ready-1",
+    sourceName: "NVIDIA Blog",
+    sourceUrl: "https://example.com/nvidia-original",
+    additionalSources: [{ name: "AIHOT", url: "https://aihot.virxact.com/items/ready-1" }],
+    title: "NVIDIA 发布新一代 AI 芯片",
+    originalTitle: "NVIDIA launches a new AI chip",
+    description: "新芯片提升推理效率。",
+    publishedAt: "2026-08-24T10:00:00.000Z",
+    topicHints: ["科技"],
+    preAnalyzed: true,
+    importanceHint: 7.2,
+  }], {
+    apiKey: "test-key",
+    now: new Date("2026-08-24T11:00:00.000Z"),
+    fetchImpl: async () => {
+      aihotDeepSeekCalls += 1;
+      return new Response(null, { status: 500 });
+    },
+  });
+  assert.equal(aihotDeepSeekCalls, 0);
+  assert.equal(aihotSnapshot.stories[0].title, "NVIDIA 发布新一代 AI 芯片");
+  assert.equal(aihotSnapshot.stories[0].originalTitle, "NVIDIA launches a new AI chip");
+  assert.equal(aihotSnapshot.stories[0].translationStatus, "translated");
+  assert.equal(aihotSnapshot.stories[0].analysisStatus, "complete");
+  assert.equal(aihotSnapshot.stories[0].tags.topic.includes("科技"), true);
+  assert.equal(aihotSnapshot.stories[0].sources.some((item) => item.name === "AIHOT"), true);
+  assert.ok(aihotSnapshot.stories[0].importance >= 7.2);
+
   const pagingNow = new Date("2026-08-25T12:00:00.000Z");
   const energyStories: RawStory[] = Array.from({ length: 55 }, (_, index) => ({
     sourceId: `energy-${index}`,
@@ -216,6 +246,63 @@ async function verifyStories() {
   assert.equal(sliced.stories.length, 1);
   assert.equal(manyTranslated.stories.length, 13);
 
+  let repeatedAnalysisCalls = 0;
+  const reusableRaw: RawStory[] = [{
+    sourceId: "reuse-analysis-1",
+    sourceName: "Reusable Source",
+    sourceUrl: "https://example.com/reuse-analysis-1",
+    title: "Reusable English stock market analysis item",
+    description: "A listed company earnings event for cache verification.",
+    publishedAt: "2026-08-24T10:00:00.000Z",
+  }];
+  const reusableFetch: typeof fetch = async (_input, init) => {
+    repeatedAnalysisCalls += 1;
+    const request = JSON.parse(String(init?.body));
+    const content = String(request.messages[1].content);
+    const start = content.indexOf("[{");
+    const end = content.indexOf("]\n输出");
+    const rows = JSON.parse(content.slice(start, end + 1));
+    return Response.json({ choices: [{ message: { content: JSON.stringify({
+      advice: "复用分析。",
+      stories: rows.map((row: { id: string }) => ({ id: row.id, titleZh: "复用中文标题", summary: "复用中文摘要", topic: ["科技"], region: [], assets: ["美股"], direction: "neutral", horizon: "1-3d" })),
+    }) } }] });
+  };
+  await buildStorySnapshot(reusableRaw, { apiKey: "cache-key", now: new Date("2026-08-24T11:00:00.000Z"), fetchImpl: reusableFetch });
+  await buildStorySnapshot(reusableRaw, { apiKey: "cache-key", now: new Date("2026-08-24T11:01:00.000Z"), fetchImpl: reusableFetch });
+  assert.equal(repeatedAnalysisCalls, 1, "same story id should reuse DeepSeek enrichment");
+
+  const prefetchNow = new Date();
+  const prefetchRss = `<rss><channel>${Array.from({ length: 50 }, (_, index) => {
+    const suffix = String(index).padStart(3, "0");
+    return `<item><title>Stock market earnings prefetch item ${suffix}</title><link>https://example.com/prefetch-${suffix}</link><description>Listed company stock earnings update ${suffix}</description><pubDate>${new Date(prefetchNow.getTime() - index * 60_000).toUTCString()}</pubDate></item>`;
+  }).join("")}</channel></rss>`;
+  let prefetchAnalysisRows = 0;
+  const prefetchFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes("api.deepseek.com")) {
+      const request = JSON.parse(String(init?.body));
+      const content = String(request.messages[1].content);
+      const start = content.indexOf("[{");
+      const end = content.indexOf("]\n输出");
+      const rows = JSON.parse(content.slice(start, end + 1));
+      prefetchAnalysisRows += rows.length;
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ advice: "预分析完成。", stories: rows.map((row: { id: string }, index: number) => ({ id: row.id, titleZh: `预分析${index}`, summary: `预分析摘要${index}`, topic: ["科技"], region: [], assets: ["美股"], direction: "neutral", horizon: "1-3d" })) }) } }] });
+    }
+    if (url.includes("aihot.virxact.com/api/v1/items")) return Response.json({ schemaVersion: 1, items: [] });
+    if (url.includes("bloomberg.com/feeds/markets")) return new Response(prefetchRss, { status: 200 });
+    if (url.includes("bloomberg.com/feeds/") || url.includes("news.google.com") || url.includes("cnbc.com") || url.includes("feeds.a.dj.com") || url.includes("federalreserve.gov") || url.includes("sec.gov") || url.includes("feeds.bbci.co.uk")) return new Response("<rss><channel></channel></rss>", { status: 200 });
+    if (url.includes("gdeltproject")) return Response.json({ articles: [] });
+    if (url.includes("reliefweb")) return Response.json({ data: [] });
+    if (url.includes("cls.cn")) return Response.json({ data: { roll_data: [] } });
+    if (url.includes("sina.com.cn")) return Response.json({ result: { data: [] } });
+    if (url.includes("eastmoney.com")) return new Response("var ajaxResult={\"LivesList\":[]};", { status: 200 });
+    return new Response(null, { status: 404 });
+  };
+  const prefetchedPage = await getStorySnapshot({ page: 1, pageSize: 20, apiKey: "prefetch-key", fetchImpl: prefetchFetch });
+  assert.equal(prefetchedPage.stories.length, 20);
+  assert.equal(prefetchedPage.pagination.pageSize, 20);
+  assert.equal(prefetchAnalysisRows, 50, "first page should warm enrichment for the first 50 stories");
+
   const originalFetch = globalThis.fetch;
   const now = new Date();
   const rss = `<rss><channel><item><title>Market event alpha</title><link>https://example.com/a</link><description>A</description><pubDate>${now.toUTCString()}</pubDate></item><item><title>Market event beta</title><link>https://example.com/b</link><description>B</description><pubDate>${new Date(now.getTime() - 60_000).toUTCString()}</pubDate></item></channel></rss>`;
@@ -245,7 +332,7 @@ async function verifyStories() {
   const routeSource = readFileSync(resolve("app/api/osint/v1/stories/route.ts"), "utf8");
   assert.equal(serviceSource.includes("AbortSignal.timeout(10_000)"), true);
   assert.equal(serviceSource.includes("https://www.bloomberg.com/feeds/markets/news.rss"), true);
-  for (const sourceName of ["Bloomberg", "Reuters", "Wind公开资讯", "CNBC Markets", "WSJ Markets", "新浪财经", "东方财富"]) {
+  for (const sourceName of ["AIHOT v1", "Bloomberg", "Reuters", "Wind公开资讯", "CNBC Markets", "WSJ Markets", "新浪财经", "东方财富"]) {
     assert.equal(serviceSource.includes(sourceName), true);
   }
   assert.equal(routeSource.includes('searchParams.get("page")'), true);

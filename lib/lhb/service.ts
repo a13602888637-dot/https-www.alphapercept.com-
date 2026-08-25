@@ -149,21 +149,27 @@ export function normalizeLhbSnapshot(
     flows.set(flowKey, flow);
   }
   const seatFlows = [...flows.values()].sort((left, right) => Math.abs(right.netAmount) - Math.abs(left.netAmount));
-  const hotMoneyByLabel = new Map<string, LhbHotMoneyFlow & { stocksByCode: Map<string, LhbHotMoneyStock> }>();
+  const hotMoneyBySeat = new Map<string, LhbHotMoneyFlow & { stocksByCode: Map<string, LhbHotMoneyStock> }>();
   const confidenceRank = { A: 0, B: 1, C: 2 } as const;
   for (const seat of seatFlows) {
-    if (seat.category !== "known-seat" || !seat.aliasConfidence || seat.buyAmount <= 0 || isMultiSessionReason(seat.reason)) continue;
-    const flow = hotMoneyByLabel.get(seat.label) ?? {
+    if (seat.category === "institution" || seat.category === "northbound" || seat.buyAmount <= 0 || isMultiSessionReason(seat.reason)) continue;
+    const kind = seat.category === "known-seat" ? "known" as const : "active" as const;
+    const departmentKey = seat.departmentCode || seat.departmentName;
+    const flowId = kind === "known" ? `known:${seat.label}` : `active:${departmentKey}`;
+    const flow = hotMoneyBySeat.get(flowId) ?? {
+      flowId,
+      kind,
       label: seat.label,
       confidence: seat.aliasConfidence,
       departmentNames: [],
       totalBuyAmount: 0,
       totalSellAmount: 0,
       totalNetAmount: 0,
+      stockCount: 0,
       stocks: [],
       stocksByCode: new Map<string, LhbHotMoneyStock>(),
     };
-    if (confidenceRank[seat.aliasConfidence] < confidenceRank[flow.confidence]) flow.confidence = seat.aliasConfidence;
+    if (seat.aliasConfidence && (!flow.confidence || confidenceRank[seat.aliasConfidence] < confidenceRank[flow.confidence])) flow.confidence = seat.aliasConfidence;
     if (!flow.departmentNames.includes(seat.departmentName)) flow.departmentNames.push(seat.departmentName);
     flow.totalBuyAmount += seat.buyAmount;
     flow.totalSellAmount += seat.sellAmount;
@@ -183,15 +189,16 @@ export function normalizeLhbSnapshot(
       if (stock.reason && !current.reasons.includes(stock.reason)) current.reasons.push(stock.reason);
       flow.stocksByCode.set(stock.code, current);
     }
-    hotMoneyByLabel.set(seat.label, flow);
+    hotMoneyBySeat.set(flowId, flow);
   }
-  const hotMoneyFlows = [...hotMoneyByLabel.values()]
+  const hotMoneyFlows = [...hotMoneyBySeat.values()]
     .map(({ stocksByCode, ...flow }) => ({
       ...flow,
       totalBuyAmount: moneyValue(flow.totalBuyAmount),
       totalSellAmount: moneyValue(flow.totalSellAmount),
       totalNetAmount: moneyValue(flow.totalNetAmount),
       departmentNames: [...flow.departmentNames].sort(),
+      stockCount: stocksByCode.size,
       stocks: [...stocksByCode.values()]
         .map((stock) => ({
           ...stock,
@@ -223,10 +230,15 @@ export function normalizeLhbSnapshot(
 }
 
 export function toLhbDashboardSnapshot(snapshot: LhbSnapshot): LhbDashboardSnapshot {
-  const { seatFlows: _seatFlows, stocks, ...metadata } = snapshot;
+  const { seatFlows: _seatFlows, stocks, hotMoneyFlows, ...metadata } = snapshot;
+  const knownFlows = hotMoneyFlows.filter((flow) => flow.kind === "known");
+  const activeFlows = hotMoneyFlows.filter((flow) => flow.kind === "active").slice(0, 20);
   return {
     ...metadata,
     stocks: stocks.map(({ buySeats: _buySeats, sellSeats: _sellSeats, ...stock }) => stock),
+    hotMoneyFlows: [...knownFlows, ...activeFlows]
+      .sort((left, right) => right.totalBuyAmount - left.totalBuyAmount)
+      .map((flow) => ({ ...flow, stockCount: Math.max(flow.stockCount, flow.stocks.length), stocks: flow.stocks.slice(0, 3) })),
   };
 }
 

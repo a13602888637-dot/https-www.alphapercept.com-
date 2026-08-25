@@ -42,12 +42,15 @@ export interface LhbHotMoneyStock {
 }
 
 export interface LhbHotMoneyFlow {
+  flowId: string;
+  kind: "known" | "active";
   label: string;
-  confidence: Exclude<LhbAliasConfidence, null>;
+  confidence: LhbAliasConfidence;
   departmentNames: string[];
   totalBuyAmount: number;
   totalSellAmount: number;
   totalNetAmount: number;
+  stockCount: number;
   stocks: LhbHotMoneyStock[];
 }
 
