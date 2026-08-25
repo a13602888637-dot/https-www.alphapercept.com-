@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-import { buildStorySnapshot, type RawStory } from "../../lib/osint/story-service";
+import { buildStorySnapshot, isGlobalMarketHeadline, type RawStory } from "../../lib/osint/story-service";
 
 const rawStories: RawStory[] = [
   {
@@ -45,6 +47,24 @@ async function verifyStories() {
   assert.equal(hormuz?.tags.verification, "multi-source");
   assert.equal(hormuz?.tags.assets.includes("原油"), true);
   assert.equal(typeof snapshot.advice.text, "string");
+  const treasurySecretary = await buildStorySnapshot([
+    {
+      sourceId: "policy-1",
+      sourceName: "BBC World",
+      sourceUrl: "https://example.com/treasury-secretary",
+      title: "US treasury secretary announces new sanctions",
+      description: "The policy targets cross-border payments.",
+      publishedAt: "2026-08-24T10:00:00.000Z",
+    },
+  ], { apiKey: null, now: new Date("2026-08-24T11:00:00.000Z") });
+  assert.equal(treasurySecretary.stories[0].tags.assets.includes("美债"), false);
+  assert.equal(isGlobalMarketHeadline("英科医疗：目前客户下单意愿强烈"), false);
+  assert.equal(isGlobalMarketHeadline("韩国消费者信心指数四个月来首降，央行称股市下跌有影响"), true);
+  const serviceSource = readFileSync(resolve("lib/osint/story-service.ts"), "utf8");
+  assert.equal(serviceSource.includes("AbortSignal.timeout(5_000)"), true);
+  for (const sourceName of ["Google News", "新浪财经", "东方财富"]) {
+    assert.equal(serviceSource.includes(sourceName), true);
+  }
   console.log("STORY_CONTRACT_OK");
 }
 

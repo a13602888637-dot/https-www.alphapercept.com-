@@ -45,7 +45,7 @@ function xmlTag(block: string, name: string): string {
 }
 
 function validDate(value: unknown, fallback = new Date()): string {
-  const date = new Date(String(value ?? ""));
+  const date = typeof value === "number" ? new Date(value) : new Date(String(value ?? ""));
   return Number.isNaN(date.getTime()) ? fallback.toISOString() : date.toISOString();
 }
 
@@ -76,6 +76,17 @@ function matchesAny(text: string, words: string[]): boolean {
   return words.some((word) => normalized.includes(word.toLowerCase()));
 }
 
+const GLOBAL_MARKET_HEADLINE_WORDS = [
+  "央行", "利率", "通胀", "就业", "消费者信心", "gdp", "关税", "制裁", "冲突", "战争", "停火",
+  "海峡", "原油", "石油", "天然气", "黄金", "美元", "美债", "股指", "全球", "美国", "欧洲", "欧盟",
+  "日本", "韩国", "中东", "伊朗", "以色列", "监管", "政策", "供应链", "航运", "港口", "地震", "海啸",
+  "台风", "洪水", "人工智能法", "芯片禁令", "半导体出口", "军工", "国防",
+];
+
+export function isGlobalMarketHeadline(title: string): boolean {
+  return matchesAny(title, GLOBAL_MARKET_HEADLINE_WORDS);
+}
+
 const TOPIC_RULES: Array<[string, string[]]> = [
   ["地缘", ["冲突", "战争", "制裁", "导弹", "军方", "国防", "海峡", "停火", "iran", "israel", "military", "sanction"]],
   ["宏观", ["央行", "利率", "通胀", "就业", "gdp", "fed", "ecb", "recession", "inflation"]],
@@ -97,7 +108,7 @@ const REGION_RULES: Array<[string, string[]]> = [
 const ASSET_RULES: Array<[string, string[]]> = [
   ["原油", ["原油", "石油", "opec", "oil", "brent", "wti", "霍尔木兹"]],
   ["黄金", ["黄金", "gold", "避险"]],
-  ["美债", ["美债", "国债收益率", "treasury", "fed", "美联储"]],
+  ["美债", ["美债", "国债收益率", "treasury yield", "treasury bond", "u.s. bond"]],
   ["美元", ["美元", "dollar", "外汇"]],
   ["美股", ["美股", "标普", "纳斯达克", "nvidia", "wall street"]],
   ["A股", ["a股", "沪深", "上证", "中国股市"]],
@@ -186,7 +197,7 @@ async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchIm
           },
         ],
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(5_000),
     });
     if (!response.ok) return null;
     const payload = await response.json();
@@ -302,7 +313,7 @@ async function fetchGdelt(fetchImpl: typeof fetch): Promise<SourceResult> {
   try {
     const query = encodeURIComponent("(conflict OR sanctions OR central bank OR oil OR earthquake OR technology)");
     const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${query}&mode=ArtList&maxrecords=30&format=json&timespan=24h`;
-    const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
+    const response = await fetchImpl(url, { signal: AbortSignal.timeout(7_000) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     const stories = (Array.isArray(payload?.articles) ? payload.articles : []).map((item: Record<string, unknown>, index: number) => ({
@@ -323,7 +334,7 @@ async function fetchReliefWeb(fetchImpl: typeof fetch): Promise<SourceResult> {
   const name = "ReliefWeb";
   try {
     const url = "https://api.reliefweb.int/v1/reports?appname=alpha-quant-copilot&profile=list&preset=latest&limit=20&fields%5Binclude%5D%5B%5D=title&fields%5Binclude%5D%5B%5D=date&fields%5Binclude%5D%5B%5D=url_alias&fields%5Binclude%5D%5B%5D=body";
-    const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
+    const response = await fetchImpl(url, { signal: AbortSignal.timeout(7_000) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     const stories = (Array.isArray(payload?.data) ? payload.data : []).map((item: Record<string, unknown>) => {
@@ -362,7 +373,55 @@ async function fetchChineseFinance(fetchImpl: typeof fetch): Promise<SourceResul
         description: cleanText(item.brief || item.content),
         publishedAt: validDate(item.ctime ? Number(item.ctime) * 1_000 : item.time),
       };
-    }).filter((story: RawStory) => story.title.length > 5).slice(0, 20);
+    }).filter((story: RawStory) => story.title.length > 5 && isGlobalMarketHeadline(story.title)).slice(0, 20);
+    return { name, stories, ok: stories.length > 0 };
+  } catch {
+    return { name, stories: [], ok: false };
+  }
+}
+
+async function fetchSinaFinance(fetchImpl: typeof fetch): Promise<SourceResult> {
+  const name = "新浪财经";
+  try {
+    const url = "https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2516&k=&num=20&page=1&r=0.1&callback=";
+    const response = await fetchImpl(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8_000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const items = payload?.result?.data ?? payload?.data ?? [];
+    const stories = (Array.isArray(items) ? items : []).map((item: Record<string, unknown>, index: number) => ({
+      sourceId: `sina-${item.docid ?? index}`,
+      sourceName: name,
+      sourceUrl: String(item.url ?? item.wapurl ?? "https://finance.sina.com.cn"),
+      title: cleanText(item.title || item.stitle),
+      description: cleanText(item.summary || item.intro),
+      publishedAt: validDate(item.ctime ? Number(item.ctime) * 1_000 : item.mtime ? Number(item.mtime) * 1_000 : null),
+    })).filter((story: RawStory) => story.title.length > 5 && isGlobalMarketHeadline(story.title)).slice(0, 20);
+    return { name, stories, ok: stories.length > 0 };
+  } catch {
+    return { name, stories: [], ok: false };
+  }
+}
+
+async function fetchEastMoneyNews(fetchImpl: typeof fetch): Promise<SourceResult> {
+  const name = "东方财富";
+  try {
+    const url = "https://newsapi.eastmoney.com/kuaixun/v1/getlist_102_ajaxResult_20_1_.html";
+    const response = await fetchImpl(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8_000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("Invalid East Money payload");
+    const payload = JSON.parse(text.slice(start, end + 1));
+    const items = payload?.LivesList ?? payload?.data ?? [];
+    const stories = (Array.isArray(items) ? items : []).map((item: Record<string, unknown>, index: number) => ({
+      sourceId: `eastmoney-${item.id ?? index}`,
+      sourceName: name,
+      sourceUrl: String(item.url_w ?? item.url_m ?? "https://finance.eastmoney.com"),
+      title: cleanText(item.title || item.simtitle),
+      description: cleanText(item.digest || item.simdigest),
+      publishedAt: validDate(item.showtime || item.ordertime),
+    })).filter((story: RawStory) => story.title.length > 5 && isGlobalMarketHeadline(story.title)).slice(0, 20);
     return { name, stories, ok: stories.length > 0 };
   } catch {
     return { name, stories: [], ok: false };
@@ -376,9 +435,12 @@ export async function getStorySnapshot(options: { window?: "24h"; limit?: number
   }
   const results = await Promise.all([
     fetchRss("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", fetchImpl),
+    fetchRss("Google News", "https://news.google.com/rss/search?q=geopolitics%20OR%20central%20bank%20OR%20oil%20OR%20markets&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", fetchImpl),
     fetchGdelt(fetchImpl),
     fetchReliefWeb(fetchImpl),
     fetchChineseFinance(fetchImpl),
+    fetchSinaFinance(fetchImpl),
+    fetchEastMoneyNews(fetchImpl),
   ]);
   const snapshot = await buildStorySnapshot(results.flatMap((result) => result.stories), {
     apiKey: process.env.DEEPSEEK_API_KEY ?? null,

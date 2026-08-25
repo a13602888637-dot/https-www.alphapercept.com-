@@ -95,6 +95,48 @@ async function verifyMarketService() {
   assert.equal(snapshot.markets.find((market) => market.symbol === "UST20Y")?.confidence, "official");
   assert.equal(snapshot.markets.find((market) => market.symbol === "BZ=F")?.status, "unavailable");
   assert.equal(snapshot.coverage.total, Object.keys(MARKET_MANIFEST).length);
+
+  let concurrentYahoo = 0;
+  let maxConcurrentYahoo = 0;
+  const concurrencyFetch: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("query1.finance.yahoo.com")) {
+      concurrentYahoo += 1;
+      maxConcurrentYahoo = Math.max(maxConcurrentYahoo, concurrentYahoo);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      concurrentYahoo -= 1;
+      return Response.json({ chart: { result: null, error: { code: "Not Found" } } });
+    }
+    if (url.includes("push2.eastmoney.com")) return Response.json({ data: { diff: [] } });
+    if (url.includes("home.treasury.gov")) return new Response(treasuryXml, { status: 200 });
+    return new Response(null, { status: 404 });
+  };
+  await getMarketSnapshot(concurrencyFetch);
+  assert.ok(
+    maxConcurrentYahoo >= 10 && maxConcurrentYahoo <= 12,
+    `Yahoo requests should use bounded parallelism, observed ${maxConcurrentYahoo}`
+  );
+
+  let nkdAttempts = 0;
+  const retryFetch: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("query1.finance.yahoo.com") || url.includes("query2.finance.yahoo.com")) {
+      const symbol = decodeURIComponent(url.split("/chart/")[1].split("?")[0]);
+      if (symbol === "NKD=F") {
+        nkdAttempts += 1;
+        if (url.includes("query2.finance.yahoo.com")) {
+          return Response.json({ chart: { result: [{ meta: { regularMarketPrice: 38150, chartPreviousClose: 38300, regularMarketTime: 1787580000 } }], error: null } });
+        }
+      }
+      return Response.json({ chart: { result: null, error: { code: "Not Found" } } });
+    }
+    if (url.includes("push2.eastmoney.com")) return Response.json({ data: { diff: [] } });
+    if (url.includes("home.treasury.gov")) return new Response(treasuryXml, { status: 200 });
+    return new Response(null, { status: 404 });
+  };
+  const retried = await getMarketSnapshot(retryFetch);
+  assert.equal(nkdAttempts, 2);
+  assert.equal(retried.markets.find((market) => market.symbol === "NKD=F")?.value, 38150);
   console.log("MARKET_SERVICE_OK");
 }
 

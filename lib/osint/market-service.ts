@@ -4,7 +4,7 @@ import { MARKET_MANIFEST } from "./market-manifest";
 type LastGoodEntry = { market: OsintMarket; cachedAt: number };
 
 const lastGood = new Map<string, LastGoodEntry>();
-const YAHOO_TIMEOUT_MS = 8_000;
+const YAHOO_TIMEOUT_MS = 6_000;
 const EASTMONEY_TIMEOUT_MS = 8_000;
 const TREASURY_TIMEOUT_MS = 10_000;
 const CACHE_STATUS_MS = 30 * 60 * 1_000;
@@ -44,6 +44,20 @@ function unavailable(entry: MarketManifestEntry): OsintMarket {
   };
 }
 
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  async function runWorker() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => runWorker()));
+  return results;
+}
+
 function withEntry(entry: MarketManifestEntry, quote: Omit<OsintMarket, keyof MarketManifestEntry | "symbol">): OsintMarket {
   return {
     symbol: entry.symbol,
@@ -55,21 +69,17 @@ function withEntry(entry: MarketManifestEntry, quote: Omit<OsintMarket, keyof Ma
   };
 }
 
-async function inBatches<T, R>(items: T[], size: number, worker: (item: T) => Promise<R>): Promise<R[]> {
-  const output: R[] = [];
-  for (let index = 0; index < items.length; index += size) {
-    output.push(...(await Promise.all(items.slice(index, index + size).map(worker))));
-  }
-  return output;
-}
-
-async function fetchYahooMarkets(entries: MarketManifestEntry[], fetchImpl: typeof fetch): Promise<Map<string, OsintMarket>> {
-  const pairs = await inBatches(entries, 6, async (entry): Promise<[string, OsintMarket | null]> => {
+async function fetchYahooMarket(
+  entry: MarketManifestEntry,
+  fetchImpl: typeof fetch,
+  timeoutMs: number,
+  host: "query1.finance.yahoo.com" | "query2.finance.yahoo.com"
+): Promise<[string, OsintMarket | null]> {
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(entry.providerSymbol)}?range=5d&interval=1d`;
+      const url = `https://${host}/v8/finance/chart/${encodeURIComponent(entry.providerSymbol)}?range=5d&interval=1d`;
       const response = await fetchImpl(url, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; AlphaQuant/1.0)" },
-        signal: AbortSignal.timeout(YAHOO_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok) return [entry.symbol, null];
       const payload = await response.json();
@@ -96,9 +106,24 @@ async function fetchYahooMarkets(entries: MarketManifestEntry[], fetchImpl: type
     } catch {
       return [entry.symbol, null];
     }
-  });
+}
 
-  return new Map(pairs.filter((pair): pair is [string, OsintMarket] => pair[1] !== null));
+async function fetchYahooMarkets(entries: MarketManifestEntry[], fetchImpl: typeof fetch): Promise<Map<string, OsintMarket>> {
+  const pairs = await mapWithConcurrency(entries, 12, (entry) =>
+    fetchYahooMarket(entry, fetchImpl, YAHOO_TIMEOUT_MS, "query1.finance.yahoo.com")
+  );
+  const result = new Map(pairs.filter((pair): pair is [string, OsintMarket] => pair[1] !== null));
+  const failedEntries = entries.filter((entry) => !result.has(entry.symbol));
+  if (failedEntries.length > 0) {
+    const retries = await mapWithConcurrency(failedEntries, 12, (entry) =>
+      fetchYahooMarket(entry, fetchImpl, 3_000, "query2.finance.yahoo.com")
+    );
+    for (const [symbol, market] of retries) {
+      if (market) result.set(symbol, market);
+    }
+  }
+
+  return result;
 }
 
 async function fetchEastMoneyMarkets(entries: MarketManifestEntry[], fetchImpl: typeof fetch): Promise<Map<string, OsintMarket>> {
