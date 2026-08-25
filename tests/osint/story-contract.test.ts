@@ -203,6 +203,27 @@ async function verifyStories() {
   assert.ok(bloombergImportance > genericImportance);
   assert.equal(qualityRanked.stories.find((story) => story.sources.some((item) => item.name === "Federal Reserve"))?.tags.verification, "official");
 
+  const chronological = await buildStorySnapshot([
+    {
+      sourceId: "new-generic",
+      sourceName: "Generic Blog",
+      sourceUrl: "https://example.com/new-generic",
+      title: "Latest stock market update with limited context",
+      description: "A recent market update.",
+      publishedAt: "2026-08-25T11:55:00.000Z",
+    },
+    {
+      sourceId: "older-official",
+      sourceName: "Federal Reserve",
+      sourceUrl: "https://www.federalreserve.gov/newsevents/pressreleases/older.htm",
+      title: "Federal Reserve issues an earlier official market statement",
+      description: "An official and higher importance policy statement.",
+      publishedAt: "2026-08-25T09:00:00.000Z",
+    },
+  ], { apiKey: null, now: pagingNow, windowHours: 72, pageSize: 20 });
+  assert.equal(chronological.stories[0].publishedAt, "2026-08-25T11:55:00.000Z");
+  assert.ok(chronological.stories[0].importance < chronological.stories[1].importance);
+
   const manyRaw: RawStory[] = Array.from({ length: 13 }, (_, index) => ({
     sourceId: `many-${index}`,
     sourceName: "BBC World",

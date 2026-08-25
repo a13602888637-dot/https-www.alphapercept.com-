@@ -19,7 +19,7 @@ function amount(value: number): string {
   return `${(value / 10_000).toLocaleString("zh-CN", { maximumFractionDigits: 0 })} 万`;
 }
 
-export function DailyReportView({ reportId }: { reportId: string }) {
+export function DailyReportView({ reportId, embedded = false }: { reportId: string; embedded?: boolean }) {
   const [report, setReport] = useState<OsintDailyReportRecord | null>(null);
   const [exportReady, setExportReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +27,9 @@ export function DailyReportView({ reportId }: { reportId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    setReport(null);
+    setExportReady(false);
+    setError(null);
     void fetch(`/api/osint/v1/reports/${encodeURIComponent(reportId)}`, {
       cache: "no-store",
       signal: controller.signal,
@@ -44,14 +47,14 @@ export function DailyReportView({ reportId }: { reportId: string }) {
     return () => controller.abort();
   }, [reportId]);
 
-  if (error) return <main className="h-full overflow-y-auto bg-[#070B12] p-6 text-base text-amber-200">{error}</main>;
-  if (!report) return <main className="flex h-full items-center justify-center bg-[#070B12] text-base text-[#718096]"><Loader2 className="mr-2 h-5 w-5 animate-spin" />读取日报</main>;
+  if (error) return <div className={`${embedded ? "min-h-48 rounded-xl border border-amber-400/20 bg-[#0D1420]" : "h-full bg-[#070B12]"} p-6 text-base text-amber-200`}>{error}</div>;
+  if (!report) return <div className={`flex ${embedded ? "min-h-48 rounded-xl border border-[#1F2A3A] bg-[#0D1420]" : "h-full bg-[#070B12]"} items-center justify-center text-base text-[#718096]`}><Loader2 className="mr-2 h-5 w-5 animate-spin" />读取日报</div>;
 
   const snapshot = report.snapshot;
   return (
-    <main className="h-full overflow-y-auto bg-[#070B12] text-base leading-7 text-[#D6DEE8]">
-      <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-5 pb-28 sm:px-6 sm:py-8 sm:pb-8">
-        <Link href="/osint/reports" className="inline-flex min-h-11 items-center gap-2 text-sm text-[#8B98AA] hover:text-white"><ArrowLeft className="h-4 w-4" />返回每日复盘</Link>
+    <div className={`${embedded ? "rounded-xl border border-[#1F2A3A] bg-[#090F18]" : "h-full overflow-y-auto bg-[#070B12]"} text-base leading-7 text-[#D6DEE8]`}>
+      <div className={`w-full space-y-4 px-4 py-5 pb-28 sm:px-6 sm:py-8 sm:pb-8 ${embedded ? "max-w-none" : "mx-auto max-w-6xl"}`}>
+        {!embedded && <Link href="/osint/reports" className="inline-flex min-h-11 items-center gap-2 text-sm text-[#8B98AA] hover:text-white"><ArrowLeft className="h-4 w-4" />返回每日复盘</Link>}
         <header className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-5">
           <p className="text-sm tracking-[0.14em] text-[#2EC4C7]">DAILY SNAPSHOT</p>
           <h1 className="mt-1 text-2xl font-semibold text-white">{snapshot.title}</h1>
@@ -81,7 +84,7 @@ export function DailyReportView({ reportId }: { reportId: string }) {
           <p className="mt-2 rounded-lg border-l-4 border-[#F2B84B] bg-[#F2B84B]/[0.07] px-3 py-2 text-[#F6C968]">一句建议：{snapshot.stories.advice.text}</p>
           <div className="mt-3 divide-y divide-[#1F2A3A]">
             {snapshot.stories.stories.map((story) => (
-              <article key={story.id} className="py-4"><div className="flex items-start justify-between gap-3"><h3 className="font-medium text-white">{story.title}</h3><span className="shrink-0 text-xs text-[#F2B84B]">{story.importance.toFixed(1)}/10</span></div><p className="mt-2 text-[#AAB5C4]">{story.summary}</p><div className="mt-2 flex flex-wrap gap-1.5">{[...story.tags.topic, ...story.tags.region, ...story.tags.assets].slice(0, 7).map((tag) => <span key={tag} className="rounded-full border border-[#2A394E] px-2 py-0.5 text-xs text-[#8B98AA]">{tag}</span>)}</div></article>
+              <article key={story.id} className="py-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="font-medium text-white">{story.title}</h3><time className="mt-1 block text-xs text-[#718096]">{new Date(story.publishedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}</time></div><span className="shrink-0 text-xs text-[#F2B84B]">{story.importance.toFixed(1)}/10</span></div><p className="mt-2 text-[#AAB5C4]">{story.summary}</p><div className="mt-2 flex flex-wrap gap-1.5">{[...story.tags.topic, ...story.tags.region, ...story.tags.assets].slice(0, 7).map((tag) => <span key={tag} className="rounded-full border border-[#2A394E] px-2 py-0.5 text-xs text-[#8B98AA]">{tag}</span>)}</div></article>
             ))}
             {snapshot.stories.stories.length === 0 && <p className="py-8 text-center text-[#718096]">该快照暂无热点</p>}
           </div>
@@ -105,6 +108,6 @@ export function DailyReportView({ reportId }: { reportId: string }) {
 
         <footer className="rounded-xl border border-[#2A394E] bg-[#0A111C] p-4 text-sm leading-6 text-[#8B98AA]">{DAILY_REPORT_DISCLAIMER}</footer>
       </div>
-    </main>
+    </div>
   );
 }

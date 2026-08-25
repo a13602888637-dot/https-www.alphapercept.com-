@@ -214,7 +214,9 @@ function mergeStories(rawStories: RawStory[], now: Date): OsintStory[] {
     const importanceHint = Math.max(...items.map((item) => item.importanceHint ?? 0));
     story.importance = Math.max(importance({ publishedAt: story.publishedAt, sources: items, tags }, now), importanceHint);
     return story;
-  }).sort((left, right) => right.importance - left.importance || right.publishedAt.localeCompare(left.publishedAt));
+  }).sort((left, right) =>
+    right.publishedAt.localeCompare(left.publishedAt) || right.importance - left.importance
+  );
 }
 
 function normalizeArray(value: unknown): string[] {

@@ -19,7 +19,7 @@
     },
     {
       "path": "/api/osint/v1/reports/generate?edition=close",
-      "schedule": "30 10 * * 1-5"
+      "schedule": "0 8 * * 1-5"
     },
     {
       "path": "/api/osint/v1/reports/generate?edition=global",

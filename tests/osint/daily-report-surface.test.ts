@@ -62,7 +62,12 @@ assert.equal(center.includes("月复盘"), true);
 assert.equal(center.includes("text-base"), true);
 assert.equal(center.includes("生成今日复盘"), false);
 assert.equal(center.includes("后台每日自动归档"), true);
+assert.equal(center.includes("max-w-4xl"), false);
+assert.equal(center.includes("selectedReportId"), true);
+assert.equal(center.includes("DailyReportView"), true);
+assert.equal(center.includes("报告直接预览"), true);
 assert.equal(view.includes("text-base"), true);
+assert.equal(view.includes("embedded"), true);
 assert.equal(view.includes("snapshot.lhb.hotMoneyFlows"), true);
 assert.equal(view.includes("另有"), true);
 for (const viewLabel of ["综合", "行情", "热点", "游资"]) {
@@ -86,7 +91,7 @@ assert.equal(existsSync(resolve("app/osint/reports/page.tsx")), true);
 assert.equal(existsSync(resolve("app/osint/reports/[reportId]/page.tsx")), true);
 
 const vercelConfig = JSON.parse(read("vercel.json"));
-assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=close" && cron.schedule === "30 10 * * 1-5"), true);
+assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=close" && cron.schedule === "0 8 * * 1-5"), true);
 assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=global" && cron.schedule === "15 0 * * 2-6"), true);
 
 console.log("DAILY_REPORT_SURFACE_OK");
