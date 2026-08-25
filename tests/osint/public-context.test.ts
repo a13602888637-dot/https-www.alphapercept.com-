@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import { composePublicContext } from "../../lib/osint/context";
 import type { MarketSnapshot, StorySnapshot } from "../../lib/osint/contracts";
+import { etagForBody } from "../../lib/osint/http";
 
 const marketSnapshot: MarketSnapshot = {
   schemaVersion: "1.0",
@@ -42,6 +43,7 @@ assert.equal(/watchlist|portfolio|clerk/i.test(contextRoute), false);
 const situationScreen = readFileSync(resolve("components/osint-v2/SituationScreen.tsx"), "utf8");
 const marketBoard = readFileSync(resolve("components/osint-v2/MarketBoard.tsx"), "utf8");
 const worldBriefing = readFileSync(resolve("components/osint-v2/WorldBriefing.tsx"), "utf8");
+const statusBar = readFileSync(resolve("components/osint-v2/StatusBar.tsx"), "utf8");
 const topNav = readFileSync(resolve("components/layout/TopNavBar.tsx"), "utf8");
 for (const removed of ["GeoMapBase", "AISituationBrain", "useAuth", "/api/watchlist"]) {
   assert.equal(situationScreen.includes(removed), false);
@@ -50,7 +52,12 @@ assert.equal(situationScreen.includes("MarketBoard"), true);
 assert.equal(situationScreen.includes("WorldBriefing"), true);
 assert.equal(marketBoard.includes("暂无"), true);
 assert.equal(worldBriefing.includes("过去24小时"), true);
+for (const timeSource of [marketBoard, worldBriefing, statusBar]) {
+  assert.equal(timeSource.includes('timeZone: "Asia/Shanghai"'), true);
+}
 assert.equal(topNav.includes('label: "我的股票"'), false);
 assert.equal(topNav.includes('label: "今日"'), true);
 assert.equal(topNav.includes('label: "深度研究"'), true);
+assert.equal(etagForBody({ generatedAt: "2026-08-24T10:00:00Z", data: [1] }), etagForBody({ generatedAt: "2026-08-24T10:01:00Z", data: [1] }));
+assert.notEqual(etagForBody({ generatedAt: "2026-08-24T10:00:00Z", data: [1] }), etagForBody({ generatedAt: "2026-08-24T10:00:00Z", data: [2] }));
 console.log("PUBLIC_CONTEXT_OK");

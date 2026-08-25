@@ -13,6 +13,7 @@ export interface LhbSeat {
 }
 
 export interface LhbStock {
+  tradeId: string;
   code: string;
   name: string;
   changePercent: number | null;
@@ -25,14 +26,22 @@ export interface LhbStock {
 }
 
 export interface LhbSeatFlow extends LhbSeat {
-  stocks: Array<{ code: string; name: string; buyAmount: number; sellAmount: number; netAmount: number }>;
+  flowId: string;
+  tradeId: string;
+  reason: string;
+  stocks: Array<{ tradeId: string; code: string; name: string; reason: string; buyAmount: number; sellAmount: number; netAmount: number }>;
 }
 
 export interface LhbSnapshot {
   schemaVersion: "1.0";
+  status: "live" | "degraded" | "unavailable";
   tradeDate: string;
   generatedAt: string;
+  asOf: string | null;
   source: "eastmoney";
+  sourceHealth: { summary: boolean; buySeats: boolean; sellSeats: boolean };
+  errors: string[];
+  invalidRowCount: number;
   stockCount: number;
   seatCount: number;
   stocks: LhbStock[];

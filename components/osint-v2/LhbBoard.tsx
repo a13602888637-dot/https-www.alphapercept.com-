@@ -47,7 +47,7 @@ function SeatList({ title, seats, direction }: { title: string; seats: LhbSeat[]
 
 export function LhbBoard() {
   const [snapshot, setSnapshot] = useState<LhbSnapshot | null>(null);
-  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [mode, setMode] = useState<ViewMode>("stocks");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function LhbBoard() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = (await response.json()) as LhbSnapshot;
       setSnapshot(data);
-      setSelectedCode((current) => current && data.stocks.some((stock) => stock.code === current) ? current : data.stocks[0]?.code ?? null);
+      setSelectedTradeId((current) => current && data.stocks.some((stock) => stock.tradeId === current) ? current : data.stocks[0]?.tradeId ?? null);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "龙虎榜数据加载失败");
@@ -71,8 +71,8 @@ export function LhbBoard() {
   useEffect(() => { void load(); }, [load]);
 
   const selected = useMemo(
-    () => snapshot?.stocks.find((stock) => stock.code === selectedCode) ?? null,
-    [selectedCode, snapshot?.stocks]
+    () => snapshot?.stocks.find((stock) => stock.tradeId === selectedTradeId) ?? null,
+    [selectedTradeId, snapshot?.stocks]
   );
   const netSellStocks = useMemo(
     () => [...(snapshot?.stocks ?? [])].sort((left, right) => left.netAmount - right.netAmount),
@@ -90,7 +90,7 @@ export function LhbBoard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded border border-emerald-500/20 bg-emerald-500/[0.06] px-2 py-1 text-[9px] text-emerald-300">来源：东方财富盘后公开数据</span>
+            <span className={`rounded border px-2 py-1 text-[9px] ${snapshot?.status === "degraded" ? "border-amber-500/20 bg-amber-500/[0.06] text-amber-300" : "border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-300"}`}>来源：东方财富盘后公开数据{snapshot?.status === "degraded" ? " · 部分席位暂不可用" : ""}</span>
             <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex min-h-8 items-center gap-1.5 rounded border border-[#1F2A3A] px-2.5 text-[10px] text-[#718096] hover:bg-[#101927] hover:text-[#D6DEE8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] disabled:opacity-50">
               <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`} />刷新
             </button>
@@ -113,8 +113,8 @@ export function LhbBoard() {
         ) : mode === "stocks" ? (
           <div className="grid min-h-full gap-4 xl:grid-cols-[0.9fr_1.1fr]">
             <div className="grid min-h-0 gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-              <StockRank title="净买入榜" stocks={snapshot.stocks.slice(0, 12)} selectedCode={selectedCode} onSelect={setSelectedCode} />
-              <StockRank title="净卖出榜" stocks={netSellStocks.slice(0, 12)} selectedCode={selectedCode} onSelect={setSelectedCode} />
+              <StockRank title="净买入榜" stocks={snapshot.stocks.slice(0, 12)} selectedTradeId={selectedTradeId} onSelect={setSelectedTradeId} />
+              <StockRank title="净卖出榜" stocks={netSellStocks.slice(0, 12)} selectedTradeId={selectedTradeId} onSelect={setSelectedTradeId} />
             </div>
             <div className="rounded-md border border-[#1F2A3A] bg-[#0D1420] p-3">
               {selected && (
@@ -132,7 +132,7 @@ export function LhbBoard() {
           <div className="overflow-hidden rounded-md border border-[#1F2A3A]">
             <div className="grid grid-cols-[minmax(120px,0.8fr)_0.5fr_0.6fr_1.5fr] bg-[#0D1420] px-3 py-2 text-[10px] text-[#718096]"><span>席位/标签</span><span>类型</span><span className="text-right">净额</span><span className="pl-4">涉及股票</span></div>
             {snapshot.seatFlows.slice(0, 80).map((seat) => (
-              <div key={seat.departmentCode || seat.departmentName} className="grid min-h-12 grid-cols-[minmax(120px,0.8fr)_0.5fr_0.6fr_1.5fr] items-center border-t border-[#1F2A3A] px-3 py-2 text-[11px]">
+              <div key={seat.flowId} className="grid min-h-12 grid-cols-[minmax(120px,0.8fr)_0.5fr_0.6fr_1.5fr] items-center border-t border-[#1F2A3A] px-3 py-2 text-[11px]">
                 <span className="truncate text-[#C7D0DD]" title={seat.departmentName}>{seat.label}</span><span className="text-[9px] text-[#718096]">{categoryLabel(seat)}</span><span className={`text-right font-mono ${amountClass(seat.netAmount)}`}>{formatAmount(seat.netAmount)}</span><span className="truncate pl-4 text-[10px] text-[#718096]" title={seat.stocks.map((stock) => `${stock.name} ${formatAmount(stock.netAmount)}`).join("、")}>{seat.stocks.slice(0, 5).map((stock) => `${stock.name} ${formatAmount(stock.netAmount)}`).join(" · ")}</span>
               </div>
             ))}
@@ -145,13 +145,13 @@ export function LhbBoard() {
   );
 }
 
-function StockRank({ title, stocks, selectedCode, onSelect }: { title: string; stocks: LhbStock[]; selectedCode: string | null; onSelect: (code: string) => void }) {
+function StockRank({ title, stocks, selectedTradeId, onSelect }: { title: string; stocks: LhbStock[]; selectedTradeId: string | null; onSelect: (tradeId: string) => void }) {
   return (
     <div className="min-w-0 rounded-md border border-[#1F2A3A] bg-[#0D1420] p-2">
       <h3 className="px-1 pb-2 text-[10px] font-medium tracking-wide text-[#718096]">{title}</h3>
       <div className="space-y-0.5">
         {stocks.map((stock, index) => (
-          <button key={`${title}-${stock.code}`} type="button" onClick={() => onSelect(stock.code)} className={`grid min-h-9 w-full grid-cols-[20px_1fr_auto] items-center gap-2 rounded px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] ${selectedCode === stock.code ? "bg-[#162438]" : "hover:bg-[#101927]"}`}><span className="font-mono text-[9px] text-[#536177]">{index + 1}</span><span className="truncate text-[11px] text-[#C7D0DD]">{stock.name} <span className="font-mono text-[9px] text-[#536177]">{stock.code}</span></span><span className={`font-mono text-[11px] ${amountClass(stock.netAmount)}`}>{formatAmount(stock.netAmount)}</span></button>
+          <button key={`${title}-${stock.tradeId}`} type="button" onClick={() => onSelect(stock.tradeId)} className={`grid min-h-9 w-full grid-cols-[20px_1fr_auto] items-center gap-2 rounded px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] ${selectedTradeId === stock.tradeId ? "bg-[#162438]" : "hover:bg-[#101927]"}`}><span className="font-mono text-[9px] text-[#536177]">{index + 1}</span><span className="truncate text-[11px] text-[#C7D0DD]">{stock.name} <span className="font-mono text-[9px] text-[#536177]">{stock.code}</span></span><span className={`font-mono text-[11px] ${amountClass(stock.netAmount)}`}>{formatAmount(stock.netAmount)}</span></button>
         ))}
       </div>
     </div>

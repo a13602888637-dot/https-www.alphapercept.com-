@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { buildStorySnapshot, isGlobalMarketHeadline, type RawStory } from "../../lib/osint/story-service";
+import { buildStorySnapshot, getStorySnapshot, isGlobalMarketHeadline, parsePublishedAt, sliceStorySnapshot, type RawStory } from "../../lib/osint/story-service";
 
 const rawStories: RawStory[] = [
   {
@@ -109,6 +109,74 @@ async function verifyStories() {
   assert.equal(translated.stories[0].title, "航运风险上升推动油价上涨");
   assert.equal(translated.stories[0].originalTitle, "Oil rises as shipping risk increases");
   assert.equal(translated.stories[0].translationStatus, "translated");
+  assert.equal(parsePublishedAt("not-a-date"), null);
+  assert.equal(parsePublishedAt("20260825T091500Z"), "2026-08-25T09:15:00.000Z");
+
+  const manyRaw: RawStory[] = Array.from({ length: 13 }, (_, index) => ({
+    sourceId: `many-${index}`,
+    sourceName: "BBC World",
+    sourceUrl: `https://example.com/many-${index}`,
+    title: `English market story number ${String(index).padStart(2, "0")}`,
+    description: `Market description ${index}`,
+    publishedAt: `2026-08-24T${String(10 - Math.floor(index / 6)).padStart(2, "0")}:${String(index).padStart(2, "0")}:00.000Z`,
+  }));
+  const manyBase = await buildStorySnapshot(manyRaw, { apiKey: null, now: new Date("2026-08-24T11:00:00.000Z"), limit: 20 });
+  let batchCalls = 0;
+  const manyTranslated = await buildStorySnapshot(manyRaw, {
+    apiKey: "test-key",
+    now: new Date("2026-08-24T11:00:00.000Z"),
+    limit: 20,
+    fetchImpl: async (_input, init) => {
+      batchCalls += 1;
+      const request = JSON.parse(String(init?.body));
+      const content = String(request.messages[1].content);
+      const start = content.indexOf("[{");
+      const end = content.indexOf("]\n输出");
+      const rows = JSON.parse(content.slice(start, end + 1));
+      return Response.json({ choices: [{ message: { content: JSON.stringify({
+        advice: "批量翻译完成。",
+        stories: rows.map((row: { id: string }, index: number) => ({
+          id: row.id,
+          titleZh: `中文标题${batchCalls}-${index}`,
+          summary: `中文摘要${batchCalls}-${index}`,
+          topic: ["宏观"],
+          region: [],
+          assets: [],
+          direction: "neutral",
+          horizon: "1-3d",
+        })),
+      }) } }] });
+    },
+  });
+  assert.equal(batchCalls, 2);
+  assert.equal(manyTranslated.stories.filter((story) => story.translationStatus === "translated").length, 13);
+  assert.equal(manyTranslated.stories.filter((story) => story.analysisStatus === "complete").length, 13);
+  const sliced = sliceStorySnapshot(manyTranslated, 1);
+  assert.equal(sliced.stories.length, 1);
+  assert.equal(manyTranslated.stories.length, 13);
+
+  const originalFetch = globalThis.fetch;
+  const now = new Date();
+  const rss = `<rss><channel><item><title>Market event alpha</title><link>https://example.com/a</link><description>A</description><pubDate>${now.toUTCString()}</pubDate></item><item><title>Market event beta</title><link>https://example.com/b</link><description>B</description><pubDate>${new Date(now.getTime() - 60_000).toUTCString()}</pubDate></item></channel></rss>`;
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url.includes("feeds.bbci.co.uk")) return new Response(rss, { status: 200 });
+    if (url.includes("news.google.com")) return new Response("<rss><channel></channel></rss>", { status: 200 });
+    if (url.includes("gdeltproject")) return Response.json({ articles: [] });
+    if (url.includes("reliefweb")) return Response.json({ data: [] });
+    if (url.includes("cls.cn")) return Response.json({ data: { roll_data: [] } });
+    if (url.includes("sina.com.cn")) return Response.json({ result: { data: [] } });
+    if (url.includes("eastmoney.com")) return new Response("var ajaxResult={\"LivesList\":[]};", { status: 200 });
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+  try {
+    const firstLimit = await getStorySnapshot({ limit: 1 });
+    const laterLargerLimit = await getStorySnapshot({ limit: 20 });
+    assert.equal(firstLimit.stories.length, 1);
+    assert.equal(laterLargerLimit.stories.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
   const serviceSource = readFileSync(resolve("lib/osint/story-service.ts"), "utf8");
   assert.equal(serviceSource.includes("AbortSignal.timeout(10_000)"), true);
   for (const sourceName of ["Google News", "新浪财经", "东方财富"]) {

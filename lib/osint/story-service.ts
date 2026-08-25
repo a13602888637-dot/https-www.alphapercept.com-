@@ -45,9 +45,14 @@ function xmlTag(block: string, name: string): string {
   return decodeXml(match?.[1] ?? "");
 }
 
-function validDate(value: unknown, fallback = new Date()): string {
-  const date = typeof value === "number" ? new Date(value) : new Date(String(value ?? ""));
-  return Number.isNaN(date.getTime()) ? fallback.toISOString() : date.toISOString();
+export function parsePublishedAt(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  const gdelt = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  const normalized = gdelt
+    ? `${gdelt[1]}-${gdelt[2]}-${gdelt[3]}T${gdelt[4]}:${gdelt[5]}:${gdelt[6]}Z`
+    : raw;
+  const date = typeof value === "number" ? new Date(value) : new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function cleanText(value: unknown): string {
@@ -190,7 +195,7 @@ function normalizeArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 6) : [];
 }
 
-async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch): Promise<{ stories: OsintStory[]; advice: string } | null> {
+async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch): Promise<{ stories: OsintStory[]; advice: string } | null> {
   try {
     const response = await fetchImpl("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
@@ -203,7 +208,7 @@ async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchIm
           { role: "system", content: "你是全球市场新闻编辑。只输出JSON，不得补写输入中不存在的事实。" },
           {
             role: "user",
-            content: `将以下事件压缩为一句中文摘要并打标签；英文标题同时翻译为中文。advice不超过45字，titleZh不超过35字，summary不超过60字。\n${JSON.stringify(stories.slice(0, 12).map((story) => ({ id: story.id, title: story.originalTitle, summary: story.summary, language: story.language })))}\n输出：{"advice":"...","stories":[{"id":"...","titleZh":"中文标题","summary":"中文摘要","topic":[],"region":[],"assets":[],"direction":"risk-on|risk-off|mixed|neutral","horizon":"intraday|1-3d|1-3w|medium"}]}`,
+            content: `将以下事件压缩为一句中文摘要并打标签；英文标题同时翻译为中文。advice不超过45字，titleZh不超过35字，summary不超过60字。\n${JSON.stringify(stories.map((story) => ({ id: story.id, title: story.originalTitle, summary: story.summary, language: story.language })))}\n输出：{"advice":"...","stories":[{"id":"...","titleZh":"中文标题","summary":"中文摘要","topic":[],"region":[],"assets":[],"direction":"risk-on|risk-off|mixed|neutral","horizon":"intraday|1-3d|1-3w|medium"}]}`,
           },
         ],
       }),
@@ -253,6 +258,19 @@ async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchIm
   }
 }
 
+async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch): Promise<{ stories: OsintStory[]; advice: string } | null> {
+  const batches: OsintStory[][] = [];
+  for (let index = 0; index < stories.length; index += 12) batches.push(stories.slice(index, index + 12));
+  const results = await Promise.all(batches.map((batch) => enrichStoryBatch(batch, apiKey, fetchImpl)));
+  const successful = results.filter((result): result is { stories: OsintStory[]; advice: string } => result !== null);
+  if (successful.length === 0) return null;
+  const enrichedById = new Map(successful.flatMap((result) => result.stories).map((story) => [story.id, story]));
+  return {
+    stories: stories.map((story) => enrichedById.get(story.id) ?? story),
+    advice: successful.find((result) => result.advice)?.advice ?? "",
+  };
+}
+
 function fallbackAdvice(stories: OsintStory[]): string {
   const lead = stories.find((story) => story.importance >= 6 && story.tags.direction === "risk-off");
   if (lead) {
@@ -297,6 +315,11 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
   };
 }
 
+export function sliceStorySnapshot(snapshot: StorySnapshot, limit: number): StorySnapshot {
+  const safeLimit = Math.min(50, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 20));
+  return { ...snapshot, stories: snapshot.stories.slice(0, safeLimit) };
+}
+
 async function fetchText(url: string, fetchImpl: typeof fetch): Promise<string> {
   const response = await fetchImpl(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; AlphaQuant/1.0)" },
@@ -319,7 +342,7 @@ async function fetchRss(name: string, url: string, fetchImpl: typeof fetch): Pro
         sourceUrl: link,
         title,
         description: xmlTag(block, "description"),
-        publishedAt: validDate(xmlTag(block, "pubDate")),
+        publishedAt: parsePublishedAt(xmlTag(block, "pubDate")) ?? "",
       };
     }).filter((story) => story.title && story.sourceUrl).slice(0, 20);
     return { name, stories, ok: stories.length > 0 };
@@ -342,7 +365,7 @@ async function fetchGdelt(fetchImpl: typeof fetch): Promise<SourceResult> {
       sourceUrl: String(item.url ?? ""),
       title: cleanText(item.title),
       description: cleanText(item.socialimage ? "" : item.title),
-      publishedAt: validDate(item.seendate),
+      publishedAt: parsePublishedAt(item.seendate) ?? "",
     })).filter((story: RawStory) => story.title && story.sourceUrl).slice(0, 30);
     return { name, stories, ok: stories.length > 0 };
   } catch {
@@ -365,7 +388,7 @@ async function fetchReliefWeb(fetchImpl: typeof fetch): Promise<SourceResult> {
         sourceUrl: String(fields.url_alias ?? `https://reliefweb.int/node/${item.id}`),
         title: cleanText(fields.title),
         description: cleanText(fields.body).slice(0, 240),
-        publishedAt: validDate((fields.date as Record<string, unknown> | undefined)?.created),
+        publishedAt: parsePublishedAt((fields.date as Record<string, unknown> | undefined)?.created) ?? "",
       };
     }).filter((story: RawStory) => story.title && story.sourceUrl);
     return { name, stories, ok: stories.length > 0 };
@@ -391,7 +414,7 @@ async function fetchChineseFinance(fetchImpl: typeof fetch): Promise<SourceResul
         sourceUrl: item.shareurl ? String(item.shareurl) : `https://www.cls.cn/detail/${id}`,
         title,
         description: cleanText(item.brief || item.content),
-        publishedAt: validDate(item.ctime ? Number(item.ctime) * 1_000 : item.time),
+        publishedAt: parsePublishedAt(item.ctime ? Number(item.ctime) * 1_000 : item.time) ?? "",
       };
     }).filter((story: RawStory) => story.title.length > 5 && isGlobalMarketHeadline(story.title)).slice(0, 20);
     return { name, stories, ok: stories.length > 0 };
@@ -414,7 +437,7 @@ async function fetchSinaFinance(fetchImpl: typeof fetch): Promise<SourceResult> 
       sourceUrl: String(item.url ?? item.wapurl ?? "https://finance.sina.com.cn"),
       title: cleanText(item.title || item.stitle),
       description: cleanText(item.summary || item.intro),
-      publishedAt: validDate(item.ctime ? Number(item.ctime) * 1_000 : item.mtime ? Number(item.mtime) * 1_000 : null),
+      publishedAt: parsePublishedAt(item.ctime ? Number(item.ctime) * 1_000 : item.mtime ? Number(item.mtime) * 1_000 : null) ?? "",
     })).filter((story: RawStory) => story.title.length > 5 && isGlobalMarketHeadline(story.title)).slice(0, 20);
     return { name, stories, ok: stories.length > 0 };
   } catch {
@@ -440,7 +463,7 @@ async function fetchEastMoneyNews(fetchImpl: typeof fetch): Promise<SourceResult
       sourceUrl: String(item.url_w ?? item.url_m ?? "https://finance.eastmoney.com"),
       title: cleanText(item.title || item.simtitle),
       description: cleanText(item.digest || item.simdigest),
-      publishedAt: validDate(item.showtime || item.ordertime),
+      publishedAt: parsePublishedAt(item.showtime || item.ordertime) ?? "",
     })).filter((story: RawStory) => story.title.length > 5 && isGlobalMarketHeadline(story.title)).slice(0, 20);
     return { name, stories, ok: stories.length > 0 };
   } catch {
@@ -450,8 +473,9 @@ async function fetchEastMoneyNews(fetchImpl: typeof fetch): Promise<SourceResult
 
 export async function getStorySnapshot(options: { window?: "24h"; limit?: number; fetchImpl?: typeof fetch } = {}): Promise<StorySnapshot> {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const requestedLimit = Math.min(50, Math.max(1, options.limit ?? 20));
   if (fetchImpl === fetch && storyCache && Date.now() - storyCache.timestamp < CACHE_TTL_MS) {
-    return storyCache.snapshot;
+    return sliceStorySnapshot(storyCache.snapshot, requestedLimit);
   }
   const results = await Promise.all([
     fetchRss("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", fetchImpl),
@@ -462,12 +486,12 @@ export async function getStorySnapshot(options: { window?: "24h"; limit?: number
     fetchSinaFinance(fetchImpl),
     fetchEastMoneyNews(fetchImpl),
   ]);
-  const snapshot = await buildStorySnapshot(results.flatMap((result) => result.stories), {
+  const canonicalSnapshot = await buildStorySnapshot(results.flatMap((result) => result.stories), {
     apiKey: process.env.DEEPSEEK_API_KEY ?? null,
     fetchImpl,
-    limit: options.limit,
+    limit: 50,
   });
-  snapshot.sources = results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length }));
-  if (fetchImpl === fetch && snapshot.stories.length > 0) storyCache = { snapshot, timestamp: Date.now() };
-  return snapshot;
+  canonicalSnapshot.sources = results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length }));
+  if (fetchImpl === fetch && canonicalSnapshot.stories.length > 0) storyCache = { snapshot: canonicalSnapshot, timestamp: Date.now() };
+  return sliceStorySnapshot(canonicalSnapshot, requestedLimit);
 }

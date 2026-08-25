@@ -37,7 +37,7 @@ export async function GET() {
           ? tenYear < oneYear
           : false,
       curveBasis: "10Y-1Y",
-      source: "us-treasury",
+      source: [...new Set(markets.map((market) => market.source))].join("+") || "unavailable",
       asOf: yields.find((item) => item.asOf)?.asOf ?? null,
     },
     { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } }

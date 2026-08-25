@@ -2,6 +2,7 @@ import type { LhbSeat, LhbSeatFlow, LhbSnapshot, LhbStock } from "./contracts";
 import { EXACT_SEAT_ALIASES } from "./seat-aliases";
 
 type RawRow = Record<string, unknown>;
+type FetchRowsResult = { rows: RawRow[]; ok: boolean; error: string | null };
 
 const CACHE_TTL_MS = 5 * 60 * 1_000;
 const cache = new Map<string, { snapshot: LhbSnapshot; timestamp: number }>();
@@ -13,6 +14,10 @@ function numberValue(value: unknown): number {
 
 function stringValue(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+function tradeIdForRow(row: RawRow): string {
+  return stringValue(row.TRADE_ID) || `${stringValue(row.SECURITY_CODE)}|${stringValue(row.EXPLANATION)}`;
 }
 
 function classifySeat(name: string): Pick<LhbSeat, "label" | "category" | "aliasConfidence"> {
@@ -49,31 +54,47 @@ export function normalizeLhbSnapshot(
   buyRows: RawRow[],
   sellRows: RawRow[]
 ): LhbSnapshot {
-  const summaryByCode = new Map<string, RawRow[]>();
+  let invalidRowCount = 0;
+  const summaryByTrade = new Map<string, RawRow[]>();
   for (const row of summaryRows) {
     const code = stringValue(row.SECURITY_CODE);
-    if (!code) continue;
-    const rows = summaryByCode.get(code) ?? [];
+    const requiredAmounts = [row.BILLBOARD_BUY_AMT, row.BILLBOARD_SELL_AMT, row.BILLBOARD_NET_AMT];
+    if (!code || requiredAmounts.some((value) => value === null || value === undefined || !Number.isFinite(Number(value)))) {
+      invalidRowCount += 1;
+      continue;
+    }
+    const key = `${code}|${tradeIdForRow(row)}`;
+    const rows = summaryByTrade.get(key) ?? [];
     rows.push(row);
-    summaryByCode.set(code, rows);
+    summaryByTrade.set(key, rows);
   }
 
-  const buyByCode = new Map<string, LhbSeat[]>();
-  const sellByCode = new Map<string, LhbSeat[]>();
+  const buyByTrade = new Map<string, LhbSeat[]>();
+  const sellByTrade = new Map<string, LhbSeat[]>();
   for (const row of buyRows) {
     const code = stringValue(row.SECURITY_CODE);
-    if (!code) continue;
-    buyByCode.set(code, [...(buyByCode.get(code) ?? []), toSeat(row)]);
+    if (!code || !stringValue(row.OPERATEDEPT_NAME) || [row.BUY, row.SELL, row.NET].every((value) => value === undefined)) {
+      invalidRowCount += 1;
+      continue;
+    }
+    const key = `${code}|${tradeIdForRow(row)}`;
+    buyByTrade.set(key, [...(buyByTrade.get(key) ?? []), toSeat(row)]);
   }
   for (const row of sellRows) {
     const code = stringValue(row.SECURITY_CODE);
-    if (!code) continue;
-    sellByCode.set(code, [...(sellByCode.get(code) ?? []), toSeat(row)]);
+    if (!code || !stringValue(row.OPERATEDEPT_NAME) || [row.BUY, row.SELL, row.NET].every((value) => value === undefined)) {
+      invalidRowCount += 1;
+      continue;
+    }
+    const key = `${code}|${tradeIdForRow(row)}`;
+    sellByTrade.set(key, [...(sellByTrade.get(key) ?? []), toSeat(row)]);
   }
 
-  const stocks: LhbStock[] = [...summaryByCode.entries()].map(([code, rows]) => {
+  const stocks: LhbStock[] = [...summaryByTrade.entries()].map(([key, rows]) => {
     const primary = [...rows].sort((left, right) => Math.abs(numberValue(right.BILLBOARD_NET_AMT)) - Math.abs(numberValue(left.BILLBOARD_NET_AMT)))[0];
+    const code = stringValue(primary.SECURITY_CODE);
     return {
+      tradeId: tradeIdForRow(primary),
       code,
       name: stringValue(primary.SECURITY_NAME_ABBR),
       changePercent: primary.CHANGE_RATE === null || primary.CHANGE_RATE === undefined ? null : numberValue(primary.CHANGE_RATE),
@@ -81,38 +102,54 @@ export function normalizeLhbSnapshot(
       sellAmount: numberValue(primary.BILLBOARD_SELL_AMT),
       netAmount: numberValue(primary.BILLBOARD_NET_AMT),
       reasons: [...new Set(rows.map((row) => stringValue(row.EXPLANATION)).filter(Boolean))],
-      buySeats: [...(buyByCode.get(code) ?? [])].sort((left, right) => right.buyAmount - left.buyAmount),
-      sellSeats: [...(sellByCode.get(code) ?? [])].sort((left, right) => right.sellAmount - left.sellAmount),
+      buySeats: [...(buyByTrade.get(key) ?? [])].sort((left, right) => right.buyAmount - left.buyAmount),
+      sellSeats: [...(sellByTrade.get(key) ?? [])].sort((left, right) => right.sellAmount - left.sellAmount),
     };
   }).sort((left, right) => right.netAmount - left.netAmount);
 
-  const stockNames = new Map(stocks.map((stock) => [stock.code, stock.name]));
-  const uniqueSeatRows = new Map<string, { code: string; seat: LhbSeat }>();
+  const stocksByTrade = new Map(stocks.map((stock) => [`${stock.code}|${stock.tradeId}`, stock]));
+  const uniqueSeatRows = new Map<string, { code: string; tradeId: string; seat: LhbSeat }>();
   for (const row of [...buyRows, ...sellRows]) {
     const code = stringValue(row.SECURITY_CODE);
+    if (!code || !stringValue(row.OPERATEDEPT_NAME) || [row.BUY, row.SELL, row.NET].every((value) => value === undefined)) continue;
+    const tradeId = tradeIdForRow(row);
     const seat = toSeat(row);
-    const key = `${code}|${seat.departmentCode || seat.departmentName}|${seat.buyAmount}|${seat.sellAmount}|${seat.netAmount}`;
+    const key = `${tradeId}|${code}|${seat.departmentCode || seat.departmentName}|${seat.buyAmount}|${seat.sellAmount}|${seat.netAmount}`;
     const previous = uniqueSeatRows.get(key);
-    if (!previous || Math.abs(seat.netAmount) > Math.abs(previous.seat.netAmount)) uniqueSeatRows.set(key, { code, seat });
+    if (!previous || Math.abs(seat.netAmount) > Math.abs(previous.seat.netAmount)) uniqueSeatRows.set(key, { code, tradeId, seat });
   }
 
   const flows = new Map<string, LhbSeatFlow>();
-  for (const { code, seat } of uniqueSeatRows.values()) {
-    const flowKey = seat.departmentCode || seat.departmentName;
-    const flow = flows.get(flowKey) ?? { ...seat, buyAmount: 0, sellAmount: 0, netAmount: 0, stocks: [] };
+  for (const { code, tradeId, seat } of uniqueSeatRows.values()) {
+    const departmentKey = seat.departmentCode || seat.departmentName;
+    const flowKey = `${tradeId}|${code}|${departmentKey}`;
+    const stock = stocksByTrade.get(`${code}|${tradeId}`);
+    const reason = stock?.reasons.join(" / ") ?? "";
+    const flow = flows.get(flowKey) ?? { ...seat, flowId: flowKey, tradeId, reason, buyAmount: 0, sellAmount: 0, netAmount: 0, stocks: [] };
     flow.buyAmount += seat.buyAmount;
     flow.sellAmount += seat.sellAmount;
     flow.netAmount += seat.netAmount;
-    flow.stocks.push({ code, name: stockNames.get(code) ?? code, buyAmount: seat.buyAmount, sellAmount: seat.sellAmount, netAmount: seat.netAmount });
+    if (flow.stocks.length === 0) {
+      flow.stocks.push({ tradeId, code, name: stock?.name ?? code, reason, buyAmount: seat.buyAmount, sellAmount: seat.sellAmount, netAmount: seat.netAmount });
+    } else {
+      flow.stocks[0].buyAmount += seat.buyAmount;
+      flow.stocks[0].sellAmount += seat.sellAmount;
+      flow.stocks[0].netAmount += seat.netAmount;
+    }
     flows.set(flowKey, flow);
   }
   const seatFlows = [...flows.values()].sort((left, right) => Math.abs(right.netAmount) - Math.abs(left.netAmount));
 
   return {
     schemaVersion: "1.0",
+    status: "live",
     tradeDate,
     generatedAt: new Date().toISOString(),
+    asOf: tradeDate ? `${tradeDate}T00:00:00+08:00` : null,
     source: "eastmoney",
+    sourceHealth: { summary: true, buySeats: true, sellSeats: true },
+    errors: [],
+    invalidRowCount,
     stockCount: stocks.length,
     seatCount: seatFlows.length,
     stocks,
@@ -136,36 +173,67 @@ function reportUrl(reportName: string, date: string | null, sortColumns: string,
   return `https://datacenter-web.eastmoney.com/api/data/v1/get?${params.toString()}`;
 }
 
-async function fetchRows(reportName: string, date: string | null, sortColumns: string, pageSize: number, fetchImpl: typeof fetch): Promise<RawRow[]> {
-  const response = await fetchImpl(reportUrl(reportName, date, sortColumns, pageSize), {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; AlphaQuant/1.0)" },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) return [];
-  const payload = await response.json();
-  return Array.isArray(payload?.result?.data) ? payload.result.data : [];
+async function fetchRows(reportName: string, date: string | null, sortColumns: string, pageSize: number, fetchImpl: typeof fetch): Promise<FetchRowsResult> {
+  try {
+    const response = await fetchImpl(reportUrl(reportName, date, sortColumns, pageSize), {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; AlphaQuant/1.0)" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) return { rows: [], ok: false, error: `${reportName}: HTTP ${response.status}` };
+    const payload = await response.json();
+    if (!Array.isArray(payload?.result?.data)) return { rows: [], ok: false, error: `${reportName}: invalid payload` };
+    return { rows: payload.result.data, ok: true, error: null };
+  } catch (error) {
+    return { rows: [], ok: false, error: `${reportName}: ${error instanceof Error ? error.message : String(error)}` };
+  }
 }
 
-async function latestTradeDate(fetchImpl: typeof fetch): Promise<string | null> {
-  const rows = await fetchRows("RPT_DAILYBILLBOARD_DETAILSNEW", null, "TRADE_DATE", 1, fetchImpl);
-  const raw = stringValue(rows[0]?.TRADE_DATE);
-  return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : null;
+async function latestTradeDate(fetchImpl: typeof fetch): Promise<{ date: string | null; error: string | null }> {
+  const result = await fetchRows("RPT_DAILYBILLBOARD_DETAILSNEW", null, "TRADE_DATE", 1, fetchImpl);
+  const raw = stringValue(result.rows[0]?.TRADE_DATE);
+  return {
+    date: /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : null,
+    error: result.ok ? null : result.error,
+  };
 }
 
 export async function getLhbSnapshot(options: { date?: string; fetchImpl?: typeof fetch } = {}): Promise<LhbSnapshot> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const requestedDate = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : null;
-  const tradeDate = requestedDate ?? await latestTradeDate(fetchImpl);
-  if (!tradeDate) return normalizeLhbSnapshot("", [], [], []);
+  const latest = requestedDate ? { date: requestedDate, error: null } : await latestTradeDate(fetchImpl);
+  const tradeDate = latest.date;
+  if (!tradeDate) {
+    return {
+      ...normalizeLhbSnapshot("", [], [], []),
+      status: "unavailable",
+      sourceHealth: { summary: false, buySeats: false, sellSeats: false },
+      errors: [latest.error ?? "无法确定最近龙虎榜交易日"],
+    };
+  }
   const cached = cache.get(tradeDate);
   if (fetchImpl === fetch && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return cached.snapshot;
 
-  const [summaryRows, buyRows, sellRows] = await Promise.all([
+  const [summaryResult, buyResult, sellResult] = await Promise.all([
     fetchRows("RPT_DAILYBILLBOARD_DETAILSNEW", tradeDate, "BILLBOARD_NET_AMT", 500, fetchImpl),
     fetchRows("RPT_BILLBOARD_DAILYDETAILSBUY", tradeDate, "BUY", 500, fetchImpl),
     fetchRows("RPT_BILLBOARD_DAILYDETAILSSELL", tradeDate, "SELL", 500, fetchImpl),
   ]);
-  const snapshot = normalizeLhbSnapshot(tradeDate, summaryRows, buyRows, sellRows);
-  if (fetchImpl === fetch && snapshot.stocks.length > 0) cache.set(tradeDate, { snapshot, timestamp: Date.now() });
+  const seatDataComplete = buyResult.ok && sellResult.ok;
+  const snapshot = normalizeLhbSnapshot(
+    tradeDate,
+    summaryResult.rows,
+    seatDataComplete ? buyResult.rows : [],
+    seatDataComplete ? sellResult.rows : []
+  );
+  snapshot.status = !summaryResult.ok ? "unavailable" : seatDataComplete ? "live" : "degraded";
+  snapshot.sourceHealth = { summary: summaryResult.ok, buySeats: buyResult.ok, sellSeats: sellResult.ok };
+  snapshot.errors = [summaryResult.error, buyResult.error, sellResult.error].filter((error): error is string => Boolean(error));
+  if (snapshot.invalidRowCount > 0) {
+    if (snapshot.status === "live") snapshot.status = "degraded";
+    snapshot.errors.push(`${snapshot.invalidRowCount} 条龙虎榜记录字段缺失，已丢弃`);
+  }
+  if (fetchImpl === fetch && snapshot.status !== "unavailable" && snapshot.stocks.length > 0) {
+    cache.set(tradeDate, { snapshot, timestamp: Date.now() });
+  }
   return snapshot;
 }

@@ -10,7 +10,7 @@ function timeLabel(publishedAt: string): { time: string; age: string } {
   const date = new Date(publishedAt);
   const ageHours = Math.max(0, Math.floor((Date.now() - date.getTime()) / 3_600_000));
   return {
-    time: date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+    time: date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" }),
     age: ageHours === 0 ? "1小时内" : `${ageHours}小时前`,
   };
 }
@@ -92,7 +92,7 @@ export function WorldBriefing({
 
       <div className="mx-4 mt-3 flex items-center justify-between gap-4 rounded-md border border-[#F2B84B]/35 bg-[#F2B84B]/[0.07] px-4 py-3">
         <p className="text-xs font-medium text-[#F6C968]">今日建议：{advice.text || "等待足够数据后再判断。"}</p>
-        <span className="shrink-0 font-mono text-[10px] text-[#9f8656]">DeepSeek · {advice.generatedAt ? new Date(advice.generatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "待分析"}</span>
+        <span className="shrink-0 font-mono text-[10px] text-[#9f8656]">DeepSeek · {advice.generatedAt ? new Date(advice.generatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" }) : "待分析"}</span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 scrollbar-thin">

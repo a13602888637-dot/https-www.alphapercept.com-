@@ -43,7 +43,7 @@ function formatChange(market: OsintMarket): { text: string; className: string } 
 
 function formatAsOf(asOf: string | null): string {
   if (!asOf) return "未取得";
-  return new Date(asOf).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  return new Date(asOf).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" });
 }
 
 export function MarketBoard({ markets, isLoading }: { markets: OsintMarket[]; isLoading: boolean }) {

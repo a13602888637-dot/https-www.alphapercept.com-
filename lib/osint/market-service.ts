@@ -6,7 +6,7 @@ type LastGoodEntry = { market: OsintMarket; cachedAt: number };
 const lastGood = new Map<string, LastGoodEntry>();
 const YAHOO_TIMEOUT_MS = 6_000;
 const EASTMONEY_TIMEOUT_MS = 8_000;
-const TREASURY_TIMEOUT_MS = 10_000;
+const TREASURY_TIMEOUT_MS = 25_000;
 const CACHE_STATUS_MS = 30 * 60 * 1_000;
 
 function finiteNumber(value: unknown): number | null {
@@ -174,8 +174,43 @@ function xmlValue(block: string, field: string): string | null {
 
 export async function getTreasuryMarkets(fetchImpl: typeof fetch = fetch): Promise<OsintMarket[]> {
   const entries = Object.values(MARKET_MANIFEST).filter((entry) => entry.provider === "us-treasury");
+  const fredSeries: Record<string, string> = { UST1Y: "DGS1", UST10Y: "DGS10", UST20Y: "DGS20", UST30Y: "DGS30" };
+  const now = new Date();
+  const start = new Date(now.getTime() - 35 * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+  const end = now.toISOString().slice(0, 10);
+  const fredResults = await Promise.all(entries.map(async (entry): Promise<OsintMarket | null> => {
+    try {
+      const series = fredSeries[entry.symbol];
+      const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${series}&cosd=${start}&coed=${end}`;
+      const response = await fetchImpl(url, { signal: AbortSignal.timeout(8_000) });
+      if (!response.ok) return null;
+      const lines = (await response.text()).trim().split(/\r?\n/).slice(1);
+      const observations = lines.map((line) => {
+        const [date, rawValue] = line.split(",");
+        return { date, value: finiteNumber(rawValue) };
+      }).filter((item): item is { date: string; value: number } => Boolean(item.date) && item.value !== null);
+      if (observations.length === 0) return null;
+      const current = observations.at(-1)!;
+      const previous = observations.at(-2)?.value ?? null;
+      const change = previous !== null ? current.value - previous : null;
+      const asOf = new Date(`${current.date}T00:00:00Z`).toISOString();
+      return withEntry(entry, {
+        value: round(current.value),
+        change: round(change),
+        changePercent: previous && change !== null ? round((change / previous) * 100, 2) : null,
+        source: "fred",
+        asOf,
+        status: quoteStatus(asOf, 96 * 60 * 60 * 1_000),
+        confidence: "official",
+      });
+    } catch {
+      return null;
+    }
+  }));
+  const fredMarkets = fredResults.filter((market): market is OsintMarket => market !== null);
+  if (fredMarkets.length === entries.length) return fredMarkets;
+
   try {
-    const now = new Date();
     const month = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
     const url = `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=${month}`;
     const response = await fetchImpl(url, { signal: AbortSignal.timeout(TREASURY_TIMEOUT_MS) });
@@ -191,7 +226,7 @@ export async function getTreasuryMarkets(fetchImpl: typeof fetch = fetch): Promi
       .sort((left, right) => right.date.localeCompare(left.date));
     if (records.length === 0) return [];
 
-    return entries.flatMap((entry) => {
+    const treasuryMarkets = entries.flatMap((entry) => {
       const current = finiteNumber(xmlValue(records[0].block, entry.providerSymbol));
       if (current === null) return [];
       const previous = records[1] ? finiteNumber(xmlValue(records[1].block, entry.providerSymbol)) : null;
@@ -207,8 +242,11 @@ export async function getTreasuryMarkets(fetchImpl: typeof fetch = fetch): Promi
         confidence: "official",
       })];
     });
+    const merged = new Map(fredMarkets.map((market) => [market.symbol, market]));
+    for (const market of treasuryMarkets) if (!merged.has(market.symbol)) merged.set(market.symbol, market);
+    return [...merged.values()];
   } catch {
-    return [];
+    return fredMarkets;
   }
 }
 

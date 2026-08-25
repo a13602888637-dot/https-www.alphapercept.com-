@@ -139,6 +139,28 @@ async function verifyMarketService() {
   const retried = await getMarketSnapshot(retryFetch);
   assert.equal(nkdAttempts, 2);
   assert.equal(retried.markets.find((market) => market.symbol === "NKD=F")?.value, 38150);
+
+  let treasuryCalls = 0;
+  const fredFetch: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("fredgraph.csv")) {
+      const series = new URL(url).searchParams.get("id") ?? "DGS10";
+      return new Response(`observation_date,${series}\n2026-08-20,4.60\n2026-08-21,4.70\n`, { status: 200 });
+    }
+    if (url.includes("home.treasury.gov")) {
+      treasuryCalls += 1;
+      return new Response(treasuryXml, { status: 200 });
+    }
+    if (url.includes("query1.finance.yahoo.com") || url.includes("query2.finance.yahoo.com")) {
+      return Response.json({ chart: { result: null, error: { code: "Not Found" } } });
+    }
+    if (url.includes("push2.eastmoney.com")) return Response.json({ data: { diff: [] } });
+    return new Response(null, { status: 404 });
+  };
+  const fredSnapshot = await getMarketSnapshot(fredFetch);
+  assert.equal(treasuryCalls, 0);
+  assert.equal(fredSnapshot.markets.find((market) => market.symbol === "UST10Y")?.value, 4.7);
+  assert.equal(fredSnapshot.markets.find((market) => market.symbol === "UST10Y")?.source, "fred");
   console.log("MARKET_SERVICE_OK");
 }
 

@@ -4,7 +4,7 @@ import type { OsintContext } from "@/lib/osint/contracts";
 
 function formatTime(value: string | undefined): string {
   if (!value) return "--:--";
-  return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" });
 }
 
 export function StatusBar({ context, isRefreshing, error }: { context: OsintContext | null; isRefreshing: boolean; error: string | null }) {
