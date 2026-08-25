@@ -141,7 +141,7 @@ function deterministicTags(story: { title: string; description: string; sources:
   const assets = ASSET_RULES.filter(([, words]) => matchesAny(text, words)).map(([tag]) => tag);
   const riskOff = matchesAny(text, ["冲突", "战争", "制裁", "短缺", "预警", "衰退", "下跌", "risk-off", "earthquake"]);
   const riskOn = matchesAny(text, ["停火", "协议", "刺激", "降息", "缓解", "回升", "risk-on"]);
-  const official = story.sources.some((source) => matchesAny(source.sourceName, ["ReliefWeb", "UN", "政府", "央行", "官方"]));
+  const official = story.sources.some((source) => matchesAny(source.sourceName, ["ReliefWeb", "UN", "政府", "央行", "官方", "Federal Reserve", "SEC"]));
 
   return {
     topic: topic.length > 0 ? [...new Set(topic)] : ["综合"],
@@ -154,8 +154,8 @@ function deterministicTags(story: { title: string; description: string; sources:
 }
 
 function sourceTier(sourceName: string): number {
-  if (matchesAny(sourceName, ["ReliefWeb", "UN", "官方", "央行"])) return 3;
-  if (matchesAny(sourceName, ["Reuters", "BBC", "财联社", "新浪财经", "东方财富"])) return 2;
+  if (matchesAny(sourceName, ["ReliefWeb", "UN", "官方", "央行", "Federal Reserve", "SEC"])) return 3;
+  if (matchesAny(sourceName, ["Bloomberg", "Reuters", "CNBC", "WSJ", "Wind", "BBC", "财联社", "新浪财经", "东方财富"])) return 2;
   return 1;
 }
 
@@ -402,7 +402,9 @@ async function fetchGdelt(fetchImpl: typeof fetch): Promise<SourceResult> {
       title: cleanText(item.title),
       description: cleanText(item.socialimage ? "" : item.title),
       publishedAt: parsePublishedAt(item.seendate) ?? "",
-    })).filter((story: RawStory) => story.title && story.sourceUrl).slice(0, 30);
+    })).filter((story: RawStory) => story.title && story.sourceUrl)
+      .filter((story: RawStory) => isGlobalMarketHeadline(`${story.title} ${story.description}`))
+      .slice(0, 30);
     return { name, stories, ok: stories.length > 0 };
   } catch {
     return { name, stories: [], ok: false };
@@ -426,7 +428,8 @@ async function fetchReliefWeb(fetchImpl: typeof fetch): Promise<SourceResult> {
         description: cleanText(fields.body).slice(0, 240),
         publishedAt: parsePublishedAt((fields.date as Record<string, unknown> | undefined)?.created) ?? "",
       };
-    }).filter((story: RawStory) => story.title && story.sourceUrl);
+    }).filter((story: RawStory) => story.title && story.sourceUrl)
+      .filter((story: RawStory) => isGlobalMarketHeadline(`${story.title} ${story.description}`));
     return { name, stories, ok: stories.length > 0 };
   } catch {
     return { name, stories: [], ok: false };
@@ -531,7 +534,9 @@ export async function getStorySnapshot(options: {
     : null;
   if (!results) {
     results = await Promise.all([
-      fetchGoogleNewsIndex("Bloomberg", "site:bloomberg.com (stocks OR markets OR economy OR earnings OR bonds OR oil)", fetchImpl),
+      fetchRss("Bloomberg Markets", "https://www.bloomberg.com/feeds/markets/news.rss", fetchImpl, { maxItems: 50, marketOnly: true }),
+      fetchRss("Bloomberg Economics", "https://www.bloomberg.com/feeds/economics/news.rss", fetchImpl, { maxItems: 40, marketOnly: true }),
+      fetchRss("Bloomberg Technology", "https://www.bloomberg.com/feeds/technology/news.rss", fetchImpl, { maxItems: 40, marketOnly: true }),
       fetchGoogleNewsIndex("Reuters", "site:reuters.com (stocks OR markets OR economy OR companies OR commodities)", fetchImpl),
       fetchGoogleNewsIndex("Wind公开资讯", "site:wind.com.cn (股票 OR 市场 OR 宏观 OR 行业 OR 公司)", fetchImpl),
       fetchRss("CNBC Markets", "https://www.cnbc.com/id/100003114/device/rss/rss.html", fetchImpl, { maxItems: 40, marketOnly: true }),

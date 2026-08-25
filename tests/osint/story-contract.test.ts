@@ -137,6 +137,37 @@ async function verifyStories() {
   assert.equal(energyPage.stories.length, 20);
   assert.equal(energyPage.stories.every((story) => story.tags.topic.includes("能源")), true);
 
+  const qualityRanked = await buildStorySnapshot([
+    {
+      sourceId: "quality-bloomberg",
+      sourceName: "Bloomberg Markets",
+      sourceUrl: "https://www.bloomberg.com/news/articles/quality",
+      title: "Global stocks rise after central bank decision",
+      description: "Equity markets react to policy guidance.",
+      publishedAt: "2026-08-25T11:00:00.000Z",
+    },
+    {
+      sourceId: "quality-generic",
+      sourceName: "Generic Blog",
+      sourceUrl: "https://example.com/generic",
+      title: "Regional stocks move after corporate update",
+      description: "Equity markets react to a company update.",
+      publishedAt: "2026-08-25T11:00:00.000Z",
+    },
+    {
+      sourceId: "quality-fed",
+      sourceName: "Federal Reserve",
+      sourceUrl: "https://www.federalreserve.gov/newsevents/pressreleases/test.htm",
+      title: "Federal Reserve issues policy statement on rates",
+      description: "The central bank publishes an official decision.",
+      publishedAt: "2026-08-25T11:00:00.000Z",
+    },
+  ], { apiKey: null, now: pagingNow, windowHours: 72, pageSize: 20 });
+  const bloombergImportance = qualityRanked.stories.find((story) => story.sources.some((item) => item.name === "Bloomberg Markets"))?.importance ?? 0;
+  const genericImportance = qualityRanked.stories.find((story) => story.sources.some((item) => item.name === "Generic Blog"))?.importance ?? 0;
+  assert.ok(bloombergImportance > genericImportance);
+  assert.equal(qualityRanked.stories.find((story) => story.sources.some((item) => item.name === "Federal Reserve"))?.tags.verification, "official");
+
   const manyRaw: RawStory[] = Array.from({ length: 13 }, (_, index) => ({
     sourceId: `many-${index}`,
     sourceName: "BBC World",
@@ -183,8 +214,10 @@ async function verifyStories() {
   const originalFetch = globalThis.fetch;
   const now = new Date();
   const rss = `<rss><channel><item><title>Market event alpha</title><link>https://example.com/a</link><description>A</description><pubDate>${now.toUTCString()}</pubDate></item><item><title>Market event beta</title><link>https://example.com/b</link><description>B</description><pubDate>${new Date(now.getTime() - 60_000).toUTCString()}</pubDate></item></channel></rss>`;
+  const bloombergRss = `<rss><channel><item><title>Global chip stocks slide before earnings</title><link>https://www.bloomberg.com/news/articles/test</link><description>Investors cut technology stock exposure.</description><pubDate>${now.toUTCString()}</pubDate></item></channel></rss>`;
   globalThis.fetch = (async (input) => {
     const url = String(input);
+    if (url.includes("bloomberg.com/feeds/markets")) return new Response(bloombergRss, { status: 200 });
     if (url.includes("feeds.bbci.co.uk")) return new Response(rss, { status: 200 });
     if (url.includes("news.google.com")) return new Response("<rss><channel></channel></rss>", { status: 200 });
     if (url.includes("gdeltproject")) return Response.json({ articles: [] });
@@ -198,13 +231,15 @@ async function verifyStories() {
     const firstLimit = await getStorySnapshot({ limit: 1 });
     const laterLargerLimit = await getStorySnapshot({ limit: 20 });
     assert.equal(firstLimit.stories.length, 1);
-    assert.equal(laterLargerLimit.stories.length, 2);
+    assert.equal(laterLargerLimit.stories.length, 3);
+    assert.equal(laterLargerLimit.sources.find((item) => item.name === "Bloomberg Markets")?.ok, true);
   } finally {
     globalThis.fetch = originalFetch;
   }
   const serviceSource = readFileSync(resolve("lib/osint/story-service.ts"), "utf8");
   const routeSource = readFileSync(resolve("app/api/osint/v1/stories/route.ts"), "utf8");
   assert.equal(serviceSource.includes("AbortSignal.timeout(10_000)"), true);
+  assert.equal(serviceSource.includes("https://www.bloomberg.com/feeds/markets/news.rss"), true);
   for (const sourceName of ["Bloomberg", "Reuters", "Wind公开资讯", "CNBC Markets", "WSJ Markets", "新浪财经", "东方财富"]) {
     assert.equal(serviceSource.includes(sourceName), true);
   }
