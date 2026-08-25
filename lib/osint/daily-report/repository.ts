@@ -1,5 +1,7 @@
 import { prisma } from "../../db";
 import type {
+  DailyReportArchiveStatus,
+  DailyReportEdition,
   OsintDailyReportRecord,
   OsintDailyReportSnapshot,
   OsintDailyReportSummary,
@@ -7,27 +9,44 @@ import type {
 
 interface DatabaseReportRow {
   id: string;
-  periodType: string;
-  periodKey: string;
-  snapshot: unknown;
+  reportDate: string;
+  edition: string;
+  version: number;
+  status: string;
+  payload: unknown;
   asOf: Date;
+  generatedAt: Date;
+  finalizedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+function editionValue(value: string): DailyReportEdition {
+  return value === "global" ? "global" : "close";
+}
+
+function archiveStatusValue(value: string): DailyReportArchiveStatus {
+  return value === "final" ? "final" : "draft";
 }
 
 function toRecord(row: DatabaseReportRow): OsintDailyReportRecord {
   return {
     id: row.id,
     periodType: "daily",
-    periodKey: row.periodKey,
+    reportDate: row.reportDate,
+    edition: editionValue(row.edition),
+    version: row.version,
+    archiveStatus: archiveStatusValue(row.status),
     asOf: row.asOf.toISOString(),
+    generatedAt: row.generatedAt.toISOString(),
+    finalizedAt: row.finalizedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    snapshot: row.snapshot as OsintDailyReportSnapshot,
+    snapshot: row.payload as OsintDailyReportSnapshot,
   };
 }
 
-function statusFor(snapshot: OsintDailyReportSnapshot): OsintDailyReportSummary["status"] {
+function healthStatus(snapshot: OsintDailyReportSnapshot): OsintDailyReportSummary["status"] {
   if (
     snapshot.markets.coverage.available === 0 &&
     snapshot.stories.stories.length === 0 &&
@@ -45,14 +64,15 @@ function statusFor(snapshot: OsintDailyReportSnapshot): OsintDailyReportSummary[
   return "healthy";
 }
 
-export function summarizeDailyReport(
-  report: OsintDailyReportRecord
-): OsintDailyReportSummary {
+export function summarizeDailyReport(report: OsintDailyReportRecord): OsintDailyReportSummary {
   const snapshot = report.snapshot;
   return {
     id: report.id,
     periodType: "daily",
-    periodKey: report.periodKey,
+    reportDate: report.reportDate,
+    edition: report.edition,
+    version: report.version,
+    archiveStatus: report.archiveStatus,
     title: snapshot.title,
     asOf: report.asOf,
     updatedAt: report.updatedAt,
@@ -60,46 +80,56 @@ export function summarizeDailyReport(
     marketTotal: snapshot.markets.coverage.total,
     storyCount: snapshot.stories.stories.length,
     lhbStockCount: snapshot.lhb.stockCount,
-    status: statusFor(snapshot),
+    status: healthStatus(snapshot),
   };
 }
 
-export async function saveDailyReport(
-  snapshot: OsintDailyReportSnapshot
-): Promise<OsintDailyReportRecord> {
-  const row = await prisma.osintDailyReport.upsert({
-    where: {
-      periodType_periodKey: {
-        periodType: snapshot.periodType,
-        periodKey: snapshot.periodKey,
-      },
-    },
-    create: {
-      periodType: snapshot.periodType,
-      periodKey: snapshot.periodKey,
-      snapshot: JSON.parse(JSON.stringify(snapshot)),
-      asOf: new Date(snapshot.asOf),
-    },
-    update: {
-      snapshot: JSON.parse(JSON.stringify(snapshot)),
-      asOf: new Date(snapshot.asOf),
+export async function saveDailyReport(snapshot: OsintDailyReportSnapshot): Promise<OsintDailyReportRecord> {
+  const latest = await prisma.osintDailyReport.findFirst({
+    where: { reportDate: snapshot.reportDate, edition: snapshot.edition },
+    orderBy: { version: "desc" },
+    select: { version: true },
+  });
+  const version = (latest?.version ?? 0) + 1;
+  const payload: OsintDailyReportSnapshot = { ...snapshot, version };
+  const generatedAt = new Date(payload.generatedAt);
+  const finalizedAt = payload.status === "final"
+    ? new Date(payload.finalizedAt ?? payload.generatedAt)
+    : null;
+  const row = await prisma.osintDailyReport.create({
+    data: {
+      reportDate: payload.reportDate,
+      edition: payload.edition,
+      version,
+      status: payload.status,
+      payload: JSON.parse(JSON.stringify(payload)),
+      asOf: new Date(payload.asOf),
+      generatedAt,
+      finalizedAt,
     },
   });
   return toRecord(row);
 }
 
 export async function listDailyReports(limit = 31): Promise<OsintDailyReportSummary[]> {
+  const safeLimit = Math.min(100, Math.max(1, limit));
   const rows = await prisma.osintDailyReport.findMany({
-    where: { periodType: "daily" },
-    orderBy: [{ periodKey: "desc" }, { updatedAt: "desc" }],
-    take: Math.min(100, Math.max(1, limit)),
+    orderBy: [{ reportDate: "desc" }, { edition: "asc" }, { version: "desc" }],
+    take: Math.min(400, safeLimit * 4),
   });
-  return rows.map((row) => summarizeDailyReport(toRecord(row)));
+  const latest: DatabaseReportRow[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const key = `${row.reportDate}|${row.edition}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    latest.push(row);
+    if (latest.length >= safeLimit) break;
+  }
+  return latest.map((row) => summarizeDailyReport(toRecord(row)));
 }
 
-export async function getDailyReport(
-  id: string
-): Promise<OsintDailyReportRecord | null> {
+export async function getDailyReport(id: string): Promise<OsintDailyReportRecord | null> {
   const row = await prisma.osintDailyReport.findUnique({ where: { id } });
   return row ? toRecord(row) : null;
 }

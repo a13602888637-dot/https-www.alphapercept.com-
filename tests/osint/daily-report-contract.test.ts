@@ -6,7 +6,7 @@ import type {
   StorySnapshot,
 } from "../../lib/osint/contracts";
 import { composeDailyReportSnapshot } from "../../lib/osint/daily-report/compose";
-import { buildDailyReportHtml } from "../../lib/osint/daily-report/export-html";
+import { buildDailyReportHtml, hasRequiredExportNotices } from "../../lib/osint/daily-report/export-html";
 
 const REQUIRED_WATERMARK = "AlphaPercept · 仅供参考";
 const REQUIRED_DISCLAIMER =
@@ -122,7 +122,11 @@ const report = composeDailyReportSnapshot({
 
 assert.equal(report.schemaVersion, "1.0");
 assert.equal(report.periodType, "daily");
-assert.equal(report.periodKey, "2026-08-25");
+assert.equal(report.reportDate, "2026-08-25");
+assert.equal(report.edition, "close");
+assert.equal(report.version, 1);
+assert.equal(report.status, "final");
+assert.equal(report.finalizedAt, "2026-08-25T08:05:00.000Z");
 assert.equal(report.asOf, "2026-08-25T08:02:00.000Z");
 assert.equal(report.markets.markets[0].symbol, "CL=F");
 assert.equal(report.stories.stories[0].id, "story-1");
@@ -148,6 +152,8 @@ assert.match(fullHtml, new RegExp(REQUIRED_WATERMARK));
 assert.match(fullHtml, new RegExp(REQUIRED_DISCLAIMER));
 assert.match(fullHtml, /\.watermark\{[^}]*position:fixed/);
 assert.match(fullHtml, /<footer[^>]*>.*本报告基于公开信息自动整理/s);
+assert.equal(hasRequiredExportNotices(fullHtml), true);
+assert.equal(hasRequiredExportNotices(fullHtml.replace("z-index:9999", "display:none")), false);
 
 const marketHtml = buildDailyReportHtml(report, "markets");
 assert.match(marketHtml, /全球行情/);

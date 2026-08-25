@@ -264,16 +264,20 @@ model PersonalNote {
 
 // OSINT 每日复盘归档：仅保存生成时的公开数据快照，不包含用户持仓或自选股
 model OsintDailyReport {
-  id         String   @id @default(cuid())
-  periodType String   @default("daily")
-  periodKey  String
-  snapshot   Json
-  asOf       DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String    @id @default(cuid())
+  reportDate  String
+  edition     String    @default("close")
+  version     Int       @default(1)
+  status      String    @default("draft")
+  payload     Json
+  asOf        DateTime
+  generatedAt DateTime
+  finalizedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  @@unique([periodType, periodKey])
-  @@index([periodType, asOf])
+  @@unique([reportDate, edition, version])
+  @@index([reportDate, edition, status])
 }
 
 // Uzi 深度研判任务：网页只负责排队与展示，本机 Codex Worker 负责长任务。

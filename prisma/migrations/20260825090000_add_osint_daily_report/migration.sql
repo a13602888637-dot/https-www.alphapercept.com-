@@ -1,10 +1,14 @@
 -- CreateTable
 CREATE TABLE "OsintDailyReport" (
     "id" TEXT NOT NULL,
-    "periodType" TEXT NOT NULL DEFAULT 'daily',
-    "periodKey" TEXT NOT NULL,
-    "snapshot" JSONB NOT NULL,
+    "reportDate" TEXT NOT NULL,
+    "edition" TEXT NOT NULL DEFAULT 'close',
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "status" TEXT NOT NULL DEFAULT 'draft',
+    "payload" JSONB NOT NULL,
     "asOf" TIMESTAMP(3) NOT NULL,
+    "generatedAt" TIMESTAMP(3) NOT NULL,
+    "finalizedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -12,9 +16,9 @@ CREATE TABLE "OsintDailyReport" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "OsintDailyReport_periodType_periodKey_key"
-ON "OsintDailyReport"("periodType", "periodKey");
+CREATE UNIQUE INDEX "OsintDailyReport_reportDate_edition_version_key"
+ON "OsintDailyReport"("reportDate", "edition", "version");
 
 -- CreateIndex
-CREATE INDEX "OsintDailyReport_periodType_asOf_idx"
-ON "OsintDailyReport"("periodType", "asOf");
+CREATE INDEX "OsintDailyReport_reportDate_edition_status_idx"
+ON "OsintDailyReport"("reportDate", "edition", "status");

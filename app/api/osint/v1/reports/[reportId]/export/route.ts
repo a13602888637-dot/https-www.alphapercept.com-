@@ -46,7 +46,7 @@ export async function GET(
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `inline; filename="osint-${report.periodKey}-${requestedSection}.html"`,
+      "Content-Disposition": `inline; filename="osint-${report.reportDate}-${report.edition}-v${report.version}-${requestedSection}.html"`,
     },
   });
 }

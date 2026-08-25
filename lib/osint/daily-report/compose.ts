@@ -1,6 +1,6 @@
 import type { LhbSnapshot } from "../../lhb/contracts";
 import type { MarketSnapshot, StorySnapshot } from "../contracts";
-import type { OsintDailyReportSnapshot } from "./contracts";
+import type { DailyReportArchiveStatus, DailyReportEdition, OsintDailyReportSnapshot } from "./contracts";
 
 function shanghaiDateKey(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -24,9 +24,9 @@ function latestIso(values: Array<string | null | undefined>, fallback: string): 
   return timestamps[0]?.value ?? fallback;
 }
 
-function titleForDate(periodKey: string): string {
-  const [year, month, day] = periodKey.split("-");
-  return `${year}年${Number(month)}月${Number(day)}日 OSINT 每日复盘`;
+function titleForDate(reportDate: string, edition: DailyReportEdition): string {
+  const [year, month, day] = reportDate.split("-");
+  return `${year}年${Number(month)}月${Number(day)}日 OSINT 每日复盘 · ${edition === "global" ? "全球终版" : "收盘版"}`;
 }
 
 export function composeDailyReportSnapshot(input: {
@@ -34,10 +34,17 @@ export function composeDailyReportSnapshot(input: {
   stories: StorySnapshot;
   lhb: LhbSnapshot;
   now?: Date;
+  reportDate?: string;
+  edition?: DailyReportEdition;
+  version?: number;
+  status?: DailyReportArchiveStatus;
 }): OsintDailyReportSnapshot {
   const now = input.now ?? new Date();
   const generatedAt = now.toISOString();
-  const periodKey = shanghaiDateKey(now);
+  const reportDate = input.reportDate ?? shanghaiDateKey(now);
+  const edition = input.edition ?? "close";
+  const version = Math.max(1, Math.floor(input.version ?? 1));
+  const status = input.status ?? "final";
   const asOf = latestIso(
     [input.markets.generatedAt, input.stories.generatedAt, input.lhb.generatedAt],
     generatedAt
@@ -46,9 +53,13 @@ export function composeDailyReportSnapshot(input: {
   return {
     schemaVersion: "1.0",
     periodType: "daily",
-    periodKey,
-    title: titleForDate(periodKey),
+    reportDate,
+    edition,
+    version,
+    status,
+    title: titleForDate(reportDate, edition),
     generatedAt,
+    finalizedAt: status === "final" ? generatedAt : null,
     asOf,
     markets: input.markets,
     stories: input.stories,

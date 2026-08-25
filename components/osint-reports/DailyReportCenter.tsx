@@ -53,10 +53,10 @@ export function DailyReportCenter() {
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(
-          response.status === 401 ? "请先登录后生成日报" : payload.error || "日报生成失败"
+          response.status === 403 ? "当前账号没有共享日报生成权限" : payload.error || "日报生成失败"
         );
       }
-      setMessage("今日复盘已归档；同一天重复生成会更新快照。 ");
+      setMessage("今日复盘已归档为新版本，旧版本不会被覆盖。");
       await loadReports();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "日报生成失败");
@@ -110,7 +110,7 @@ export function DailyReportCenter() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="font-medium text-white">{report.title}</h2>
-                    <p className="mt-1 text-sm text-[#718096]">截至 {new Date(report.asOf).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}</p>
+                    <p className="mt-1 text-sm text-[#718096]">{report.edition === "global" ? "全球终版" : "收盘版"} · v{report.version} · 截至 {new Date(report.asOf).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}</p>
                   </div>
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#2A394E] px-2 py-1 text-xs text-[#8B98AA]"><ShieldCheck className="h-3 w-3" />{STATUS_LABELS[report.status]}</span>
                 </div>

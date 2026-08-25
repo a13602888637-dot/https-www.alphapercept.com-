@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildStorySnapshot, getStorySnapshot, isGlobalMarketHeadline, parsePublishedAt, sliceStorySnapshot, type RawStory } from "../../lib/osint/story-service";
-import { parseStoryRequest } from "../../app/api/osint/v1/stories/route";
+import { parseStoryRequest } from "../../lib/osint/story-query";
 
 const rawStories: RawStory[] = [
   {
@@ -330,14 +330,16 @@ async function verifyStories() {
   }
   const serviceSource = readFileSync(resolve("lib/osint/story-service.ts"), "utf8");
   const routeSource = readFileSync(resolve("app/api/osint/v1/stories/route.ts"), "utf8");
+  const querySource = readFileSync(resolve("lib/osint/story-query.ts"), "utf8");
   assert.equal(serviceSource.includes("AbortSignal.timeout(10_000)"), true);
   assert.equal(serviceSource.includes("https://www.bloomberg.com/feeds/markets/news.rss"), true);
   for (const sourceName of ["AIHOT v1", "Bloomberg", "Reuters", "Wind公开资讯", "CNBC Markets", "WSJ Markets", "新浪财经", "东方财富"]) {
     assert.equal(serviceSource.includes(sourceName), true);
   }
-  assert.equal(routeSource.includes('searchParams.get("page")'), true);
-  assert.equal(routeSource.includes('searchParams.get("pageSize")'), true);
-  assert.equal(routeSource.includes('searchParams.get("topic")'), true);
+  assert.equal(routeSource.includes("parseStoryRequest"), true);
+  assert.equal(querySource.includes('searchParams.get("page")'), true);
+  assert.equal(querySource.includes('searchParams.get("pageSize")'), true);
+  assert.equal(querySource.includes('searchParams.get("topic")'), true);
   console.log("STORY_CONTRACT_OK");
 }
 

@@ -7,6 +7,14 @@ import type { OsintDailyReportRecord } from "@/lib/osint/daily-report/contracts"
 import { DAILY_REPORT_DISCLAIMER } from "@/lib/osint/daily-report/export-html";
 import { PrintActions } from "./PrintActions";
 
+const VIEW_MODES = [
+  { value: "full", label: "综合" },
+  { value: "markets", label: "行情" },
+  { value: "stories", label: "热点" },
+  { value: "lhb", label: "游资" },
+] as const;
+type ViewMode = (typeof VIEW_MODES)[number]["value"];
+
 function amount(value: number): string {
   return `${(value / 10_000).toLocaleString("zh-CN", { maximumFractionDigits: 0 })} 万`;
 }
@@ -15,6 +23,7 @@ export function DailyReportView({ reportId }: { reportId: string }) {
   const [report, setReport] = useState<OsintDailyReportRecord | null>(null);
   const [exportReady, setExportReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("full");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -41,16 +50,20 @@ export function DailyReportView({ reportId }: { reportId: string }) {
   const snapshot = report.snapshot;
   return (
     <main className="h-full overflow-y-auto bg-[#070B12] text-base leading-7 text-[#D6DEE8]">
-      <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-5 sm:px-6 sm:py-8">
+      <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-5 pb-28 sm:px-6 sm:py-8 sm:pb-8">
         <Link href="/osint/reports" className="inline-flex min-h-11 items-center gap-2 text-sm text-[#8B98AA] hover:text-white"><ArrowLeft className="h-4 w-4" />返回每日复盘</Link>
         <header className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-5">
           <p className="text-sm tracking-[0.14em] text-[#2EC4C7]">DAILY SNAPSHOT</p>
           <h1 className="mt-1 text-2xl font-semibold text-white">{snapshot.title}</h1>
-          <p className="mt-2 text-sm text-[#718096]">数据截至 {new Date(snapshot.asOf).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })} · 归档后不随实时行情变化</p>
+          <p className="mt-2 text-sm text-[#718096]">{report.edition === "global" ? "全球终版" : "收盘版"} · v{report.version} · 数据截至 {new Date(snapshot.asOf).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })} · 归档后不随实时行情变化</p>
           <div className="mt-4"><PrintActions reportId={report.id} exportReady={exportReady} /></div>
         </header>
 
-        <section className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-4 sm:p-5">
+        <nav className="sticky top-0 z-20 grid grid-cols-4 gap-1 rounded-xl border border-[#1F2A3A] bg-[#070B12]/95 p-1 backdrop-blur" aria-label="复盘内容">
+          {VIEW_MODES.map((item) => <button key={item.value} type="button" aria-pressed={viewMode === item.value} onClick={() => setViewMode(item.value)} className={`min-h-11 rounded-lg text-sm ${viewMode === item.value ? "bg-[#173044] text-[#9DE7E8]" : "text-[#718096]"}`}>{item.label}</button>)}
+        </nav>
+
+        {(viewMode === "full" || viewMode === "markets") && <section className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-4 sm:p-5">
           <h2 className="text-xl font-semibold text-white">全球行情</h2>
           <p className="mt-1 text-sm text-[#718096]">覆盖 {snapshot.markets.coverage.available}/{snapshot.markets.coverage.total} · 陈旧 {snapshot.markets.coverage.stale}</p>
           <div className="mt-4 divide-y divide-[#1F2A3A]">
@@ -61,9 +74,9 @@ export function DailyReportView({ reportId }: { reportId: string }) {
               </div>
             ))}
           </div>
-        </section>
+        </section>}
 
-        <section className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-4 sm:p-5">
+        {(viewMode === "full" || viewMode === "stories") && <section className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-4 sm:p-5">
           <h2 className="text-xl font-semibold text-white">世界热点</h2>
           <p className="mt-2 rounded-lg border-l-4 border-[#F2B84B] bg-[#F2B84B]/[0.07] px-3 py-2 text-[#F6C968]">一句建议：{snapshot.stories.advice.text}</p>
           <div className="mt-3 divide-y divide-[#1F2A3A]">
@@ -72,9 +85,9 @@ export function DailyReportView({ reportId }: { reportId: string }) {
             ))}
             {snapshot.stories.stories.length === 0 && <p className="py-8 text-center text-[#718096]">该快照暂无热点</p>}
           </div>
-        </section>
+        </section>}
 
-        <section className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-4 sm:p-5">
+        {(viewMode === "full" || viewMode === "lhb") && <section className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-4 sm:p-5">
           <h2 className="text-xl font-semibold text-white">资金龙虎榜</h2>
           <p className="mt-1 text-sm text-[#718096]">交易日 {snapshot.lhb.tradeDate || "暂无"} · {snapshot.lhb.hotMoneyFlows.length} 组游资/活跃席位 · {snapshot.lhb.status}</p>
           <div className="mt-3 space-y-3">
@@ -88,7 +101,7 @@ export function DailyReportView({ reportId }: { reportId: string }) {
             ))}
             {snapshot.lhb.hotMoneyFlows.length === 0 && <p className="py-8 text-center text-[#718096]">该快照暂无游资或活跃席位</p>}
           </div>
-        </section>
+        </section>}
 
         <footer className="rounded-xl border border-[#2A394E] bg-[#0A111C] p-4 text-sm leading-6 text-[#8B98AA]">{DAILY_REPORT_DISCLAIMER}</footer>
       </div>

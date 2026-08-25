@@ -5,6 +5,7 @@ import { getMarketSnapshot } from "../market-service";
 import { getStorySnapshot } from "../story-service";
 import { composeDailyReportSnapshot } from "./compose";
 import type { OsintDailyReportSnapshot } from "./contracts";
+import type { DailyReportArchiveStatus, DailyReportEdition } from "./contracts";
 import { saveDailyReport } from "./repository";
 
 interface DailyReportDependencies {
@@ -67,6 +68,9 @@ function unavailableLhb(generatedAt: string): LhbSnapshot {
 
 export async function collectDailyReportSnapshot(options: {
   now?: Date;
+  reportDate?: string;
+  edition?: DailyReportEdition;
+  status?: DailyReportArchiveStatus;
   dependencies?: Partial<DailyReportDependencies>;
 } = {}): Promise<OsintDailyReportSnapshot> {
   const now = options.now ?? new Date();
@@ -92,10 +96,17 @@ export async function collectDailyReportSnapshot(options: {
         ? lhbResult.value
         : unavailableLhb(generatedAt),
     now,
+    reportDate: options.reportDate,
+    edition: options.edition,
+    status: options.status,
   });
 }
 
-export async function generateAndSaveDailyReport() {
-  const snapshot = await collectDailyReportSnapshot();
+export async function generateAndSaveDailyReport(options: {
+  reportDate?: string;
+  edition?: DailyReportEdition;
+  status?: DailyReportArchiveStatus;
+} = {}) {
+  const snapshot = await collectDailyReportSnapshot(options);
   return saveDailyReport(snapshot);
 }
