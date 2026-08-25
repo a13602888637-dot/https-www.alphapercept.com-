@@ -64,6 +64,10 @@ export interface OsintContext {
     confidence: "high" | "medium" | "low";
     generatedAt: string | null;
   };
+  sourceHealth: {
+    markets: Array<{ name: string; available: number; stale: number }>;
+    stories: Array<{ name: string; ok: boolean; count: number }>;
+  };
 }
 
 export interface MarketSnapshot {
