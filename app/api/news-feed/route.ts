@@ -8,6 +8,9 @@ export async function GET() {
   const news = snapshot.stories.map((story) => ({
     id: story.id,
     title: story.title,
+    originalTitle: story.originalTitle,
+    language: story.language,
+    translationStatus: story.translationStatus,
     summary: story.summary,
     source: story.sources.map((source) => source.name).join(" + "),
     sourceUrl: story.sources[0]?.url ?? "",

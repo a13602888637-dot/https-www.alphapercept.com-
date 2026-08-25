@@ -14,7 +14,7 @@ export type OsintInstrumentType =
 export interface OsintMarket {
   symbol: string;
   name: string;
-  category: "index" | "future" | "commodity" | "fx" | "rate";
+  category: "index" | "future" | "commodity" | "fx" | "risk" | "yield";
   instrumentType: OsintInstrumentType;
   region: string;
   value: number | null;
@@ -39,6 +39,9 @@ export interface OsintStory {
   id: string;
   publishedAt: string;
   title: string;
+  originalTitle: string;
+  language: "zh" | "en" | "other";
+  translationStatus: "native" | "translated" | "fallback";
   summary: string;
   importance: number;
   sources: Array<{ name: string; url: string }>;

@@ -12,7 +12,8 @@ const FILTERS: Array<{ key: MarketFilter; label: string }> = [
   { key: "future", label: "连续期指" },
   { key: "commodity", label: "商品" },
   { key: "fx", label: "外汇" },
-  { key: "rate", label: "利率" },
+  { key: "risk", label: "风险指标" },
+  { key: "yield", label: "美债收益率" },
 ];
 
 const STATUS_LABELS: Record<OsintMarket["status"], { label: string; className: string }> = {

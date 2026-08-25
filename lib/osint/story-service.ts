@@ -15,6 +15,7 @@ interface BuildStoryOptions {
   fetchImpl?: typeof fetch;
   now?: Date;
   limit?: number;
+  windowHours?: number;
 }
 
 interface SourceResult {
@@ -61,6 +62,12 @@ function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "").slice(0, 80);
 }
 
+function storyLanguage(text: string): OsintStory["language"] {
+  if (/\p{Script=Han}/u.test(text)) return "zh";
+  if (/[A-Za-z]/.test(text)) return "en";
+  return "other";
+}
+
 function areDuplicates(left: RawStory, right: RawStory): boolean {
   const a = normalizeTitle(left.title);
   const b = normalizeTitle(right.title);
@@ -91,7 +98,7 @@ const TOPIC_RULES: Array<[string, string[]]> = [
   ["地缘", ["冲突", "战争", "制裁", "导弹", "军方", "国防", "海峡", "停火", "iran", "israel", "military", "sanction"]],
   ["宏观", ["央行", "利率", "通胀", "就业", "gdp", "fed", "ecb", "recession", "inflation"]],
   ["能源", ["原油", "石油", "天然气", "opec", "oil", "brent", "wti", "能源"]],
-  ["科技", ["芯片", "半导体", "人工智能", "ai", "nvidia", "robot", "科技"]],
+  ["科技", ["芯片", "半导体", "人工智能", "artificial intelligence", "大模型", "nvidia", "robot", "机器人", "科技"]],
   ["政策", ["法案", "监管", "关税", "政府", "政策", "regulation", "tariff"]],
   ["供应链", ["航运", "港口", "供应链", "物流", "shipping", "freight"]],
   ["灾害", ["地震", "海啸", "洪水", "飓风", "灾害", "earthquake", "hurricane"]],
@@ -165,6 +172,9 @@ function mergeStories(rawStories: RawStory[], now: Date): OsintStory[] {
       id: storyId(primary.title),
       publishedAt: latestPublishedAt,
       title: primary.title,
+      originalTitle: primary.title,
+      language: storyLanguage(primary.title),
+      translationStatus: storyLanguage(primary.title) === "zh" ? "native" : "fallback",
       summary: cleanText(primary.description || primary.title).slice(0, 120),
       importance: 0,
       sources,
@@ -193,11 +203,11 @@ async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchIm
           { role: "system", content: "你是全球市场新闻编辑。只输出JSON，不得补写输入中不存在的事实。" },
           {
             role: "user",
-            content: `将以下事件压缩为一句中文摘要并打标签。advice不超过45字，summary不超过60字。\n${JSON.stringify(stories.slice(0, 12).map((story) => ({ id: story.id, title: story.title, summary: story.summary })))}\n输出：{"advice":"...","stories":[{"id":"...","summary":"...","topic":[],"region":[],"assets":[],"direction":"risk-on|risk-off|mixed|neutral","horizon":"intraday|1-3d|1-3w|medium"}]}`,
+            content: `将以下事件压缩为一句中文摘要并打标签；英文标题同时翻译为中文。advice不超过45字，titleZh不超过35字，summary不超过60字。\n${JSON.stringify(stories.slice(0, 12).map((story) => ({ id: story.id, title: story.originalTitle, summary: story.summary, language: story.language })))}\n输出：{"advice":"...","stories":[{"id":"...","titleZh":"中文标题","summary":"中文摘要","topic":[],"region":[],"assets":[],"direction":"risk-on|risk-off|mixed|neutral","horizon":"intraday|1-3d|1-3w|medium"}]}`,
           },
         ],
       }),
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) return null;
     const payload = await response.json();
@@ -219,8 +229,12 @@ async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchIm
       const horizon = ["intraday", "1-3d", "1-3w", "medium"].includes(String(item.horizon))
         ? (String(item.horizon) as StoryTags["horizon"])
         : story.tags.horizon;
+      const titleZh = cleanText(item.titleZh).slice(0, 80);
+      const translatedTitle = story.language !== "zh" && titleZh ? titleZh : story.title;
       return {
         ...story,
+        title: translatedTitle,
+        translationStatus: story.language === "zh" ? "native" as const : titleZh ? "translated" as const : "fallback" as const,
         summary: cleanText(item.summary || story.summary).slice(0, 120),
         tags: {
           ...story.tags,
@@ -251,7 +265,13 @@ function fallbackAdvice(stories: OsintStory[]): string {
 export async function buildStorySnapshot(rawStories: RawStory[], options: BuildStoryOptions = {}): Promise<StorySnapshot> {
   const now = options.now ?? new Date();
   const limit = Math.min(50, Math.max(1, options.limit ?? 20));
-  let stories = mergeStories(rawStories, now).slice(0, limit);
+  const windowMs = Math.max(1, options.windowHours ?? 24) * 60 * 60 * 1_000;
+  const currentStories = rawStories.filter((story) => {
+    const publishedAt = new Date(story.publishedAt).getTime();
+    const age = now.getTime() - publishedAt;
+    return Number.isFinite(publishedAt) && age >= -5 * 60 * 1_000 && age <= windowMs;
+  });
+  let stories = mergeStories(currentStories, now).slice(0, limit);
   let advice = fallbackAdvice(stories);
   let adviceConfidence: "high" | "medium" | "low" = "low";
   let generatedAt: string | null = null;
@@ -267,7 +287,7 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
   }
 
   const sourceCounts = new Map<string, number>();
-  for (const story of rawStories) sourceCounts.set(story.sourceName, (sourceCounts.get(story.sourceName) ?? 0) + 1);
+  for (const story of currentStories) sourceCounts.set(story.sourceName, (sourceCounts.get(story.sourceName) ?? 0) + 1);
   return {
     schemaVersion: "1.0",
     generatedAt: now.toISOString(),

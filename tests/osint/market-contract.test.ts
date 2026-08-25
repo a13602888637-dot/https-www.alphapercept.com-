@@ -28,6 +28,8 @@ assert.deepEqual(required.filter((symbol) => !MARKET_MANIFEST[symbol]), []);
 assert.equal(MARKET_MANIFEST["CL=F"].name, "WTI原油");
 assert.equal(MARKET_MANIFEST["BZ=F"].name, "Brent原油");
 assert.equal(MARKET_MANIFEST["^VIX"].instrumentType, "index");
+assert.equal(MARKET_MANIFEST["^VIX"].category, "risk");
+assert.equal(MARKET_MANIFEST["UST10Y"].category, "yield");
 assert.equal(
   new Set(Object.keys(MARKET_MANIFEST)).size,
   Object.keys(MARKET_MANIFEST).length

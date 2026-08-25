@@ -29,6 +29,14 @@ const rawStories: RawStory[] = [
     description: "暂无重大伤亡报告。",
     publishedAt: "2026-08-24T09:00:00.000Z",
   },
+  {
+    sourceId: "old-1",
+    sourceName: "Google News",
+    sourceUrl: "https://example.com/old-oil-story",
+    title: "Oil market story from two days ago",
+    description: "This item is outside the requested 24 hour window.",
+    publishedAt: "2026-08-22T08:00:00.000Z",
+  },
 ];
 
 async function verifyStories() {
@@ -60,8 +68,49 @@ async function verifyStories() {
   assert.equal(treasurySecretary.stories[0].tags.assets.includes("美债"), false);
   assert.equal(isGlobalMarketHeadline("英科医疗：目前客户下单意愿强烈"), false);
   assert.equal(isGlobalMarketHeadline("韩国消费者信心指数四个月来首降，央行称股市下跌有影响"), true);
+  const ukraine = await buildStorySnapshot([
+    {
+      sourceId: "ukraine-1",
+      sourceName: "BBC World",
+      sourceUrl: "https://example.com/ukraine",
+      title: "UK prime minister supports Ukraine despite Russian drone threats",
+      description: "Diplomatic and military update.",
+      publishedAt: "2026-08-24T10:00:00.000Z",
+    },
+  ], { apiKey: null, now: new Date("2026-08-24T11:00:00.000Z") });
+  assert.equal(ukraine.stories[0].tags.topic.includes("科技"), false);
+
+  const englishRaw: RawStory[] = [{
+    sourceId: "translate-1",
+    sourceName: "BBC World",
+    sourceUrl: "https://example.com/translate",
+    title: "Oil rises as shipping risk increases",
+    description: "Markets react to supply concerns.",
+    publishedAt: "2026-08-24T10:00:00.000Z",
+  }];
+  const englishBase = await buildStorySnapshot(englishRaw, { apiKey: null, now: new Date("2026-08-24T11:00:00.000Z") });
+  const translated = await buildStorySnapshot(englishRaw, {
+    apiKey: "test-key",
+    now: new Date("2026-08-24T11:00:00.000Z"),
+    fetchImpl: async () => Response.json({ choices: [{ message: { content: JSON.stringify({
+      advice: "关注原油供应风险。",
+      stories: [{
+        id: englishBase.stories[0].id,
+        titleZh: "航运风险上升推动油价上涨",
+        summary: "市场正对供应中断风险重新定价。",
+        topic: ["能源"],
+        region: [],
+        assets: ["原油"],
+        direction: "risk-off",
+        horizon: "1-3d",
+      }],
+    }) } }] }),
+  });
+  assert.equal(translated.stories[0].title, "航运风险上升推动油价上涨");
+  assert.equal(translated.stories[0].originalTitle, "Oil rises as shipping risk increases");
+  assert.equal(translated.stories[0].translationStatus, "translated");
   const serviceSource = readFileSync(resolve("lib/osint/story-service.ts"), "utf8");
-  assert.equal(serviceSource.includes("AbortSignal.timeout(5_000)"), true);
+  assert.equal(serviceSource.includes("AbortSignal.timeout(10_000)"), true);
   for (const sourceName of ["Google News", "新浪财经", "东方财富"]) {
     assert.equal(serviceSource.includes(sourceName), true);
   }

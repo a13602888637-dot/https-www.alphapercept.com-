@@ -110,7 +110,13 @@ export function WorldBriefing({
                   <div className="relative rounded-md border border-[#1F2A3A] bg-[#0D1420] px-4 py-3 transition-colors hover:border-[#314158] hover:bg-[#101927]">
                     <span className="absolute -left-[21px] top-4 h-2.5 w-2.5 rounded-full border-2 border-[#070B12] bg-[#2EC4C7]" />
                     <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0"><h3 className="text-[13px] font-medium leading-5 text-[#D6DEE8]">{story.title}</h3><p className="mt-1 text-[11px] leading-5 text-[#8B98AA]">{story.summary}</p></div>
+                      <div className="min-w-0">
+                        <h3 className="text-[13px] font-medium leading-5 text-[#D6DEE8]">{story.title}</h3>
+                        {story.translationStatus === "translated" && story.originalTitle !== story.title && (
+                          <p className="mt-0.5 truncate text-[9px] text-[#536177]" title={story.originalTitle}>{story.originalTitle}</p>
+                        )}
+                        <p className="mt-1 text-[11px] leading-5 text-[#8B98AA]">{story.summary}</p>
+                      </div>
                       <span className="shrink-0 font-mono text-[10px] text-[#F2B84B]">重要度 {story.importance.toFixed(1)}/10</span>
                     </div>
                     <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">

@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, RefreshCw, Radio } from "lucide-react";
 import type { OsintContext, OsintMarket } from "@/lib/osint/contracts";
 import { MarketBoard } from "./MarketBoard";
+import { LhbBoard } from "./LhbBoard";
 import { StatusBar } from "./StatusBar";
 import { WorldBriefing } from "./WorldBriefing";
 
-type MobileView = "market" | "stories";
+type MobileView = "market" | "stories" | "lhb";
+type RightView = "stories" | "lhb";
 
 const EMPTY_ADVICE: OsintContext["advice"] = { text: "等待足够数据后再判断。", confidence: "low", generatedAt: null };
 
@@ -33,6 +35,7 @@ export function SituationScreen() {
   const [isRefreshing, setIsRefreshing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<MobileView>("stories");
+  const [rightView, setRightView] = useState<RightView>("stories");
 
   const loadContext = useCallback(async (signal?: AbortSignal) => {
     setIsRefreshing(true);
@@ -100,8 +103,8 @@ export function SituationScreen() {
       )}
 
       <div className="flex border-b border-[#1F2A3A] bg-[#090f19] p-1 lg:hidden" role="tablist" aria-label="OSINT 视图">
-        {(["market", "stories"] as const).map((view) => (
-          <button key={view} role="tab" aria-selected={mobileView === view} onClick={() => setMobileView(view)} className={`min-h-10 flex-1 rounded text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] ${mobileView === view ? "bg-[#142235] text-[#9DE7E8]" : "text-[#718096]"}`}>{view === "market" ? "行情" : "热点"}</button>
+        {(["market", "stories", "lhb"] as const).map((view) => (
+          <button key={view} role="tab" aria-selected={mobileView === view} onClick={() => setMobileView(view)} className={`min-h-10 flex-1 rounded text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] ${mobileView === view ? "bg-[#142235] text-[#9DE7E8]" : "text-[#718096]"}`}>{view === "market" ? "行情" : view === "stories" ? "热点" : "龙虎榜"}</button>
         ))}
       </div>
 
@@ -109,8 +112,20 @@ export function SituationScreen() {
         <div className={`${mobileView === "market" ? "block" : "hidden"} min-h-0 border-r border-[#1F2A3A] lg:block`}>
           <MarketBoard markets={context?.markets ?? []} isLoading={isLoading} />
         </div>
-        <div className={`${mobileView === "stories" ? "block" : "hidden"} min-h-0 lg:block`}>
-          <WorldBriefing stories={context?.stories ?? []} advice={context?.advice ?? EMPTY_ADVICE} sources={context?.sourceHealth.stories ?? []} isLoading={isLoading} />
+        <div className={`${mobileView === "market" ? "hidden" : "block"} min-h-0 lg:block`}>
+          <div className="hidden h-full min-h-0 flex-col lg:flex">
+            <div className="flex min-h-10 items-center gap-1 border-b border-[#1F2A3A] bg-[#090f19] px-3" role="tablist" aria-label="情报数据视图">
+              {(["stories", "lhb"] as const).map((view) => (
+                <button key={view} type="button" role="tab" aria-selected={rightView === view} onClick={() => setRightView(view)} className={`min-h-8 rounded px-3 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] ${rightView === view ? "bg-[#142235] text-[#9DE7E8]" : "text-[#718096] hover:text-[#D6DEE8]"}`}>{view === "stories" ? "世界热点" : "资金龙虎榜"}</button>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1">
+              {rightView === "stories" ? <WorldBriefing stories={context?.stories ?? []} advice={context?.advice ?? EMPTY_ADVICE} sources={context?.sourceHealth.stories ?? []} isLoading={isLoading} /> : <LhbBoard />}
+            </div>
+          </div>
+          <div className="h-full min-h-0 lg:hidden">
+            {mobileView === "lhb" ? <LhbBoard /> : <WorldBriefing stories={context?.stories ?? []} advice={context?.advice ?? EMPTY_ADVICE} sources={context?.sourceHealth.stories ?? []} isLoading={isLoading} />}
+          </div>
         </div>
       </main>
 

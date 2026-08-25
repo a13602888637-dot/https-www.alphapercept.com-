@@ -34,11 +34,11 @@ const entries: MarketManifestEntry[] = [
   { symbol: "USDCNH=X", name: "美元/离岸人民币", category: "fx", instrumentType: "fx", region: "global", provider: "yahoo", providerSymbol: "CNH=X" },
   { symbol: "USDJPY=X", name: "美元/日元", category: "fx", instrumentType: "fx", region: "global", provider: "yahoo", providerSymbol: "JPY=X" },
 
-  { symbol: "^VIX", name: "VIX恐慌指数", category: "rate", instrumentType: "index", region: "us", provider: "yahoo", providerSymbol: "^VIX" },
-  { symbol: "UST1Y", name: "美国1年期国债收益率", category: "rate", instrumentType: "yield", region: "us", provider: "us-treasury", providerSymbol: "BC_1YEAR" },
-  { symbol: "UST10Y", name: "美国10年期国债收益率", category: "rate", instrumentType: "yield", region: "us", provider: "us-treasury", providerSymbol: "BC_10YEAR" },
-  { symbol: "UST20Y", name: "美国20年期国债收益率", category: "rate", instrumentType: "yield", region: "us", provider: "us-treasury", providerSymbol: "BC_20YEAR" },
-  { symbol: "UST30Y", name: "美国30年期国债收益率", category: "rate", instrumentType: "yield", region: "us", provider: "us-treasury", providerSymbol: "BC_30YEAR" },
+  { symbol: "^VIX", name: "VIX恐慌指数", category: "risk", instrumentType: "index", region: "us", provider: "yahoo", providerSymbol: "^VIX" },
+  { symbol: "UST1Y", name: "美国1年期国债收益率", category: "yield", instrumentType: "yield", region: "us", provider: "us-treasury", providerSymbol: "BC_1YEAR" },
+  { symbol: "UST10Y", name: "美国10年期国债收益率", category: "yield", instrumentType: "yield", region: "us", provider: "us-treasury", providerSymbol: "BC_10YEAR" },
+  { symbol: "UST20Y", name: "美国20年期国债收益率", category: "yield", instrumentType: "yield", region: "us", provider: "us-treasury", providerSymbol: "BC_20YEAR" },
+  { symbol: "UST30Y", name: "美国30年期国债收益率", category: "yield", instrumentType: "yield", region: "us", provider: "us-treasury", providerSymbol: "BC_30YEAR" },
 ];
 
 export const MARKET_MANIFEST: Record<string, MarketManifestEntry> =
