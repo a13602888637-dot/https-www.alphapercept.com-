@@ -8,6 +8,9 @@ const YAHOO_TIMEOUT_MS = 6_000;
 const EASTMONEY_TIMEOUT_MS = 8_000;
 const TREASURY_TIMEOUT_MS = 25_000;
 const CACHE_STATUS_MS = 30 * 60 * 1_000;
+const SNAPSHOT_TTL_MS = 30_000;
+let marketSnapshotCache: { snapshot: MarketSnapshot; timestamp: number } | null = null;
+let marketSnapshotInFlight: Promise<MarketSnapshot> | null = null;
 
 function finiteNumber(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -262,7 +265,7 @@ function resolveMarket(entry: MarketManifestEntry, fresh: Map<string, OsintMarke
   return { ...previous.market, status };
 }
 
-export async function getMarketSnapshot(fetchImpl: typeof fetch = fetch): Promise<MarketSnapshot> {
+async function loadMarketSnapshot(fetchImpl: typeof fetch): Promise<MarketSnapshot> {
   const entries = Object.values(MARKET_MANIFEST);
   const [yahoo, eastmoney, treasury] = await Promise.all([
     fetchYahooMarkets(entries.filter((entry) => entry.provider === "yahoo"), fetchImpl),
@@ -281,4 +284,20 @@ export async function getMarketSnapshot(fetchImpl: typeof fetch = fetch): Promis
     coverage: calculateCoverage(markets),
     markets,
   };
+}
+
+export async function getMarketSnapshot(fetchImpl: typeof fetch = fetch): Promise<MarketSnapshot> {
+  if (fetchImpl !== fetch) return loadMarketSnapshot(fetchImpl);
+  if (marketSnapshotCache && Date.now() - marketSnapshotCache.timestamp < SNAPSHOT_TTL_MS) {
+    return marketSnapshotCache.snapshot;
+  }
+  if (marketSnapshotInFlight) return marketSnapshotInFlight;
+  marketSnapshotInFlight = loadMarketSnapshot(fetchImpl);
+  try {
+    const snapshot = await marketSnapshotInFlight;
+    marketSnapshotCache = { snapshot, timestamp: Date.now() };
+    return snapshot;
+  } finally {
+    marketSnapshotInFlight = null;
+  }
 }

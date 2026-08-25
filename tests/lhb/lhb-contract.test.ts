@@ -186,4 +186,30 @@ async function verifyUnavailable() {
   console.log("LHB_CONTRACT_OK");
 }
 
-void verifyUnavailable();
+async function verifyWarmCache() {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async (input) => {
+    calls += 1;
+    const url = new URL(String(input));
+    const reportName = url.searchParams.get("reportName");
+    const filtered = url.searchParams.has("filter");
+    if (reportName === "RPT_DAILYBILLBOARD_DETAILSNEW" && !filtered) {
+      return Response.json({ result: { data: [{ TRADE_DATE: "2026-08-24 00:00:00" }] } });
+    }
+    if (reportName === "RPT_DAILYBILLBOARD_DETAILSNEW") return Response.json({ result: { data: summaryRows } });
+    if (reportName === "RPT_BILLBOARD_DAILYDETAILSBUY") return Response.json({ result: { data: buyRows } });
+    if (reportName === "RPT_BILLBOARD_DAILYDETAILSSELL") return Response.json({ result: { data: sellRows } });
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+  try {
+    await getLhbSnapshot();
+    const firstCallCount = calls;
+    await getLhbSnapshot();
+    assert.equal(calls, firstCallCount, "warm LHB refresh should not query the latest date again");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+void verifyWarmCache().then(verifyUnavailable);

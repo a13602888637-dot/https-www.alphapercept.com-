@@ -6,6 +6,8 @@ type FetchRowsResult = { rows: RawRow[]; ok: boolean; error: string | null };
 
 const CACHE_TTL_MS = 5 * 60 * 1_000;
 const cache = new Map<string, { snapshot: LhbSnapshot; timestamp: number }>();
+let latestSnapshotCache: { snapshot: LhbSnapshot; timestamp: number } | null = null;
+let latestSnapshotInFlight: Promise<LhbSnapshot> | null = null;
 
 function numberValue(value: unknown): number {
   const parsed = Number(value ?? 0);
@@ -263,7 +265,7 @@ async function latestTradeDate(fetchImpl: typeof fetch): Promise<{ date: string 
   };
 }
 
-export async function getLhbSnapshot(options: { date?: string; fetchImpl?: typeof fetch } = {}): Promise<LhbSnapshot> {
+async function loadLhbSnapshot(options: { date?: string; fetchImpl?: typeof fetch } = {}): Promise<LhbSnapshot> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const requestedDate = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : null;
   const latest = requestedDate ? { date: requestedDate, error: null } : await latestTradeDate(fetchImpl);
@@ -302,4 +304,24 @@ export async function getLhbSnapshot(options: { date?: string; fetchImpl?: typeo
     cache.set(tradeDate, { snapshot, timestamp: Date.now() });
   }
   return snapshot;
+}
+
+export async function getLhbSnapshot(options: { date?: string; fetchImpl?: typeof fetch } = {}): Promise<LhbSnapshot> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const hasRequestedDate = Boolean(options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date));
+  if (fetchImpl !== fetch || hasRequestedDate) return loadLhbSnapshot(options);
+  if (latestSnapshotCache && Date.now() - latestSnapshotCache.timestamp < CACHE_TTL_MS) {
+    return latestSnapshotCache.snapshot;
+  }
+  if (latestSnapshotInFlight) return latestSnapshotInFlight;
+  latestSnapshotInFlight = loadLhbSnapshot(options);
+  try {
+    const snapshot = await latestSnapshotInFlight;
+    if (snapshot.status !== "unavailable" && snapshot.stocks.length > 0) {
+      latestSnapshotCache = { snapshot, timestamp: Date.now() };
+    }
+    return snapshot;
+  } finally {
+    latestSnapshotInFlight = null;
+  }
 }

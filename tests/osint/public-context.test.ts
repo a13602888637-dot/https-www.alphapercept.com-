@@ -16,7 +16,9 @@ const marketSnapshot: MarketSnapshot = {
 const storySnapshot: StorySnapshot = {
   schemaVersion: "1.0",
   generatedAt: "2026-08-24T11:00:00.000Z",
+  windowHours: 72,
   stories: [],
+  pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
   advice: { text: "暂无明确跨市场共振信号。", confidence: "low", generatedAt: null },
   sources: [],
 };
@@ -51,7 +53,13 @@ for (const removed of ["GeoMapBase", "AISituationBrain", "useAuth", "/api/watchl
 assert.equal(situationScreen.includes("MarketBoard"), true);
 assert.equal(situationScreen.includes("WorldBriefing"), true);
 assert.equal(marketBoard.includes("暂无"), true);
-assert.equal(worldBriefing.includes("过去24小时"), true);
+assert.equal(worldBriefing.includes("过去3天"), true);
+assert.equal(worldBriefing.includes("pageSize=20"), true);
+assert.equal(worldBriefing.includes("上一页"), true);
+assert.equal(worldBriefing.includes("下一页"), true);
+assert.equal(situationScreen.includes('/api/osint/v1/markets'), true);
+assert.equal(situationScreen.includes('/api/osint/v1/context'), false);
+assert.equal(situationScreen.includes("30_000"), true);
 for (const timeSource of [marketBoard, worldBriefing, statusBar]) {
   assert.equal(timeSource.includes('timeZone: "Asia/Shanghai"'), true);
 }

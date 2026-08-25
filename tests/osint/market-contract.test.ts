@@ -164,6 +164,21 @@ async function verifyMarketService() {
   assert.equal(treasuryCalls, 0);
   assert.equal(fredSnapshot.markets.find((market) => market.symbol === "UST10Y")?.value, 4.7);
   assert.equal(fredSnapshot.markets.find((market) => market.symbol === "UST10Y")?.source, "fred");
+
+  const originalFetch = globalThis.fetch;
+  let defaultFetchCalls = 0;
+  globalThis.fetch = (async (input, init) => {
+    defaultFetchCalls += 1;
+    return fredFetch(input, init);
+  }) as typeof fetch;
+  try {
+    await getMarketSnapshot();
+    const callsAfterFirstSnapshot = defaultFetchCalls;
+    await getMarketSnapshot();
+    assert.equal(defaultFetchCalls, callsAfterFirstSnapshot, "warm market refresh should reuse the short server snapshot cache");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
   console.log("MARKET_SERVICE_OK");
 }
 
