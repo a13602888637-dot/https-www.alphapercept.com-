@@ -1,6 +1,7 @@
 "use client";
 
 import { FileDown } from "lucide-react";
+import { DAILY_REPORT_PDF_LAYOUT_VERSION } from "@/lib/osint/daily-report/pdf-readiness";
 
 const EXPORT_ACTIONS = [
   { section: "full", label: "完整复盘" },
@@ -22,7 +23,7 @@ export function PrintActions({
         {EXPORT_ACTIONS.map((action) => (
           <a
             key={action.section}
-            href={exportReady ? `/api/osint/v1/reports/${encodeURIComponent(reportId)}/export?section=${action.section}` : undefined}
+            href={exportReady ? `/api/osint/v1/reports/${encodeURIComponent(reportId)}/export?section=${action.section}&layout=${DAILY_REPORT_PDF_LAYOUT_VERSION}` : undefined}
             download
             aria-disabled={!exportReady}
             onClick={(event) => { if (!exportReady) event.preventDefault(); }}

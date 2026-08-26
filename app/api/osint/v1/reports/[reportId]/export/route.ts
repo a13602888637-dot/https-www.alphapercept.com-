@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildDailyReportPdf } from "@/lib/osint/daily-report/pdf-export";
 import type { DailyReportExportSection } from "@/lib/osint/daily-report/contracts";
+import { DAILY_REPORT_PDF_LAYOUT_VERSION } from "@/lib/osint/daily-report/pdf-readiness";
 import { getDailyReport } from "@/lib/osint/daily-report/repository";
 
 export const dynamic = "force-dynamic";
@@ -47,13 +48,13 @@ export async function GET(
 
   try {
     const pdf = await cachedPdf(
-      `${report.id}:${requestedSection}`,
+      `${report.id}:${requestedSection}:${DAILY_REPORT_PDF_LAYOUT_VERSION}`,
       () => buildDailyReportPdf(
         report.snapshot,
         requestedSection as DailyReportExportSection
       )
     );
-    const filename = `alphapercept-osint-${report.reportDate}-${report.edition}-v${report.version}-${requestedSection}.pdf`;
+    const filename = `alphapercept-osint-${report.reportDate}-${report.edition}-v${report.version}-${DAILY_REPORT_PDF_LAYOUT_VERSION}-${requestedSection}.pdf`;
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
@@ -63,7 +64,7 @@ export async function GET(
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Content-Length": String(pdf.length),
         "X-Content-Type-Options": "nosniff",
-        "ETag": `"${report.id}-${requestedSection}"`,
+        "ETag": `"${report.id}-${requestedSection}-${DAILY_REPORT_PDF_LAYOUT_VERSION}"`,
       },
     });
   } catch (error) {

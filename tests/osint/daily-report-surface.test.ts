@@ -81,8 +81,11 @@ assert.equal(center.includes("游资 {report.lhbHotMoneyCount}"), true);
 assert.equal(center.includes("行情 {report.marketAvailable}"), false);
 assert.equal(view.includes("text-base"), true);
 assert.equal(view.includes("embedded"), true);
-assert.equal(view.includes("snapshot.lhb.hotMoneyFlows"), true);
-assert.equal(view.includes("另有"), true);
+assert.equal(view.includes("selectReportStocks"), true);
+assert.equal(view.includes("selectReportHotMoney"), true);
+for (const machineCopy of ["低重要度单源杂讯", "达到日报筛选标准", "观察可信度", "组内最新优先", "重要度"] ) {
+  assert.equal(view.includes(machineCopy), false);
+}
 for (const viewLabel of ["热点", "个股资金", "游资"]) {
   assert.equal(view.includes(viewLabel), true);
 }
@@ -96,6 +99,10 @@ assert.equal(printActions.includes("disabled={!exportReady}"), true);
 assert.equal(printActions.includes("window.open"), false);
 assert.equal(printActions.includes("download"), true);
 assert.equal(printActions.includes("print=1"), false);
+assert.equal(printActions.includes("DAILY_REPORT_PDF_LAYOUT_VERSION"), true);
+assert.equal(printActions.includes("layout=${DAILY_REPORT_PDF_LAYOUT_VERSION}"), true);
+assert.equal(exportRoute.includes("DAILY_REPORT_PDF_LAYOUT_VERSION"), true);
+assert.equal(exportRoute.includes("${report.id}:${requestedSection}:${DAILY_REPORT_PDF_LAYOUT_VERSION}"), true);
 
 const exportHtml = read("lib/osint/daily-report/export-html.ts");
 const pdfExport = read("lib/osint/daily-report/pdf-export.ts");
