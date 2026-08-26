@@ -61,7 +61,7 @@ assert.equal(worldBriefing.includes("snapshotCacheRef"), true);
 assert.equal(worldBriefing.includes("cachedSnapshot"), true);
 assert.equal(worldBriefing.includes("grid w-full grid-cols-1 gap-2 sm:flex"), true);
 assert.equal(worldBriefing.includes("flex-col items-start"), true);
-assert.equal(worldBriefing.includes("grid-cols-[44px_minmax(0,1fr)]"), true);
+assert.equal(worldBriefing.includes("grid-cols-[58px_minmax(0,1fr)]"), true);
 assert.equal(worldBriefing.includes("text-sm leading-6"), true);
 assert.equal(situationScreen.includes('/api/osint/v1/markets'), true);
 assert.equal(situationScreen.includes('/api/osint/v1/context'), false);
