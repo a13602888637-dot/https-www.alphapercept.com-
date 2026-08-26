@@ -45,6 +45,7 @@ async function verifyStories() {
   assert.equal(parseStoryRequest(new URLSearchParams("limit=50")).pageSize, 50);
   assert.equal(parseStoryRequest(new URLSearchParams("page=2&pageSize=20&topic=能源")).page, 2);
   assert.equal(parseStoryRequest(new URLSearchParams("page=2&pageSize=20&topic=能源")).topic, "能源");
+  assert.equal(parseStoryRequest(new URLSearchParams("topic=未来事件")).topic, "未来事件");
   const snapshot = await buildStorySnapshot(rawStories, {
     apiKey: null,
     now: new Date("2026-08-24T11:00:00.000Z"),
@@ -128,6 +129,7 @@ async function verifyStories() {
   assert.equal(cachedAnalysisCalls, 0);
   assert.equal(cachedSnapshot.stories[0].title, "航运风险上升推动油价上涨");
   assert.equal(cachedSnapshot.stories[0].analysisStatus, "complete");
+  assert.equal(cachedSnapshot.stories[0].cacheStatus, "live");
   const cachedFallback = await buildStorySnapshot([], {
     apiKey: "test-key",
     now: new Date("2026-08-24T11:00:00.000Z"),
@@ -138,6 +140,7 @@ async function verifyStories() {
   } as Parameters<typeof buildStorySnapshot>[1] & { cachedStories: Map<string, typeof translated.stories[0]> });
   assert.equal(cachedFallback.stories.length, 1);
   assert.equal(cachedFallback.stories[0].title, "航运风险上升推动油价上涨");
+  assert.equal(cachedFallback.stories[0].cacheStatus, "cached");
   const futureRaw: RawStory[] = [{
     sourceId: "future-news-1",
     sourceName: "Reuters",
@@ -161,12 +164,75 @@ async function verifyStories() {
         direction: "neutral",
         horizon: "1-3d",
         scheduledFor: "2026-08-27T21:00:00.000Z",
+        scheduledPrecision: "exact",
       }],
     }) } }] }),
   });
   assert.equal(futureAnalyzed.stories[0].eventType, "upcoming");
   assert.equal(futureAnalyzed.stories[0].scheduledFor, "2026-08-27T21:00:00.000Z");
+  assert.equal(futureAnalyzed.stories[0].scheduledPrecision, "exact");
   assert.equal(futureAnalyzed.stories[0].tags.topic.includes("未来事件"), true);
+  const vagueFutureRaw: RawStory[] = [{
+    sourceId: "vague-future-news",
+    sourceName: "Reuters",
+    sourceUrl: "https://example.com/vague-future-news",
+    title: "Company plans an investor update tomorrow",
+    description: "The company did not provide a calendar date or exact time.",
+    publishedAt: "2026-08-25T10:30:00.000Z",
+  }];
+  const vagueFutureBase = await buildStorySnapshot(vagueFutureRaw, { apiKey: null, now: new Date("2026-08-25T11:00:00.000Z") });
+  const vagueFuture = await buildStorySnapshot(vagueFutureRaw, {
+    apiKey: "test-key",
+    now: new Date("2026-08-25T11:00:00.000Z"),
+    fetchImpl: async () => Response.json({ choices: [{ message: { content: JSON.stringify({
+      advice: "等待官方日历。",
+      stories: [{
+        id: vagueFutureBase.stories[0].id,
+        titleZh: "公司计划明日更新",
+        summary: "未披露明确日历日期。",
+        topic: ["科技"],
+        region: ["美国"],
+        assets: [],
+        direction: "neutral",
+        horizon: "1-3d",
+        scheduledFor: "2026-08-26T12:00:00.000Z",
+        scheduledPrecision: "date",
+      }],
+    }) } }] }),
+  });
+  assert.equal(vagueFuture.stories[0].eventType, "news");
+  assert.equal(vagueFuture.stories[0].scheduledFor, null);
+  const dateOnlyRaw: RawStory[] = [{
+    sourceId: "date-only-news",
+    sourceName: "Reuters",
+    sourceUrl: "https://example.com/date-only-news",
+    title: "Company will publish results on August 27",
+    description: "The announcement gives a date but no clock time or market session.",
+    publishedAt: "2026-08-25T10:30:00.000Z",
+  }];
+  const dateOnlyBase = await buildStorySnapshot(dateOnlyRaw, { apiKey: null, now: new Date("2026-08-25T11:00:00.000Z") });
+  const dateOnlyFuture = await buildStorySnapshot(dateOnlyRaw, {
+    apiKey: "test-key",
+    now: new Date("2026-08-25T11:00:00.000Z"),
+    fetchImpl: async () => Response.json({ choices: [{ message: { content: JSON.stringify({
+      advice: "关注公司公告。",
+      stories: [{
+        id: dateOnlyBase.stories[0].id,
+        titleZh: "公司将公布业绩",
+        summary: "公告只给出日期。",
+        topic: ["市场"],
+        region: ["美国"],
+        assets: [],
+        direction: "neutral",
+        horizon: "1-3d",
+        scheduledFor: "2026-08-27T16:00:00.000Z",
+        scheduledPrecision: "exact",
+      }],
+    }) } }] }),
+  });
+  assert.equal(dateOnlyFuture.stories[0].eventType, "upcoming");
+  assert.equal(dateOnlyFuture.stories[0].scheduledFor, "2026-08-27T12:00:00.000Z");
+  assert.equal(dateOnlyFuture.stories[0].scheduledPrecision, "date");
   const cachedFutureFiltered = await buildStorySnapshot(futureRaw, {
     apiKey: null,
     now: new Date("2026-08-25T11:00:00.000Z"),

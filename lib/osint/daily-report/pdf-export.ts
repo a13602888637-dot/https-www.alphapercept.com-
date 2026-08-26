@@ -86,6 +86,18 @@ function shortShanghaiTime(value: string): string {
   });
 }
 
+function shortEventTime(story: CuratedStoryCategory["stories"][number]): string {
+  const value = story.scheduledFor || story.publishedAt;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "--";
+  if (story.scheduledPrecision === "date" || story.scheduledPrecision === "session") {
+    const day = date.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", month: "numeric", day: "numeric" });
+    const session = story.scheduledSession === "bmo" ? "盘前" : story.scheduledSession === "dmh" ? "盘中" : story.scheduledSession === "amc" ? "盘后" : "";
+    return `${day}${session ? ` · ${session}` : ""}`;
+  }
+  return shortShanghaiTime(value);
+}
+
 function drawPageBase(
   doc: PDFKit.PDFDocument,
   report: OsintDailyReportSnapshot,
@@ -156,7 +168,7 @@ function drawUpcomingBand(
     const height = 29;
     doc.rect(x, y, width, height).fill(index % 2 === 0 ? COLORS.white : COLORS.row);
     doc.fontSize(7.2).fillColor(COLORS.ink)
-      .text(shortShanghaiTime(story.scheduledFor || story.publishedAt), x + 9, y + 10, { width: 88, lineBreak: false });
+      .text(shortEventTime(story), x + 9, y + 10, { width: 88, lineBreak: false });
     doc.fontSize(7.3).fillColor(COLORS.ink)
       .text(clip(story.title, 35), x + 101, y + 9, { width: 265, lineBreak: false, ellipsis: true });
     doc.fontSize(6.4).fillColor(COLORS.coral)

@@ -119,6 +119,9 @@ assert.equal(nextConfig.includes("serverExternalPackages: ['pdfkit']"), true);
 assert.equal(nextConfig.includes("./node_modules/pdfkit/js/standard-fonts/**/*"), true);
 assert.equal(worldBriefing.includes('"未来事件"'), true);
 assert.equal(worldBriefing.includes("scheduledFor"), true);
+assert.equal(worldBriefing.includes("scheduledPrecision"), true);
+assert.equal(worldBriefing.includes("cacheStatus"), true);
+assert.equal(worldBriefing.includes('source === "持久缓存"'), true);
 assert.equal(worldBriefing.includes("天后"), true);
 assert.equal(worldBriefing.includes("过去3天新闻 + 未来7天事件"), true);
 

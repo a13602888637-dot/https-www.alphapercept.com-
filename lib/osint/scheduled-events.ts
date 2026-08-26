@@ -94,15 +94,38 @@ function isFutureInWindow(scheduledFor: string, now: Date, days: number): boolea
   return Number.isFinite(timestamp) && timestamp >= now.getTime() - 5 * 60_000 && timestamp <= now.getTime() + days * 86_400_000;
 }
 
+function dateAnchorIso(year: number, month: number, day: number): string {
+  return new Date(Date.UTC(year, month - 1, day, 12)).toISOString();
+}
+
+function isDateInWindow(scheduledFor: string, now: Date, days: number): boolean {
+  const timestamp = Date.parse(scheduledFor);
+  return Number.isFinite(timestamp) && timestamp >= now.getTime() - 24 * 60 * 60_000 && timestamp <= now.getTime() + days * 86_400_000;
+}
+
+function categoryForSymbol(symbol: string): "宏观" | "科技" | "能源" | "市场" {
+  if (["NVDA", "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "AMD", "AVGO", "ORCL", "NFLX", "CRM", "ADBE", "INTC", "QCOM", "MU", "TSM", "ASML", "ARM"].includes(symbol)) return "科技";
+  if (["XOM", "CVX"].includes(symbol)) return "能源";
+  return "市场";
+}
+
+function categoryForIpo(name: string): "科技" | "市场" {
+  return /(?:\bAI\b|artificial intelligence|technology|technologies|software|semiconductor|chip|robot)/i.test(name)
+    ? "科技"
+    : "市场";
+}
+
 function officialStory(input: {
   source: string;
   sourceUrl: string;
   title: string;
   description: string;
   scheduledFor: string;
-  category: "宏观" | "科技";
+  category: "宏观" | "科技" | "能源" | "市场";
   assets: string[];
   importance: number;
+  scheduledPrecision?: "date" | "session" | "exact";
+  scheduledSession?: "bmo" | "dmh" | "amc" | null;
 }): RawStory {
   return {
     sourceId: `scheduled:${slug(input.source)}:${input.scheduledFor}:${slug(input.title)}`,
@@ -113,6 +136,8 @@ function officialStory(input: {
     description: input.description,
     publishedAt: input.scheduledFor,
     scheduledFor: input.scheduledFor,
+    scheduledPrecision: input.scheduledPrecision ?? "exact",
+    scheduledSession: input.scheduledSession ?? null,
     eventType: "upcoming",
     topicHints: ["未来事件", input.category, ...input.assets],
     preAnalyzed: true,
@@ -312,21 +337,23 @@ export function parseFinnhubEarningsCalendar(payload: unknown, options: ParseOpt
     if (!MAJOR_EARNINGS_SYMBOLS.has(symbol) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
     const [year, month, day] = date.split("-").map(Number);
     const hourCode = String(row.hour ?? "").toLowerCase();
-    const hour = hourCode === "bmo" ? 8 : hourCode === "dmh" ? 12 : 16;
-    const scheduledFor = zonedLocalToIso({ year, month, day, hour, minute: 0, timeZone: "America/New_York" });
-    if (!isFutureInWindow(scheduledFor, options.now, options.days)) continue;
+    const scheduledSession = hourCode === "bmo" || hourCode === "dmh" || hourCode === "amc" ? hourCode : null;
+    const scheduledFor = dateAnchorIso(year, month, day);
+    if (!isDateInWindow(scheduledFor, options.now, options.days)) continue;
     const eps = Number(row.epsEstimate);
     const revenue = Number(row.revenueEstimate);
-    const timing = hourCode === "bmo" ? "美股盘前" : hourCode === "dmh" ? "美股盘中" : "美股盘后";
+    const timing = scheduledSession === "bmo" ? "美股盘前" : scheduledSession === "dmh" ? "美股盘中" : scheduledSession === "amc" ? "美股盘后" : "具体时段待定";
     events.push(officialStory({
       source: "Finnhub Earnings",
       sourceUrl: options.sourceUrl,
       title: `${symbol} 财报发布（${timing}）`,
       description: `${symbol} 预计公布季度财务结果${Number.isFinite(eps) ? `，市场EPS预期 ${eps}` : ""}${Number.isFinite(revenue) ? `，营收预期 ${(revenue / 1_000_000_000).toFixed(1)} 十亿美元` : ""}。`,
       scheduledFor,
-      category: "科技",
+      category: categoryForSymbol(symbol),
       assets: [symbol, "美股", "财报"],
       importance: ["NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA"].includes(symbol) ? 10 : 8,
+      scheduledPrecision: scheduledSession ? "session" : "date",
+      scheduledSession,
     }));
   }
   return events;
@@ -342,8 +369,8 @@ export function parseFinnhubIpoCalendar(payload: unknown, options: ParseOptions)
     const date = String(row.date ?? "");
     if (!Number.isFinite(value) || value < 1_000_000_000 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
     const [year, month, day] = date.split("-").map(Number);
-    const scheduledFor = zonedLocalToIso({ year, month, day, hour: 9, minute: 30, timeZone: "America/New_York" });
-    if (!isFutureInWindow(scheduledFor, options.now, options.days)) continue;
+    const scheduledFor = dateAnchorIso(year, month, day);
+    if (!isDateInWindow(scheduledFor, options.now, options.days)) continue;
     const name = String(row.name ?? row.symbol ?? "大型公司");
     const symbol = String(row.symbol ?? "");
     events.push(officialStory({
@@ -352,9 +379,10 @@ export function parseFinnhubIpoCalendar(payload: unknown, options: ParseOptions)
       title: `${name}${symbol ? `（${symbol}）` : ""}计划上市`,
       description: `${name}预计在${String(row.exchange ?? "美国市场")}上市，预计发行规模约 ${(value / 1_000_000_000).toFixed(1)} 十亿美元。`,
       scheduledFor,
-      category: "科技",
+      category: categoryForIpo(name),
       assets: [symbol || "IPO", "美股", "IPO"],
       importance: value >= 5_000_000_000 ? 9 : 8,
+      scheduledPrecision: "date",
     }));
   }
   return events;

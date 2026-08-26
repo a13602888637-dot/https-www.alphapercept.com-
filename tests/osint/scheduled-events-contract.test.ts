@@ -25,6 +25,7 @@ async function verifyScheduledEvents() {
   assert.equal(fed.length, 1);
   assert.equal(fed[0].eventType, "upcoming");
   assert.equal(fed[0].scheduledFor, "2026-08-28T14:00:00.000Z");
+  assert.equal(fed[0].scheduledPrecision, "exact");
   assert.equal(fed[0].title, "美联储主席Kevin Warsh：Keynote Remarks");
   assert.equal(fed[0].topicHints.includes("未来事件"), true);
   assert.equal(fed[0].preAnalyzed, true);
@@ -43,11 +44,17 @@ async function verifyScheduledEvents() {
 
   const earnings = module.parseFinnhubEarningsCalendar({ earningsCalendar: [
     { date: "2026-08-26", hour: "amc", symbol: "NVDA", epsEstimate: 1.23, revenueEstimate: 54000000000 },
+    { date: "2026-08-27", hour: "bmo", symbol: "XOM", epsEstimate: 2.1 },
+    { date: "2026-08-27", hour: "amc", symbol: "JPM", epsEstimate: 4.2 },
     { date: "2026-08-27", hour: "amc", symbol: "TINY", epsEstimate: 0.1 },
   ] }, { now, days: 7, sourceUrl: "https://finnhub.io/docs/api/earnings-calendar" });
-  assert.equal(earnings.length, 1);
+  assert.equal(earnings.length, 3);
   assert.equal(earnings[0].title.includes("NVDA"), true);
-  assert.equal(earnings[0].scheduledFor, "2026-08-26T20:00:00.000Z");
+  assert.equal(earnings[0].scheduledFor, "2026-08-26T12:00:00.000Z");
+  assert.equal(earnings[0].scheduledPrecision, "session");
+  assert.equal(earnings[0].scheduledSession, "amc");
+  assert.equal(earnings.find((event: { title: string }) => event.title.includes("XOM"))?.topicHints.includes("能源"), true);
+  assert.equal(earnings.find((event: { title: string }) => event.title.includes("JPM"))?.topicHints.includes("科技"), false);
 
   const ipos = module.parseFinnhubIpoCalendar({ ipoCalendar: [
     { date: "2026-08-28", name: "Large AI Co", symbol: "LAIC", exchange: "NASDAQ", totalSharesValue: 2500000000, status: "expected" },
@@ -55,6 +62,8 @@ async function verifyScheduledEvents() {
   ] }, { now, days: 7, sourceUrl: "https://finnhub.io/docs/api/ipo-calendar" });
   assert.equal(ipos.length, 1);
   assert.equal(ipos[0].title.includes("Large AI Co"), true);
+  assert.equal(ipos[0].scheduledFor, "2026-08-28T12:00:00.000Z");
+  assert.equal(ipos[0].scheduledPrecision, "date");
 
   const nvidiaRss = `<rss><channel><item><title>NVIDIA Sets Conference Call for Second-Quarter Financial Results</title><link>https://nvidianews.nvidia.com/news/nvidia-results</link><description><![CDATA[NVIDIA will host a conference call on Wednesday, August 26, at 2 p.m. PT (5 p.m. ET). Results are publicly announced at approximately 1:20 p.m. PT.]]></description><pubDate>Wed, 29 Jul 2026 21:00:00 GMT</pubDate></item></channel></rss>`;
   const nvidia = module.parseNvidiaPressRss(nvidiaRss, { now, days: 7, sourceUrl: "https://nvidianews.nvidia.com/cats/press_release.xml" });

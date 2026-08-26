@@ -21,9 +21,14 @@ function timeLabel(story: OsintStory): { time: string; age: string } {
   const date = new Date(story.scheduledFor || story.publishedAt);
   if (story.eventType === "upcoming") {
     const days = Math.max(0, shanghaiDay(date) - shanghaiDay(new Date()));
+    const countdown = days === 0 ? "今天" : days === 1 ? "明天" : `${days}天后`;
+    const session = story.scheduledSession === "bmo" ? "美股盘前" : story.scheduledSession === "dmh" ? "美股盘中" : story.scheduledSession === "amc" ? "美股盘后" : null;
+    const dateOnly = date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric", timeZone: "Asia/Shanghai" });
     return {
-      time: date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai", hour12: false }),
-      age: days === 0 ? "今天" : days === 1 ? "明天" : `${days}天后`,
+      time: story.scheduledPrecision === "date" || story.scheduledPrecision === "session"
+        ? dateOnly
+        : date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai", hour12: false }),
+      age: session ? `${session} · ${countdown}` : countdown,
     };
   }
   const ageHours = Math.max(0, Math.floor((Date.now() - date.getTime()) / 3_600_000));
@@ -41,6 +46,7 @@ function tagList(story: OsintStory): string[] {
     story.tags.direction,
     story.tags.horizon,
     story.tags.verification === "multi-source" ? "双源确认" : story.tags.verification === "official" ? "官方来源" : "单源",
+    story.cacheStatus === "cached" ? "缓存" : "",
   ].filter(Boolean).slice(0, 7);
 }
 
@@ -97,7 +103,8 @@ export function WorldBriefing() {
   const visibleStories = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return stories.filter((story) => {
-      if (source !== "全部" && !story.sources.some((item) => item.name === source)) return false;
+      if (source === "持久缓存" && story.cacheStatus !== "cached") return false;
+      if (source !== "全部" && source !== "持久缓存" && !story.sources.some((item) => item.name === source)) return false;
       if (needle && !`${story.title} ${story.summary} ${tagList(story).join(" ")}`.toLowerCase().includes(needle)) return false;
       return true;
     });
@@ -159,7 +166,7 @@ export function WorldBriefing() {
                     <span className={`absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-[#070B12] sm:-left-[21px] ${upcoming ? "bg-[#F59E32]" : "bg-[#2EC4C7]"}`} />
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0"><h3 className="text-sm font-medium leading-5 text-[#D6DEE8] sm:text-[13px]">{story.title}</h3>{story.translationStatus === "translated" && story.originalTitle !== story.title && <p className="mt-0.5 truncate text-[10px] text-[#536177] sm:text-[9px]" title={story.originalTitle}>{story.originalTitle}</p>}<p className="mt-1 text-sm leading-6 text-[#8B98AA] sm:text-[11px] sm:leading-5">{story.summary}</p></div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">{upcoming && <span className="rounded-full bg-[#F59E32]/15 px-2 py-0.5 text-[9px] text-[#FFC66D]">未来事件</span>}<span className="font-mono text-[10px] text-[#F2B84B]">重要度 {story.importance.toFixed(1)}/10</span></div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">{upcoming && <span className="rounded-full bg-[#F59E32]/15 px-2 py-0.5 text-[9px] text-[#FFC66D]">未来事件</span>}{story.cacheStatus === "cached" && <span className="rounded-full bg-slate-500/15 px-2 py-0.5 text-[9px] text-slate-300">缓存回退</span>}<span className="font-mono text-[10px] text-[#F2B84B]">重要度 {story.importance.toFixed(1)}/10</span></div>
                     </div>
                     <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-1.5">{tagList(story).map((tag) => <span key={tag} className="rounded border border-[#2b3a50] bg-[#111b2a] px-1.5 py-0.5 text-[9px] text-[#91A1B7]">{tag}</span>)}</div>

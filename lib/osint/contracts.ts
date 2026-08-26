@@ -35,6 +35,9 @@ export interface StoryTags {
   verification: "official" | "multi-source" | "single-source";
 }
 
+export type ScheduledPrecision = "date" | "session" | "exact";
+export type ScheduledSession = "bmo" | "dmh" | "amc";
+
 export interface OsintStory {
   id: string;
   publishedAt: string;
@@ -49,6 +52,9 @@ export interface OsintStory {
   analysisStatus: "complete" | "fallback";
   eventType?: "news" | "upcoming";
   scheduledFor?: string | null;
+  scheduledPrecision?: ScheduledPrecision | null;
+  scheduledSession?: ScheduledSession | null;
+  cacheStatus?: "live" | "cached";
 }
 
 export interface Coverage {

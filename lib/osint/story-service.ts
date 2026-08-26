@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { OsintStory, StorySnapshot, StoryTags } from "./contracts";
+import type { OsintStory, ScheduledPrecision, ScheduledSession, StorySnapshot, StoryTags } from "./contracts";
 import { fetchAihotItemsV1 } from "./aihot-v1";
 import { fetchScheduledEvents } from "./scheduled-events";
 
@@ -17,6 +17,8 @@ export interface RawStory {
   importanceHint?: number | null;
   eventType?: "news" | "upcoming";
   scheduledFor?: string | null;
+  scheduledPrecision?: ScheduledPrecision | null;
+  scheduledSession?: ScheduledSession | null;
 }
 
 interface BuildStoryOptions {
@@ -240,6 +242,9 @@ function mergeStories(rawStories: RawStory[], now: Date): OsintStory[] {
       analysisStatus: primary.preAnalyzed ? "complete" : "fallback",
       eventType: primary.eventType ?? "news",
       scheduledFor: primary.scheduledFor ?? null,
+      scheduledPrecision: primary.scheduledPrecision ?? null,
+      scheduledSession: primary.scheduledSession ?? null,
+      cacheStatus: "live",
     };
     const importanceHint = Math.max(...items.map((item) => item.importanceHint ?? 0));
     story.importance = Math.max(importance({ publishedAt: story.publishedAt, sources: items, tags }, now), importanceHint);
@@ -251,9 +256,65 @@ function normalizeArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 6) : [];
 }
 
-function hasExplicitFutureDate(story: OsintStory): boolean {
+function explicitCalendarDate(story: OsintStory, now: Date): { year: number; month: number; day: number } | null {
   const text = `${story.originalTitle} ${story.summary}`;
-  return /(?:\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b|\d{1,2}月\d{1,2}日|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|tomorrow|next\s+(?:week|monday|tuesday|wednesday|thursday|friday))/i.test(text);
+  const iso = text.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+  if (iso) return { year: Number(iso[1]), month: Number(iso[2]), day: Number(iso[3]) };
+  const chinese = text.match(/(?:(20\d{2})年)?(\d{1,2})月(\d{1,2})日/);
+  if (chinese) return { year: Number(chinese[1] ?? now.getUTCFullYear()), month: Number(chinese[2]), day: Number(chinese[3]) };
+  const english = text.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:,?\s+(20\d{2}))?\b/i);
+  if (!english) return null;
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  return {
+    year: Number(english[3] ?? now.getUTCFullYear()),
+    month: months.indexOf(english[1].slice(0, 3).toLowerCase()) + 1,
+    day: Number(english[2]),
+  };
+}
+
+function hasExplicitClock(story: OsintStory): boolean {
+  const text = `${story.originalTitle} ${story.summary}`;
+  return /(?:\b\d{1,2}:\d{2}\b|\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b|\d{1,2}(?:[:：]\d{2})?\s*(?:点|时))/i.test(text);
+}
+
+function explicitSession(story: OsintStory): ScheduledSession | null {
+  const text = `${story.originalTitle} ${story.summary}`;
+  if (/(?:盘前|before\s+(?:the\s+)?market|before\s+market\s+open)/i.test(text)) return "bmo";
+  if (/(?:盘后|after\s+(?:the\s+)?market|after\s+market\s+close)/i.test(text)) return "amc";
+  if (/(?:盘中|during\s+(?:the\s+)?market)/i.test(text)) return "dmh";
+  return null;
+}
+
+function dateAnchor(date: { year: number; month: number; day: number }): string {
+  return new Date(Date.UTC(date.year, date.month - 1, date.day, 12)).toISOString();
+}
+
+function futureMetadata(
+  story: OsintStory,
+  item: Record<string, unknown>,
+  now: Date
+): { scheduledFor: string; scheduledPrecision: ScheduledPrecision; scheduledSession: ScheduledSession | null } | null {
+  const explicitDate = explicitCalendarDate(story, now);
+  if (!explicitDate) return null;
+  const dateStart = Date.UTC(explicitDate.year, explicitDate.month - 1, explicitDate.day);
+  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  if (!Number.isFinite(dateStart) || dateStart < todayStart || dateStart > todayStart + 7 * 86_400_000) return null;
+  const scheduledSession = explicitSession(story);
+  if (!hasExplicitClock(story)) {
+    return {
+      scheduledFor: dateAnchor(explicitDate),
+      scheduledPrecision: scheduledSession ? "session" : "date",
+      scheduledSession,
+    };
+  }
+  const scheduledTimestamp = Date.parse(cleanText(item.scheduledFor));
+  if (!Number.isFinite(scheduledTimestamp) || scheduledTimestamp < now.getTime() - 5 * 60_000 || scheduledTimestamp > now.getTime() + 7 * 86_400_000) return null;
+  if (Math.abs(scheduledTimestamp - dateStart) > 2 * 86_400_000) return null;
+  return {
+    scheduledFor: new Date(scheduledTimestamp).toISOString(),
+    scheduledPrecision: "exact",
+    scheduledSession: null,
+  };
 }
 
 async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch, now: Date): Promise<{ stories: OsintStory[]; advice: string } | null> {
@@ -269,7 +330,7 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
           { role: "system", content: "你是全球市场新闻编辑。只输出JSON，不得补写输入中不存在的事实。" },
           {
             role: "user",
-            content: `当前UTC时间为${now.toISOString()}。将以下事件压缩为一句中文摘要并打标签；英文标题同时翻译为中文。advice不超过45字，titleZh不超过35字，summary不超过60字。只有输入正文明确写出未来7天内的日期或时间时，才填写scheduledFor为ISO 8601 UTC；不得根据惯例猜日期，否则必须为null。\n${JSON.stringify(stories.map((story) => ({ id: story.id, title: story.originalTitle, summary: story.summary, language: story.language })))}\n输出：{"advice":"...","stories":[{"id":"...","titleZh":"中文标题","summary":"中文摘要","topic":[],"region":[],"assets":[],"direction":"risk-on|risk-off|mixed|neutral","horizon":"intraday|1-3d|1-3w|medium","scheduledFor":null}]}`,
+            content: `当前UTC时间为${now.toISOString()}。将以下事件压缩为一句中文摘要并打标签；英文标题同时翻译为中文。advice不超过45字，titleZh不超过35字，summary不超过60字。只有输入正文明确写出未来7天内的日历日期时，才填写scheduledFor；有明确时刻才标exact，仅有盘前/盘后标session，仅有日期标date。不得把“明天/下周”猜成日期。\n${JSON.stringify(stories.map((story) => ({ id: story.id, title: story.originalTitle, summary: story.summary, language: story.language })))}\n输出：{"advice":"...","stories":[{"id":"...","titleZh":"中文标题","summary":"中文摘要","topic":[],"region":[],"assets":[],"direction":"risk-on|risk-off|mixed|neutral","horizon":"intraday|1-3d|1-3w|medium","scheduledFor":null,"scheduledPrecision":null}]}`,
           },
         ],
       }),
@@ -297,9 +358,8 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
         : story.tags.horizon;
       const titleZh = cleanText(item.titleZh).slice(0, 80);
       const translatedTitle = story.language !== "zh" && titleZh ? titleZh : story.title;
-      const scheduledForText = cleanText(item.scheduledFor);
-      const scheduledTimestamp = Date.parse(scheduledForText);
-      const upcoming = hasExplicitFutureDate(story) && Number.isFinite(scheduledTimestamp) && scheduledTimestamp >= now.getTime() - 5 * 60_000 && scheduledTimestamp <= now.getTime() + 7 * 86_400_000;
+      const future = futureMetadata(story, item, now);
+      const upcoming = future !== null;
       const topics = normalizeArray(item.topic).length > 0 ? normalizeArray(item.topic) : story.tags.topic;
       return {
         ...story,
@@ -316,7 +376,9 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
         },
         analysisStatus: "complete" as const,
         eventType: upcoming ? "upcoming" as const : story.eventType ?? "news" as const,
-        scheduledFor: upcoming ? new Date(scheduledTimestamp).toISOString() : story.scheduledFor ?? null,
+        scheduledFor: future?.scheduledFor ?? story.scheduledFor ?? null,
+        scheduledPrecision: future?.scheduledPrecision ?? story.scheduledPrecision ?? null,
+        scheduledSession: future?.scheduledSession ?? story.scheduledSession ?? null,
       };
     });
     return { stories: enriched, advice: cleanText(parsed.advice).slice(0, 90) };
@@ -339,6 +401,10 @@ async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchIm
       summary: cached.story.summary,
       tags: { ...cached.story.tags, verification: story.tags.verification },
       analysisStatus: cached.story.analysisStatus,
+      eventType: cached.story.eventType ?? story.eventType,
+      scheduledFor: cached.story.scheduledFor ?? story.scheduledFor,
+      scheduledPrecision: cached.story.scheduledPrecision ?? story.scheduledPrecision,
+      scheduledSession: cached.story.scheduledSession ?? story.scheduledSession,
     };
   });
   const pendingStories = preparedStories.filter((story) => story.analysisStatus !== "complete");
@@ -398,6 +464,9 @@ function hydrateCachedStory(story: OsintStory, cached: OsintStory | undefined): 
     analysisStatus: "complete",
     eventType: cached.eventType ?? story.eventType ?? "news",
     scheduledFor: cached.scheduledFor ?? story.scheduledFor ?? null,
+    scheduledPrecision: cached.scheduledPrecision ?? story.scheduledPrecision ?? null,
+    scheduledSession: cached.scheduledSession ?? story.scheduledSession ?? null,
+    cacheStatus: story.cacheStatus ?? "live",
   };
 }
 
@@ -416,7 +485,7 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
       !canonicalById.has(cached.id) &&
       isStoryInWindow(cached, now, windowMs)
     ) {
-      canonicalById.set(cached.id, cached);
+      canonicalById.set(cached.id, { ...cached, cacheStatus: "cached" });
     }
   }
   const canonicalStories = [...canonicalById.values()]
