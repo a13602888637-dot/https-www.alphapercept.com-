@@ -233,6 +233,51 @@ async function verifyStories() {
   assert.equal(dateOnlyFuture.stories[0].eventType, "upcoming");
   assert.equal(dateOnlyFuture.stories[0].scheduledFor, "2026-08-27T12:00:00.000Z");
   assert.equal(dateOnlyFuture.stories[0].scheduledPrecision, "date");
+  const completedReviewRaw: RawStory[] = [{
+    sourceId: "completed-review",
+    sourceName: "新浪财经",
+    sourceUrl: "https://example.com/completed-review",
+    title: "8月26日港股收评：恒指上涨，科网股活跃",
+    description: "港股三大指数已经收盘，恒指上涨0.56%。",
+    publishedAt: "2026-08-26T08:00:00.000Z",
+  }];
+  const completedReviewBase = await buildStorySnapshot(completedReviewRaw, { apiKey: null, now: new Date("2026-08-26T08:20:00.000Z") });
+  const completedReview = await buildStorySnapshot(completedReviewRaw, {
+    apiKey: "test-key",
+    now: new Date("2026-08-26T08:20:00.000Z"),
+    fetchImpl: async () => Response.json({ choices: [{ message: { content: JSON.stringify({
+      advice: "关注港股表现。",
+      stories: [{
+        id: completedReviewBase.stories[0].id,
+        titleZh: "港股收评",
+        summary: "港股已经收盘。",
+        topic: ["市场"],
+        region: ["中国"],
+        assets: ["港股"],
+        direction: "risk-on",
+        horizon: "intraday",
+        scheduledFor: "2026-08-26T12:00:00.000Z",
+        scheduledPrecision: "date",
+      }],
+    }) } }] }),
+  });
+  assert.equal(completedReview.stories[0].eventType, "news");
+  assert.equal(completedReview.stories[0].scheduledFor, null);
+  const erroneousCachedReview = {
+    ...completedReviewBase.stories[0],
+    eventType: "upcoming" as const,
+    scheduledFor: "2026-08-26T12:00:00.000Z",
+    scheduledPrecision: "date" as const,
+    tags: { ...completedReviewBase.stories[0].tags, topic: ["未来事件", "市场"] },
+    analysisStatus: "complete" as const,
+  };
+  const sanitizedCachedReview = await buildStorySnapshot(completedReviewRaw, {
+    apiKey: null,
+    now: new Date("2026-08-26T08:20:00.000Z"),
+    cachedStories: new Map([[erroneousCachedReview.id, erroneousCachedReview]]),
+  } as Parameters<typeof buildStorySnapshot>[1] & { cachedStories: Map<string, typeof erroneousCachedReview> });
+  assert.equal(sanitizedCachedReview.stories[0].eventType, "news");
+  assert.equal(sanitizedCachedReview.stories[0].tags.topic.includes("未来事件"), false);
   const cachedFutureFiltered = await buildStorySnapshot(futureRaw, {
     apiKey: null,
     now: new Date("2026-08-25T11:00:00.000Z"),

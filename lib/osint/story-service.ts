@@ -277,6 +277,11 @@ function hasExplicitClock(story: OsintStory): boolean {
   return /(?:\b\d{1,2}:\d{2}\b|\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b|\d{1,2}(?:[:：]\d{2})?\s*(?:点|时))/i.test(text);
 }
 
+function hasFutureIntent(story: OsintStory): boolean {
+  const text = `${story.originalTitle} ${story.summary}`;
+  return /(?:将于?|将在|计划|预计|定于|拟于|即将|预定|安排于|届时|will\b|scheduled\b|plans?\b|expected\b|set\s+to\b|due\s+to\b|upcoming\b|to\s+be\s+held\b)/i.test(text);
+}
+
 function explicitSession(story: OsintStory): ScheduledSession | null {
   const text = `${story.originalTitle} ${story.summary}`;
   if (/(?:盘前|before\s+(?:the\s+)?market|before\s+market\s+open)/i.test(text)) return "bmo";
@@ -295,7 +300,7 @@ function futureMetadata(
   now: Date
 ): { scheduledFor: string; scheduledPrecision: ScheduledPrecision; scheduledSession: ScheduledSession | null } | null {
   const explicitDate = explicitCalendarDate(story, now);
-  if (!explicitDate) return null;
+  if (!explicitDate || !hasFutureIntent(story)) return null;
   const dateStart = Date.UTC(explicitDate.year, explicitDate.month - 1, explicitDate.day);
   const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   if (!Number.isFinite(dateStart) || dateStart < todayStart || dateStart > todayStart + 7 * 86_400_000) return null;
@@ -450,8 +455,27 @@ function fallbackAdvice(stories: OsintStory[]): string {
   return "暂无明确跨市场共振信号，优先观察高重要度事件的二次确认。";
 }
 
-function hydrateCachedStory(story: OsintStory, cached: OsintStory | undefined): OsintStory {
+function isStructuredScheduledStory(story: OsintStory): boolean {
+  return story.sources.some((source) => matchesAny(source.name, [
+    "Federal Reserve",
+    "Bureau of Labor Statistics",
+    "Bureau of Economic Analysis",
+    "NVIDIA IR",
+    "Finnhub Earnings",
+    "Finnhub IPO",
+  ]));
+}
+
+function hydrateCachedStory(story: OsintStory, cached: OsintStory | undefined, now: Date): OsintStory {
   if (!cached) return story;
+  const structuredUpcoming = story.eventType === "upcoming" && isStructuredScheduledStory(story);
+  const cachedFuture = !structuredUpcoming && cached.eventType === "upcoming"
+    ? futureMetadata(story, { scheduledFor: cached.scheduledFor }, now)
+    : null;
+  const upcoming = structuredUpcoming || cachedFuture !== null;
+  const cachedTopics = upcoming
+    ? cached.tags.topic
+    : cached.tags.topic.filter((topic) => topic !== "未来事件");
   return {
     ...story,
     title: cached.title,
@@ -460,12 +484,12 @@ function hydrateCachedStory(story: OsintStory, cached: OsintStory | undefined): 
     translationStatus: cached.translationStatus,
     summary: cached.summary,
     importance: Math.max(story.importance, cached.importance),
-    tags: { ...cached.tags, verification: story.tags.verification },
+    tags: { ...cached.tags, topic: cachedTopics, verification: story.tags.verification },
     analysisStatus: "complete",
-    eventType: cached.eventType ?? story.eventType ?? "news",
-    scheduledFor: cached.scheduledFor ?? story.scheduledFor ?? null,
-    scheduledPrecision: cached.scheduledPrecision ?? story.scheduledPrecision ?? null,
-    scheduledSession: cached.scheduledSession ?? story.scheduledSession ?? null,
+    eventType: upcoming ? "upcoming" : "news",
+    scheduledFor: structuredUpcoming ? story.scheduledFor ?? cached.scheduledFor ?? null : cachedFuture?.scheduledFor ?? null,
+    scheduledPrecision: structuredUpcoming ? story.scheduledPrecision ?? cached.scheduledPrecision ?? null : cachedFuture?.scheduledPrecision ?? null,
+    scheduledSession: structuredUpcoming ? story.scheduledSession ?? cached.scheduledSession ?? null : cachedFuture?.scheduledSession ?? null,
     cacheStatus: story.cacheStatus ?? "live",
   };
 }
@@ -489,7 +513,7 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
     }
   }
   const canonicalStories = [...canonicalById.values()]
-    .map((story) => hydrateCachedStory(story, options.cachedStories?.get(story.id)))
+    .map((story) => hydrateCachedStory(story, options.cachedStories?.get(story.id), now))
     .sort((left, right) => storyTiming(left, right) || right.importance - left.importance)
     .slice(0, 200);
   const filteredStories = options.topic
