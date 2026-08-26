@@ -112,6 +112,7 @@ const worldBriefing = read("components/osint-v2/WorldBriefing.tsx");
 assert.equal(exportHtml.includes("z-index:9999"), true);
 assert.equal(exportHtml.includes("section{break-inside:auto}"), true);
 assert.equal(exportHtml.includes("45mm"), true);
+assert.equal(exportHtml.includes("仅供学习和复盘参考，不构成投资建议或买卖依据"), true);
 assert.doesNotMatch(exportHtml, /\.watermark\{[^}]*display:none/);
 assert.doesNotMatch(exportHtml, /\.report-disclaimer\{[^}]*display:none/);
 assert.equal(pdfExport.includes("drawPageBase"), true);

@@ -67,13 +67,33 @@ function topAssets(stories: OsintStory[]): string[] {
   const counts = new Map<string, number>();
   for (const story of stories) {
     for (const asset of story.tags.assets) {
-      counts.set(asset, (counts.get(asset) ?? 0) + 1);
+      const label = humanAsset(asset);
+      if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
     }
   }
   return [...counts.entries()]
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "zh-CN"))
     .slice(0, 3)
     .map(([asset]) => asset);
+}
+
+function humanAsset(asset: string): string | null {
+  const normalized = asset.trim();
+  const aliases: Record<string, string> = {
+    equities: "股票",
+    equity: "股票",
+    stocks: "股票",
+    stock: "股票",
+    bonds: "债券",
+    bond: "债券",
+    rates: "利率",
+    ai: "人工智能",
+    nvidia: "英伟达",
+    haidilao: "海底捞",
+  };
+  const alias = aliases[normalized.toLowerCase()];
+  if (alias) return alias;
+  return /\p{Script=Han}/u.test(normalized) ? normalized : null;
 }
 
 function categoryInsight(stories: OsintStory[]): string {
@@ -90,7 +110,7 @@ function categoryInsight(stories: OsintStory[]): string {
 }
 
 export function plainStoryImpact(story: OsintStory): string {
-  const assets = [...new Set(story.tags.assets)].slice(0, 3);
+  const assets = [...new Set(story.tags.assets.map(humanAsset).filter((asset): asset is string => Boolean(asset)))].slice(0, 3);
   if (assets.length === 0) return "留意后续消息和市场反应。";
   const action = story.tags.direction === "risk-off"
     ? "短期可能带来压力"

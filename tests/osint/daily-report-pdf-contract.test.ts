@@ -99,15 +99,18 @@ async function verifyPdfContract() {
   assert.match(energyCategory?.insight ?? "", /原油/);
   assert.doesNotMatch(energyCategory?.insight ?? "", /多源|验证|风险偏好/);
   const plainCategoryLabel = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).plainCategoryLabel;
+  const plainStoryImpact = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).plainStoryImpact;
   const plainStockReason = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).plainStockReason;
   const selectReportStocks = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).selectReportStocks;
   const selectReportHotMoney = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).selectReportHotMoney;
   assert.equal(typeof plainCategoryLabel, "function");
+  assert.equal(typeof plainStoryImpact, "function");
   assert.equal(typeof plainStockReason, "function");
   assert.equal(typeof selectReportStocks, "function");
   assert.equal(typeof selectReportHotMoney, "function");
-  if (plainCategoryLabel && plainStockReason && selectReportStocks && selectReportHotMoney) {
+  if (plainCategoryLabel && plainStoryImpact && plainStockReason && selectReportStocks && selectReportHotMoney) {
     assert.equal(plainCategoryLabel("macro" as never), "今天市场在看什么");
+    assert.equal(plainStoryImpact(story({ id: "english-asset", title: "测试", publishedAt: "2026-08-26T08:00:00.000Z", tags: { topic: ["宏观"], region: [], assets: ["equities", "bonds"], direction: "risk-off", horizon: "1-3d", verification: "single-source" } }) as never), "股票、债券短期可能带来压力。");
     assert.equal(plainStockReason(["日涨幅偏离值达到7%的前5只证券"] as never), "涨幅明显，登上龙虎榜");
     const selection = selectReportStocks(Array.from({ length: 25 }, (_, index) => ({
       tradeId: `selection-${index}`,

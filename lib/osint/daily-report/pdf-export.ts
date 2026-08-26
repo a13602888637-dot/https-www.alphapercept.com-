@@ -103,11 +103,11 @@ function drawPageBase(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot,
     .rotate(-22, { origin: [PAGE.width / 2, PAGE.height / 2] })
     .text(DAILY_REPORT_WATERMARK, 210, 620, { width: 660, align: "center", lineBreak: false }).restore();
   doc.moveTo(PAGE.left, PAGE.footer).lineTo(PAGE.right, PAGE.footer).lineWidth(1).strokeColor(COLORS.line).stroke();
-  doc.font(FONT).fontSize(15).fillColor(COLORS.slate)
-    .text(DAILY_REPORT_DISCLAIMER, PAGE.left, 1286, { width: 800, height: 25, ellipsis: true });
+  doc.font(FONT).fontSize(14).fillColor(COLORS.slate)
+    .text(DAILY_REPORT_DISCLAIMER, PAGE.left, 1282, { width: 810, height: 38, lineGap: 2 });
   doc.fontSize(16).fillColor(COLORS.muted)
     .text(`${pageNumber} / ${totalPages}`, PAGE.right - 76, 1288, { width: 76, align: "right", lineBreak: false });
-  doc.fontSize(14).fillColor(COLORS.muted).text(`数据截至 ${shanghaiTime(report.asOf)}`, PAGE.left, 1320, { lineBreak: false });
+  doc.fontSize(14).fillColor(COLORS.muted).text(`数据截至 ${shanghaiTime(report.asOf)}`, PAGE.left, 1323, { lineBreak: false });
 }
 
 function drawTitle(doc: PDFKit.PDFDocument, title: string, subtitle: string, accent = COLORS.cyan): void {
@@ -151,8 +151,7 @@ function drawStoryModule(doc: PDFKit.PDFDocument, category: CuratedStoryCategory
     doc.moveTo(x + 24, storyY - 8).lineTo(x + width - 24, storyY - 8).lineWidth(1).strokeColor(COLORS.line).stroke();
     doc.fontSize(24).fillColor(COLORS.ink).text(clip(story.title, 28), x + 24, storyY + 3, { width: width - 48, height: 35, ellipsis: true });
     doc.fontSize(20).fillColor(COLORS.slate).text(clip(story.summary, 52), x + 24, storyY + 42, { width: width - 48, height: 54, ellipsis: true });
-    doc.fontSize(18).fillColor(accent).text(clip(plainStoryImpact(story), 32), x + 24, storyY + 102, { width: width - 48, height: 28, ellipsis: true });
-    doc.fontSize(16).fillColor(COLORS.muted).text(shortShanghaiTime(story.publishedAt), x + 24, storyY + 135, { lineBreak: false });
+    doc.fontSize(18).fillColor(accent).text(clip(plainStoryImpact(story), 32), x + 24, storyY + 100, { width: width - 48, height: 28, ellipsis: true });
   });
 }
 
@@ -211,7 +210,7 @@ function leadStocks(flow: LhbHotMoneyFlow): string {
 }
 
 function drawHotMoneyColumn(doc: PDFKit.PDFDocument, flows: LhbHotMoneyFlow[], startIndex: number, x: number, y: number, width: number): void {
-  const rowHeight = Math.min(130, (1238 - y) / Math.max(1, flows.length));
+  const rowHeight = Math.min(126, (1238 - y) / Math.max(1, flows.length));
   flows.forEach((flow, index) => {
     const rowY = y + index * rowHeight;
     const netPositive = flow.totalNetAmount >= 0;
@@ -219,12 +218,12 @@ function drawHotMoneyColumn(doc: PDFKit.PDFDocument, flows: LhbHotMoneyFlow[], s
     doc.roundedRect(x, rowY, width, rowHeight - 10, 14).fillAndStroke(index % 2 === 0 ? COLORS.white : COLORS.row, COLORS.line);
     doc.rect(x, rowY, 8, rowHeight - 10).fill(accent);
     doc.fontSize(17).fillColor(COLORS.muted).text(String(startIndex + index + 1).padStart(2, "0"), x + 20, rowY + 17, { width: 30, lineBreak: false });
-    doc.fontSize(24).fillColor(COLORS.ink).text(clip(flow.label, 12), x + 58, rowY + 13, { width: width - 226, lineBreak: false, ellipsis: true });
-    doc.fontSize(18).fillColor(COLORS.slate).text(netPositive ? "净买入" : "净卖出", x + width - 164, rowY + 17, { width: 64, lineBreak: false });
-    doc.fontSize(24).fillColor(accent).text(amount(flow.totalNetAmount), x + width - 98, rowY + 12, { width: 78, align: "right", lineBreak: false });
-    doc.fontSize(17).fillColor(COLORS.slate).text(clip(flow.departmentNames[0] || "席位观察", 22), x + 58, rowY + 50, { width: width - 78, lineBreak: false, ellipsis: true });
-    doc.fontSize(17).fillColor(COLORS.slate).text(`买入 ${amount(flow.totalBuyAmount)}  卖出 ${amount(flow.totalSellAmount)}`, x + 58, rowY + 78, { width: width - 78, lineBreak: false });
-    doc.fontSize(18).fillColor(accent).text(`主要买入：${clip(leadStocks(flow), 22)}`, x + 58, rowY + 103, { width: width - 78, lineBreak: false, ellipsis: true });
+    doc.fontSize(23).fillColor(COLORS.ink).text(clip(flow.label, 12), x + 58, rowY + 13, { width: width - 245, lineBreak: false, ellipsis: true });
+    doc.fontSize(16).fillColor(COLORS.slate).text(netPositive ? "净买入" : "净卖出", x + width - 184, rowY + 18, { width: 62, lineBreak: false });
+    doc.fontSize(20).fillColor(accent).text(amount(flow.totalNetAmount), x + width - 118, rowY + 14, { width: 98, align: "right", lineBreak: false });
+    doc.fontSize(16).fillColor(COLORS.slate).text(clip(flow.departmentNames[0] || "席位观察", 20), x + 58, rowY + 46, { width: width - 78, lineBreak: false, ellipsis: true });
+    doc.fontSize(16).fillColor(COLORS.slate).text(`买入 ${amount(flow.totalBuyAmount)}  卖出 ${amount(flow.totalSellAmount)}`, x + 58, rowY + 70, { width: width - 78, lineBreak: false });
+    doc.fontSize(16).fillColor(accent).text(`主要买入：${clip(leadStocks(flow), 20)}`, x + 58, rowY + 94, { width: width - 78, lineBreak: false, ellipsis: true });
   });
 }
 

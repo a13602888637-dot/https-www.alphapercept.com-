@@ -6,7 +6,7 @@ import { rankReportStocks } from "./story-curation";
 
 export const DAILY_REPORT_WATERMARK = "AlphaPercept · 仅供参考";
 export const DAILY_REPORT_DISCLAIMER =
-  "本报告基于公开信息自动整理，仅供学习与复盘参考，不构成投资建议或任何买卖依据。数据可能延迟或存在误差，请以交易所、上市公司及原始来源为准。";
+  "仅供学习和复盘参考，不构成投资建议或买卖依据。数据来自公开信息，可能存在延迟或误差。";
 
 export function hasRequiredExportNotices(html: string): boolean {
   const watermarkRule = html.match(/\.watermark\{([^}]*)\}/)?.[1] ?? "";

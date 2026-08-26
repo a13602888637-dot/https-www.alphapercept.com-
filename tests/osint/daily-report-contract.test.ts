@@ -6,11 +6,10 @@ import type {
   StorySnapshot,
 } from "../../lib/osint/contracts";
 import { composeDailyReportSnapshot } from "../../lib/osint/daily-report/compose";
-import { buildDailyReportHtml, hasRequiredExportNotices } from "../../lib/osint/daily-report/export-html";
+import { buildDailyReportHtml, DAILY_REPORT_DISCLAIMER, hasRequiredExportNotices } from "../../lib/osint/daily-report/export-html";
 
 const REQUIRED_WATERMARK = "AlphaPercept · 仅供参考";
-const REQUIRED_DISCLAIMER =
-  "本报告基于公开信息自动整理，仅供学习与复盘参考，不构成投资建议或任何买卖依据。数据可能延迟或存在误差，请以交易所、上市公司及原始来源为准。";
+const REQUIRED_DISCLAIMER = DAILY_REPORT_DISCLAIMER;
 
 const markets: MarketSnapshot = {
   schemaVersion: "1.0",
@@ -152,7 +151,7 @@ assert.match(fullHtml, /@media print/);
 assert.match(fullHtml, new RegExp(REQUIRED_WATERMARK));
 assert.match(fullHtml, new RegExp(REQUIRED_DISCLAIMER));
 assert.match(fullHtml, /\.watermark\{[^}]*position:fixed/);
-assert.match(fullHtml, /<footer[^>]*>.*本报告基于公开信息自动整理/s);
+assert.match(fullHtml, /<footer[^>]*>.*仅供学习和复盘参考/s);
 assert.equal(hasRequiredExportNotices(fullHtml), true);
 assert.equal(hasRequiredExportNotices(fullHtml.replace("z-index:9999", "display:none")), false);
 
