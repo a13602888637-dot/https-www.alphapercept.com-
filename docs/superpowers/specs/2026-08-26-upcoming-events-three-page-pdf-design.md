@@ -16,18 +16,18 @@
 - 2026-09-03 02:00（北京时间）：美联储公布 Beige Book。
 - 下一次 FOMC 会议为 2026-09-15 至 09-16；声明和新闻发布会时间在进入未来 7 天窗口后展示。
 
-权威来源：
+免费数据架构：
 
-- Federal Reserve 月度日历和 FOMC 日历
-- BLS 官方发布日历/ICS
-- BEA 官方 Release Schedule
-- NVIDIA Investor Relations 的 Event/Press Release RSS
+- Finnhub 现有生产 Key：财报、IPO 等结构化公司事件主源
+- Federal Reserve、BLS、BEA：三个官方宏观日历兜底
+- 现有新闻流：仅从新 story 中提取明确的未来日期，补行业大会、产品发布会、政策会议等非标准事件
+- NVIDIA Newsroom Press Release RSS：用于补充财报精确时间等官方公司公告
 
 ## 方案选择
 
-### 采用：官方日历适配器
+### 采用：免费混合聚合
 
-每个来源独立解析并归一化，优先保证时间、时区和来源链接可靠。无需 DeepSeek，不重复消耗 Token。
+Finnhub承担公司日历聚合；三个美国官方日历只覆盖最重要宏观事件；新闻抽取补足非标准事件。已有 DeepSeek 调用只对新 story 输出未来时间，不增加重复调用。
 
 ### 未采用：第三方财经日历 API
 

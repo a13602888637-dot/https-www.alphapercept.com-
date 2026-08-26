@@ -30,9 +30,9 @@
 - Test: `tests/osint/scheduled-events-contract.test.ts`
 
 **Interfaces:**
-- Produces: `fetchScheduledEvents(options?: { now?: Date; fetchImpl?: typeof fetch; days?: number }): Promise<RawStory[]>`
+- Produces: `fetchScheduledEvents(options?: { now?: Date; fetchImpl?: typeof fetch; days?: number; finnhubApiKey?: string | null }): Promise<ScheduledEventFetchResult>` where the result contains `stories` plus per-source `{ name, ok, count, error }` health.
 - Extends: `OsintStory` with `eventType: "news" | "upcoming"` and `scheduledFor: string | null`
-- Consumes: Fed monthly calendar, BLS ICS, BEA release schedule, NVIDIA IR press-release RSS/index.
+- Consumes: Finnhub earnings/IPO calendars, Fed monthly calendar, BLS ICS, BEA release schedule, and NVIDIA Newsroom press-release RSS as a precision-time supplement.
 
 - [ ] **Step 1: Write the failing contract test**
 
@@ -68,7 +68,7 @@ Implement source-local parsers and return `RawStory` objects shaped as:
 }
 ```
 
-Use `America/New_York` for Fed/BLS/BEA times and `America/Los_Angeles` for NVIDIA times before converting to ISO.
+Use `America/New_York` for Fed/BLS/BEA times and `America/Los_Angeles` for NVIDIA times before converting to ISO. Fetch sources with `Promise.allSettled`; preserve the last successful persistent stories when a source fails, and expose source health for monitoring.
 
 - [ ] **Step 4: Merge scheduled events into story collection**
 

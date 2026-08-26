@@ -47,6 +47,8 @@ export interface OsintStory {
   sources: Array<{ name: string; url: string }>;
   tags: StoryTags;
   analysisStatus: "complete" | "fallback";
+  eventType?: "news" | "upcoming";
+  scheduledFor?: string | null;
 }
 
 export interface Coverage {

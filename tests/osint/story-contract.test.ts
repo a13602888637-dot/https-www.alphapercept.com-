@@ -247,6 +247,32 @@ async function verifyStories() {
   assert.equal(chronological.stories[0].publishedAt, "2026-08-25T11:55:00.000Z");
   assert.ok(chronological.stories[0].importance < chronological.stories[1].importance);
 
+  const mixedTiming = await buildStorySnapshot([
+    {
+      sourceId: "future-fed",
+      sourceName: "Federal Reserve",
+      sourceUrl: "https://www.federalreserve.gov/calendar",
+      title: "未来美联储主席讲话",
+      description: "官方日历事件。",
+      publishedAt: "2026-08-25T14:00:00.000Z",
+      scheduledFor: "2026-08-25T14:00:00.000Z",
+      eventType: "upcoming",
+      topicHints: ["未来事件", "宏观"],
+      preAnalyzed: true,
+      importanceHint: 9,
+    },
+    {
+      sourceId: "current-news",
+      sourceName: "Reuters",
+      sourceUrl: "https://example.com/current-news",
+      title: "当前股票市场新闻",
+      description: "已发生新闻。",
+      publishedAt: "2026-08-25T11:30:00.000Z",
+    },
+  ], { apiKey: null, now: pagingNow, windowHours: 72, pageSize: 20 });
+  assert.deepEqual(mixedTiming.stories.map((story) => story.id.length > 0 ? story.eventType : ""), ["upcoming", "news"]);
+  assert.equal(mixedTiming.stories[0].tags.topic.includes("未来事件"), true);
+
   const manyRaw: RawStory[] = Array.from({ length: 13 }, (_, index) => ({
     sourceId: `many-${index}`,
     sourceName: "BBC World",

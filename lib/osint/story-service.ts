@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { OsintStory, StorySnapshot, StoryTags } from "./contracts";
 import { fetchAihotItemsV1 } from "./aihot-v1";
+import { fetchScheduledEvents } from "./scheduled-events";
 
 export interface RawStory {
   sourceId: string;
@@ -14,6 +15,8 @@ export interface RawStory {
   topicHints?: string[];
   preAnalyzed?: boolean;
   importanceHint?: number | null;
+  eventType?: "news" | "upcoming";
+  scheduledFor?: string | null;
 }
 
 interface BuildStoryOptions {
@@ -181,6 +184,28 @@ function importance(story: { publishedAt: string; sources: RawStory[]; tags: Sto
   return Number(Math.min(10, tier + corroboration + recency + relevance).toFixed(1));
 }
 
+function storyTiming(left: { eventType?: string; scheduledFor?: string | null; publishedAt: string }, right: { eventType?: string; scheduledFor?: string | null; publishedAt: string }): number {
+  const leftUpcoming = left.eventType === "upcoming";
+  const rightUpcoming = right.eventType === "upcoming";
+  if (leftUpcoming && rightUpcoming) {
+    return String(left.scheduledFor ?? left.publishedAt).localeCompare(String(right.scheduledFor ?? right.publishedAt));
+  }
+  if (leftUpcoming) return -1;
+  if (rightUpcoming) return 1;
+  return right.publishedAt.localeCompare(left.publishedAt);
+}
+
+function isStoryInWindow(story: { eventType?: string; scheduledFor?: string | null; publishedAt: string }, now: Date, windowMs: number): boolean {
+  const timestamp = new Date(story.eventType === "upcoming" ? story.scheduledFor ?? story.publishedAt : story.publishedAt).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  if (story.eventType === "upcoming") {
+    const distance = timestamp - now.getTime();
+    return distance >= -5 * 60_000 && distance <= 7 * 86_400_000;
+  }
+  const age = now.getTime() - timestamp;
+  return age >= -5 * 60_000 && age <= windowMs;
+}
+
 function mergeStories(rawStories: RawStory[], now: Date): OsintStory[] {
   const groups: RawStory[][] = [];
   for (const raw of rawStories.filter((story) => story.title && story.sourceUrl)) {
@@ -212,13 +237,13 @@ function mergeStories(rawStories: RawStory[], now: Date): OsintStory[] {
       sources,
       tags,
       analysisStatus: primary.preAnalyzed ? "complete" : "fallback",
+      eventType: primary.eventType ?? "news",
+      scheduledFor: primary.scheduledFor ?? null,
     };
     const importanceHint = Math.max(...items.map((item) => item.importanceHint ?? 0));
     story.importance = Math.max(importance({ publishedAt: story.publishedAt, sources: items, tags }, now), importanceHint);
     return story;
-  }).sort((left, right) =>
-    right.publishedAt.localeCompare(left.publishedAt) || right.importance - left.importance
-  );
+  }).sort((left, right) => storyTiming(left, right) || right.importance - left.importance);
 }
 
 function normalizeArray(value: unknown): string[] {
@@ -353,28 +378,20 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
   const windowMs = windowHours * 60 * 60 * 1_000;
   const pageSize = Math.min(50, Math.max(1, options.pageSize ?? options.limit ?? 20));
   const requestedPage = Math.max(1, Math.floor(options.page ?? 1));
-  const currentStories = rawStories.filter((story) => {
-    const publishedAt = new Date(story.publishedAt).getTime();
-    const age = now.getTime() - publishedAt;
-    return Number.isFinite(publishedAt) && age >= -5 * 60 * 1_000 && age <= windowMs;
-  });
+  const currentStories = rawStories.filter((story) => isStoryInWindow(story, now, windowMs));
   const canonicalById = new Map(
     mergeStories(currentStories, now).map((story) => [story.id, story])
   );
   for (const cached of options.cachedStories?.values() ?? []) {
-    const publishedAt = new Date(cached.publishedAt).getTime();
-    const age = now.getTime() - publishedAt;
     if (
       !canonicalById.has(cached.id) &&
-      Number.isFinite(publishedAt) &&
-      age >= -5 * 60 * 1_000 &&
-      age <= windowMs
+      isStoryInWindow(cached, now, windowMs)
     ) {
       canonicalById.set(cached.id, cached);
     }
   }
   const canonicalStories = [...canonicalById.values()]
-    .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt) || right.importance - left.importance)
+    .sort((left, right) => storyTiming(left, right) || right.importance - left.importance)
     .slice(0, 200);
   const filteredStories = options.topic
     ? canonicalStories.filter((story) => story.tags.topic.includes(options.topic!))
@@ -636,25 +653,42 @@ export async function getStorySnapshot(options: {
     ? sourceCache.results
     : null;
   if (!results) {
-    results = await Promise.all([
-      fetchAihotTechnology(fetchImpl),
-      fetchRss("Bloomberg Markets", "https://www.bloomberg.com/feeds/markets/news.rss", fetchImpl, { maxItems: 50, marketOnly: true }),
-      fetchRss("Bloomberg Economics", "https://www.bloomberg.com/feeds/economics/news.rss", fetchImpl, { maxItems: 40, marketOnly: true }),
-      fetchRss("Bloomberg Technology", "https://www.bloomberg.com/feeds/technology/news.rss", fetchImpl, { maxItems: 40, marketOnly: true }),
-      fetchGoogleNewsIndex("Reuters", "site:reuters.com (stocks OR markets OR economy OR companies OR commodities)", fetchImpl),
-      fetchGoogleNewsIndex("Wind公开资讯", "site:wind.com.cn (股票 OR 市场 OR 宏观 OR 行业 OR 公司)", fetchImpl),
-      fetchRss("CNBC Markets", "https://www.cnbc.com/id/100003114/device/rss/rss.html", fetchImpl, { maxItems: 40, marketOnly: true }),
-      fetchRss("WSJ Markets", "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", fetchImpl, { maxItems: 40, marketOnly: true }),
-      fetchRss("Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", fetchImpl, { maxItems: 30, marketOnly: true }),
-      fetchRss("SEC", "https://www.sec.gov/news/pressreleases.rss", fetchImpl, { maxItems: 30, marketOnly: true }),
-      fetchRss("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", fetchImpl, { maxItems: 30, marketOnly: true }),
-      fetchGoogleNewsIndex("Google News", "(stock market OR central bank OR oil OR sanctions OR semiconductor OR earnings)", fetchImpl),
-      fetchGdelt(fetchImpl),
-      fetchReliefWeb(fetchImpl),
-      fetchChineseFinance(fetchImpl),
-      fetchSinaFinance(fetchImpl),
-      fetchEastMoneyNews(fetchImpl),
+    const [standardResults, scheduled] = await Promise.all([
+      Promise.all([
+        fetchAihotTechnology(fetchImpl),
+        fetchRss("Bloomberg Markets", "https://www.bloomberg.com/feeds/markets/news.rss", fetchImpl, { maxItems: 50, marketOnly: true }),
+        fetchRss("Bloomberg Economics", "https://www.bloomberg.com/feeds/economics/news.rss", fetchImpl, { maxItems: 40, marketOnly: true }),
+        fetchRss("Bloomberg Technology", "https://www.bloomberg.com/feeds/technology/news.rss", fetchImpl, { maxItems: 40, marketOnly: true }),
+        fetchGoogleNewsIndex("Reuters", "site:reuters.com (stocks OR markets OR economy OR companies OR commodities)", fetchImpl),
+        fetchGoogleNewsIndex("Wind公开资讯", "site:wind.com.cn (股票 OR 市场 OR 宏观 OR 行业 OR 公司)", fetchImpl),
+        fetchRss("CNBC Markets", "https://www.cnbc.com/id/100003114/device/rss/rss.html", fetchImpl, { maxItems: 40, marketOnly: true }),
+        fetchRss("WSJ Markets", "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", fetchImpl, { maxItems: 40, marketOnly: true }),
+        fetchRss("Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", fetchImpl, { maxItems: 30, marketOnly: true }),
+        fetchRss("SEC", "https://www.sec.gov/news/pressreleases.rss", fetchImpl, { maxItems: 30, marketOnly: true }),
+        fetchRss("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", fetchImpl, { maxItems: 30, marketOnly: true }),
+        fetchGoogleNewsIndex("Google News", "(stock market OR central bank OR oil OR sanctions OR semiconductor OR earnings)", fetchImpl),
+        fetchGdelt(fetchImpl),
+        fetchReliefWeb(fetchImpl),
+        fetchChineseFinance(fetchImpl),
+        fetchSinaFinance(fetchImpl),
+        fetchEastMoneyNews(fetchImpl),
+      ]),
+      fetchScheduledEvents({ now: new Date(), days: 7, fetchImpl }),
     ]);
+    const storySourceNames: Record<string, string> = {
+      "Finnhub财报": "Finnhub Earnings",
+      "Finnhub IPO": "Finnhub IPO",
+      "Federal Reserve日历": "Federal Reserve",
+      "BLS日历": "U.S. Bureau of Labor Statistics",
+      "BEA日历": "U.S. Bureau of Economic Analysis",
+      "NVIDIA IR": "NVIDIA IR",
+    };
+    const scheduledResults = scheduled.sources.map((source) => ({
+      name: source.name,
+      ok: source.ok,
+      stories: scheduled.stories.filter((story) => story.sourceName === storySourceNames[source.name]),
+    }));
+    results = [...standardResults, ...scheduledResults];
     if (fetchImpl === fetch) {
       sourceCache = { results, timestamp: Date.now() };
       pageCache.clear();
