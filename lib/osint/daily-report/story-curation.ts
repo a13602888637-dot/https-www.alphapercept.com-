@@ -91,9 +91,16 @@ export function curateReportStories(
   options: { maxPerCategory?: number } = {}
 ): CuratedStoryReport {
   const maxPerCategory = Math.min(8, Math.max(1, options.maxPerCategory ?? 6));
-  const sorted = [...stories].sort((left, right) =>
-    right.publishedAt.localeCompare(left.publishedAt) || right.importance - left.importance
-  );
+  const sorted = [...stories].sort((left, right) => {
+    const leftUpcoming = left.eventType === "upcoming";
+    const rightUpcoming = right.eventType === "upcoming";
+    if (leftUpcoming && rightUpcoming) {
+      return String(left.scheduledFor ?? left.publishedAt).localeCompare(String(right.scheduledFor ?? right.publishedAt));
+    }
+    if (leftUpcoming) return -1;
+    if (rightUpcoming) return 1;
+    return right.publishedAt.localeCompare(left.publishedAt) || right.importance - left.importance;
+  });
   const categories = CATEGORY_RULES.map((rule) => {
     const selected = sorted
       .filter((story) => categoryForStory(story).key === rule.key && reportWorthy(story, rule.key))

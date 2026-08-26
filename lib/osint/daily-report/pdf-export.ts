@@ -8,403 +8,355 @@ import {
   DAILY_REPORT_WATERMARK,
 } from "./export-html";
 import {
+  DAILY_REPORT_PDF_FONT_ASSET,
+  isDailyReportPdfReady,
+} from "./pdf-readiness";
+import {
   curateReportStories,
   rankReportStocks,
   type CuratedStoryCategory,
 } from "./story-curation";
-import {
-  DAILY_REPORT_PDF_FONT_ASSET,
-  isDailyReportPdfReady,
-} from "./pdf-readiness";
 
-const NOTO_SANS_SC_REGULAR = `${process.cwd()}/${DAILY_REPORT_PDF_FONT_ASSET}`;
 const FONT = "NotoSansSC";
+const FONT_PATH = `${process.cwd()}/${DAILY_REPORT_PDF_FONT_ASSET}`;
+const PAGE = { width: 595.28, height: 841.89, left: 38, right: 557.28, footer: 798 };
 const COLORS = {
-  paper: "#F4F7FA",
-  card: "#FFFFFF",
-  ink: "#07111F",
-  navy: "#0B1929",
-  navySoft: "#13263B",
-  teal: "#20BFC4",
-  tealSoft: "#E6F7F7",
-  slate: "#65758A",
-  muted: "#8A98AA",
-  line: "#D8E1EB",
-  amber: "#D99B22",
-  amberSoft: "#FFF5DA",
-  red: "#C94755",
-  green: "#17845D",
+  canvas: "#F6FAFC",
+  white: "#FFFFFF",
+  ink: "#0B1B32",
+  navy: "#0B1B32",
+  navySoft: "#142D49",
+  cyan: "#00B8C4",
+  cyanSoft: "#E0F7F8",
+  coral: "#F45B69",
+  orange: "#F59E32",
+  orangeSoft: "#FFF1D9",
+  green: "#11966F",
+  slate: "#66788C",
+  muted: "#93A2B3",
+  line: "#D6E3EB",
+  row: "#EAF2F6",
 } as const;
 
 const CATEGORY_COLORS: Record<CuratedStoryCategory["key"], string> = {
-  upcoming: "#F59E32",
-  macro: "#2D78C4",
-  geopolitics: "#C94755",
-  energy: "#D99B22",
-  technology: "#20AEB4",
-  markets: "#7656A8",
+  upcoming: COLORS.orange,
+  macro: "#2F7DD1",
+  geopolitics: COLORS.coral,
+  energy: "#DB9B22",
+  technology: COLORS.cyan,
+  markets: "#7758B5",
 };
 
-type PdfSection = DailyReportExportSection;
-
-function formatShanghaiTime(value: string): string {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "--";
-  return date.toLocaleString("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    hour12: false,
-  });
+function clip(value: string, max: number): string {
+  return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 }
 
 function amount(value: number): string {
-  return `${(value / 10_000).toLocaleString("zh-CN", { maximumFractionDigits: 0 })} 万`;
+  return `${(value / 10_000).toLocaleString("zh-CN", { maximumFractionDigits: 0 })}万`;
 }
 
 function signedAmount(value: number): string {
   return `${value >= 0 ? "+" : ""}${amount(value)}`;
 }
 
-function shorten(value: string, max: number): string {
-  return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
-}
-
-function contentWidth(doc: PDFKit.PDFDocument): number {
-  return doc.page.width - doc.page.margins.left - doc.page.margins.right;
-}
-
-function preserveCursor(doc: PDFKit.PDFDocument, draw: () => void): void {
-  const x = doc.x;
-  const y = doc.y;
-  draw();
-  doc.x = x;
-  doc.y = y;
-}
-
-function drawPageBase(doc: PDFKit.PDFDocument): void {
-  preserveCursor(doc, () => {
-    doc.save();
-    doc.rect(0, 0, doc.page.width, doc.page.height).fill(COLORS.paper);
-    doc.rect(0, 0, 5, doc.page.height).fill(COLORS.teal);
-    doc.font(FONT).fontSize(6.5).fillColor(COLORS.muted)
-      .text("ALPHAPERCEPT  /  OSINT DAILY REVIEW", doc.page.margins.left, 21, {
-        lineBreak: false,
-      });
-    doc.moveTo(doc.page.margins.left, 34)
-      .lineTo(doc.page.width - doc.page.margins.right, 34)
-      .lineWidth(0.6)
-      .strokeColor(COLORS.line)
-      .stroke();
-    doc.restore();
+function shanghaiTime(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "--";
+  return date.toLocaleString("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
   });
 }
 
-function addPage(doc: PDFKit.PDFDocument): void {
-  doc.addPage();
+function shortShanghaiTime(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "--";
+  return date.toLocaleString("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
-function ensureSpace(doc: PDFKit.PDFDocument, height: number): void {
-  const bottom = doc.page.height - doc.page.margins.bottom;
-  if (doc.y + height > bottom) addPage(doc);
-}
-
-function drawCover(
+function drawPageBase(
   doc: PDFKit.PDFDocument,
   report: OsintDailyReportSnapshot,
-  selectedStories: number
+  pageNumber: number,
+  totalPages: number
 ): void {
-  doc.save();
-  doc.rect(5, 0, doc.page.width - 5, 132).fill(COLORS.navy);
-  doc.rect(doc.page.margins.left, 28, 54, 3).fill(COLORS.teal);
-  doc.font(FONT).fontSize(8).fillColor("#89E7E9")
-    .text("ALPHAPERCEPT REVIEW", doc.page.margins.left, 41, { characterSpacing: 1.5 });
-  doc.font(FONT).fontSize(22).fillColor("#FFFFFF")
-    .text(report.title, doc.page.margins.left, 61, { width: contentWidth(doc) });
-  doc.font(FONT).fontSize(8).fillColor("#9EB0C4")
-    .text(`数据截至 ${formatShanghaiTime(report.asOf)}  ·  ${report.edition === "global" ? "全球终版" : "收盘版"}  ·  v${report.version}`, doc.page.margins.left, 101, { lineBreak: false });
-  doc.restore();
-
-  const cardY = 151;
-  const gap = 10;
-  const cardWidth = (contentWidth(doc) - gap * 2) / 3;
-  const cards = [
-    { label: "热点精选", value: `${selectedStories}/${report.stories.stories.length}`, note: "分类后高价值事件" },
-    { label: "个股资金", value: `${rankReportStocks(report.lhb.stocks).length}`, note: "按净买入额排序" },
-    { label: "游资席位", value: `${report.lhb.hotMoneyFlows.length}`, note: "实名观察与活跃席位" },
-  ];
-  cards.forEach((card, index) => {
-    const x = doc.page.margins.left + index * (cardWidth + gap);
-    doc.roundedRect(x, cardY, cardWidth, 58, 7).fillAndStroke(COLORS.card, COLORS.line);
-    doc.font(FONT).fontSize(7.5).fillColor(COLORS.slate).text(card.label, x + 12, cardY + 10, { lineBreak: false });
-    doc.font(FONT).fontSize(17).fillColor(COLORS.ink).text(card.value, x + 12, cardY + 23, { lineBreak: false });
-    doc.font(FONT).fontSize(6.5).fillColor(COLORS.muted).text(card.note, x + 12, cardY + 45, { lineBreak: false });
-  });
-  doc.x = doc.page.margins.left;
-  doc.y = 231;
+  doc.rect(0, 0, PAGE.width, PAGE.height).fill(COLORS.canvas);
+  doc.rect(0, 0, 5, PAGE.height).fill(COLORS.cyan);
+  doc.font(FONT).fontSize(6.5).fillColor(COLORS.muted)
+    .text("ALPHAPERCEPT / OSINT DAILY REVIEW", PAGE.left, 20, { lineBreak: false });
+  doc.moveTo(PAGE.left, 33).lineTo(PAGE.right, 33).lineWidth(0.5).strokeColor(COLORS.line).stroke();
+  doc.save().opacity(0.043).font(FONT).fontSize(29).fillColor(COLORS.navy)
+    .rotate(-24, { origin: [PAGE.width / 2, PAGE.height / 2] })
+    .text(DAILY_REPORT_WATERMARK, 123, 404, { width: 350, align: "center", lineBreak: false })
+    .restore();
+  doc.moveTo(PAGE.left, PAGE.footer).lineTo(PAGE.right, PAGE.footer).lineWidth(0.45).strokeColor(COLORS.line).stroke();
+  doc.font(FONT).fontSize(5.3).fillColor(COLORS.slate)
+    .text(DAILY_REPORT_DISCLAIMER, PAGE.left, 806, { width: 450, height: 15, ellipsis: true });
+  doc.fontSize(6).fillColor(COLORS.muted)
+    .text(`${pageNumber} / ${totalPages}`, PAGE.right - 40, 807, { width: 40, align: "right", lineBreak: false });
+  doc.fontSize(5.6).fillColor(COLORS.muted)
+    .text(`数据截至 ${shanghaiTime(report.asOf)}`, PAGE.left, 822, { lineBreak: false });
 }
 
-function sectionHeading(
+function drawTitle(
   doc: PDFKit.PDFDocument,
-  code: string,
   title: string,
-  meta: string
+  subtitle: string,
+  accent = COLORS.cyan
 ): void {
-  ensureSpace(doc, 60);
-  const x = doc.page.margins.left;
-  const y = doc.y;
-  doc.rect(x, y, 4, 43).fill(COLORS.teal);
-  doc.font(FONT).fontSize(6.5).fillColor(COLORS.teal).text(code, x + 13, y + 1, { characterSpacing: 1 });
-  doc.font(FONT).fontSize(16).fillColor(COLORS.ink).text(title, x + 13, y + 13, { lineBreak: false });
-  doc.font(FONT).fontSize(7).fillColor(COLORS.slate).text(meta, x + 13, y + 34, { lineBreak: false });
-  doc.y = y + 56;
+  doc.rect(PAGE.left, 47, 5, 48).fill(accent);
+  doc.font(FONT).fontSize(7).fillColor(accent)
+    .text("DAILY REVIEW", 53, 49, { characterSpacing: 1.2, lineBreak: false });
+  doc.fontSize(20).fillColor(COLORS.ink).text(title, 53, 63, { lineBreak: false });
+  doc.fontSize(7).fillColor(COLORS.slate).text(subtitle, 53, 87, { width: 500, lineBreak: false });
 }
 
-function drawStoryCard(
-  doc: PDFKit.PDFDocument,
-  category: CuratedStoryCategory,
-  story: CuratedStoryCategory["stories"][number]
-): void {
-  const width = contentWidth(doc);
-  const innerWidth = width - 28;
-  doc.font(FONT).fontSize(10.5);
-  const titleHeight = Math.min(30, doc.heightOfString(story.title, { width: innerWidth - 66 }));
-  doc.font(FONT).fontSize(8.2);
-  const summaryHeight = Math.min(35, doc.heightOfString(story.summary, { width: innerWidth }));
-  const height = Math.max(94, 50 + titleHeight + summaryHeight);
-  ensureSpace(doc, height + 8);
-  const x = doc.page.margins.left;
-  const y = doc.y;
-  const accent = CATEGORY_COLORS[category.key];
-  doc.roundedRect(x, y, width, height, 7).fillAndStroke(COLORS.card, COLORS.line);
-  doc.roundedRect(x, y, 4, height, 2).fill(accent);
-  doc.font(FONT).fontSize(6.8).fillColor(COLORS.muted)
-    .text(formatShanghaiTime(story.publishedAt), x + 14, y + 10, { lineBreak: false });
-  doc.roundedRect(x + width - 62, y + 8, 49, 17, 8).fill(COLORS.amberSoft);
-  doc.font(FONT).fontSize(6.5).fillColor(COLORS.amber)
-    .text(`${story.importance.toFixed(1)} / 10`, x + width - 56, y + 13, { lineBreak: false });
-  doc.font(FONT).fontSize(10.5).fillColor(COLORS.ink)
-    .text(story.title, x + 14, y + 30, {
-      width: innerWidth - 66,
-      height: titleHeight,
-      ellipsis: true,
-    });
-  const summaryY = y + 35 + titleHeight;
-  doc.font(FONT).fontSize(8.2).fillColor(COLORS.slate)
-    .text(story.summary, x + 14, summaryY, {
-      width: innerWidth,
-      height: summaryHeight,
-      ellipsis: true,
-    });
-  const tagText = [...story.tags.topic, ...story.tags.region, ...story.tags.assets]
-    .slice(0, 6)
+function storyTags(story: CuratedStoryCategory["stories"][number]): string {
+  return [...story.tags.topic, ...story.tags.region, ...story.tags.assets]
+    .filter((tag, index, all) => all.indexOf(tag) === index)
+    .slice(0, 5)
     .map((tag) => `#${tag}`)
     .join("  ");
-  doc.font(FONT).fontSize(6.7).fillColor(accent)
-    .text(tagText || "#综合", x + 14, y + height - 28, { width: innerWidth, lineBreak: false });
-  const source = story.sources.slice(0, 2).map((item) => item.name).join(" · ") || "公开来源";
-  doc.font(FONT).fontSize(6.5).fillColor(COLORS.muted)
-    .text(`来源：${shorten(source, 55)}`, x + 14, y + height - 15, {
-      width: innerWidth,
-      lineBreak: false,
-      link: story.sources[0]?.url,
-    });
-  doc.y = y + height + 8;
 }
 
-function drawStories(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
+function drawUpcomingBand(
+  doc: PDFKit.PDFDocument,
+  category: CuratedStoryCategory | undefined,
+  startY: number
+): number {
+  const x = PAGE.left;
+  const width = PAGE.right - PAGE.left;
+  const events = category?.stories.slice(0, 5) ?? [];
+  doc.roundedRect(x, startY, width, 28, 6).fill(COLORS.navy);
+  doc.font(FONT).fontSize(9.5).fillColor(COLORS.white)
+    .text("未来 7 天大事件", x + 13, startY + 8, { lineBreak: false });
+  doc.fontSize(6.5).fillColor("#A8E8EB")
+    .text("结构化日历 + 官方来源 · 北京时间", x + width - 190, startY + 9, { width: 177, align: "right", lineBreak: false });
+  if (events.length === 0) {
+    const y = startY + 31;
+    doc.roundedRect(x, y, width, 38, 5).fillAndStroke(COLORS.orangeSoft, "#F1D59D");
+    doc.fontSize(8).fillColor(COLORS.slate)
+      .text("未来7天暂无达到展示门槛的已确认事件", x + 13, y + 14, { lineBreak: false });
+    return y + 48;
+  }
+  let y = startY + 31;
+  events.forEach((story, index) => {
+    const height = 29;
+    doc.rect(x, y, width, height).fill(index % 2 === 0 ? COLORS.white : COLORS.row);
+    doc.fontSize(7.2).fillColor(COLORS.ink)
+      .text(shortShanghaiTime(story.scheduledFor || story.publishedAt), x + 9, y + 10, { width: 88, lineBreak: false });
+    doc.fontSize(7.3).fillColor(COLORS.ink)
+      .text(clip(story.title, 35), x + 101, y + 9, { width: 265, lineBreak: false, ellipsis: true });
+    doc.fontSize(6.4).fillColor(COLORS.coral)
+      .text(clip(story.tags.assets.join(" / ") || "相关市场", 24), x + 370, y + 9, { width: 104, lineBreak: false, ellipsis: true });
+    doc.fontSize(6.2).fillColor(COLORS.orange)
+      .text("★".repeat(Math.max(3, Math.min(5, Math.round(story.importance / 2)))), x + width - 42, y + 9, { width: 34, align: "right", lineBreak: false });
+    doc.moveTo(x, y + height).lineTo(x + width, y + height).lineWidth(0.3).strokeColor(COLORS.line).stroke();
+    y += height;
+  });
+  return y + 9;
+}
+
+function drawStoryModule(
+  doc: PDFKit.PDFDocument,
+  category: CuratedStoryCategory | undefined,
+  key: CuratedStoryCategory["key"],
+  label: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): void {
+  const accent = CATEGORY_COLORS[key];
+  doc.roundedRect(x, y, width, height, 7).fillAndStroke(COLORS.white, COLORS.line);
+  doc.rect(x, y, 5, height).fill(accent);
+  doc.font(FONT).fontSize(10.5).fillColor(COLORS.ink).text(label, x + 14, y + 12, { lineBreak: false });
+  const insight = category?.insight ?? "暂无达到展示门槛的高价值事件。";
+  doc.fontSize(6.5).fillColor(COLORS.slate)
+    .text(clip(insight, 58), x + 14, y + 32, { width: width - 28, height: 20, ellipsis: true });
+  const stories = category?.stories.slice(0, 2) ?? [];
+  const contentTop = y + 61;
+  const slotHeight = (height - 68) / 2;
+  if (stories.length === 0) {
+    doc.fontSize(7.4).fillColor(COLORS.muted)
+      .text("等待更多官方或多源事件确认", x + 14, contentTop + 24, { width: width - 28, align: "center" });
+    return;
+  }
+  stories.forEach((story, index) => {
+    const sy = contentTop + index * slotHeight;
+    doc.moveTo(x + 14, sy - 6).lineTo(x + width - 14, sy - 6).lineWidth(0.35).strokeColor(COLORS.line).stroke();
+    doc.fontSize(8).fillColor(COLORS.ink)
+      .text(clip(story.title, 31), x + 14, sy, { width: width - 28, height: 13, ellipsis: true });
+    doc.fontSize(6.7).fillColor(COLORS.slate)
+      .text(clip(story.summary, 62), x + 14, sy + 18, { width: width - 28, height: 27, ellipsis: true });
+    doc.fontSize(5.9).fillColor(accent)
+      .text(clip(storyTags(story), 48), x + 14, sy + 49, { width: width - 28, lineBreak: false, ellipsis: true });
+    doc.fontSize(5.7).fillColor(COLORS.muted)
+      .text(`${shortShanghaiTime(story.publishedAt)} · ${story.importance.toFixed(1)}/10`, x + 14, sy + 64, { lineBreak: false });
+  });
+}
+
+export function drawStoryBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
+  drawTitle(doc, "热点新闻榜", `过去3天新闻 + 未来7天事件 · 原始事件 ${report.stories.stories.length} 条`);
   const curated = curateReportStories(report.stories.stories);
-  sectionHeading(
-    doc,
-    "01 / INTELLIGENCE",
-    "热点复盘",
-    `从 ${curated.totalCount} 条事件中精选 ${curated.selectedCount} 条 · 分类展示 · 组内最新优先`
-  );
-  ensureSpace(doc, 56);
-  const adviceY = doc.y;
-  doc.roundedRect(doc.page.margins.left, adviceY, contentWidth(doc), 45, 7)
-    .fillAndStroke(COLORS.amberSoft, "#F0D68D");
-  doc.font(FONT).fontSize(7).fillColor(COLORS.amber).text("总览建议", doc.page.margins.left + 13, adviceY + 9, { lineBreak: false });
-  doc.font(FONT).fontSize(8.2).fillColor(COLORS.ink)
-    .text(report.stories.advice.text || "暂无明确跨市场信号。", doc.page.margins.left + 13, adviceY + 22, { width: contentWidth(doc) - 26, height: 17, ellipsis: true });
-  doc.y = adviceY + 57;
-
-  for (const category of curated.categories) {
-    ensureSpace(doc, 78);
-    const x = doc.page.margins.left;
-    const y = doc.y;
-    const accent = CATEGORY_COLORS[category.key];
-    doc.roundedRect(x, y, contentWidth(doc), 58, 7).fillAndStroke(COLORS.navySoft, COLORS.navySoft);
-    doc.rect(x, y, 5, 58).fill(accent);
-    doc.font(FONT).fontSize(11.5).fillColor("#FFFFFF").text(category.label, x + 16, y + 10, { lineBreak: false });
-    doc.font(FONT).fontSize(7).fillColor("#AFC0D2")
-      .text(category.insight, x + 16, y + 29, { width: contentWidth(doc) - 84, height: 22, ellipsis: true });
-    doc.roundedRect(x + contentWidth(doc) - 57, y + 10, 42, 18, 9).fill("#17384A");
-    doc.font(FONT).fontSize(6.5).fillColor("#8FE4E6")
-      .text(`${category.stories.length} 条`, x + contentWidth(doc) - 48, y + 16, { lineBreak: false });
-    doc.y = y + 68;
-    for (const story of category.stories) drawStoryCard(doc, category, story);
-  }
-  if (curated.selectedCount === 0) {
-    doc.font(FONT).fontSize(9).fillColor(COLORS.slate).text("暂无达到日报筛选标准的热点。", { align: "center" });
-    doc.moveDown(1.5);
-  }
+  const upcoming = curated.categories.find((category) => category.key === "upcoming");
+  const gridY = drawUpcomingBand(doc, upcoming, 111);
+  const gap = 10;
+  const width = (PAGE.right - PAGE.left - gap) / 2;
+  const gridBottom = 780;
+  const height = Math.max(168, (gridBottom - gridY - gap) / 2);
+  const modules: Array<{ key: CuratedStoryCategory["key"]; label: string }> = [
+    { key: "macro", label: "宏观与利率" },
+    { key: "geopolitics", label: "地缘与安全" },
+    { key: "energy", label: "能源与大宗" },
+    { key: "technology", label: "科技与产业" },
+  ];
+  modules.forEach((module, index) => {
+    const row = Math.floor(index / 2);
+    const column = index % 2;
+    drawStoryModule(
+      doc,
+      curated.categories.find((category) => category.key === module.key),
+      module.key,
+      module.label,
+      PAGE.left + column * (width + gap),
+      gridY + row * (height + gap),
+      width,
+      height
+    );
+  });
 }
 
-function drawStockTableHeader(doc: PDFKit.PDFDocument): void {
-  const x = doc.page.margins.left;
-  const y = doc.y;
-  const widths = [25, 112, 67, 67, 70, 158];
+export function drawStockBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
+  const stocks = rankReportStocks(report.lhb.stocks);
+  const displayed = stocks.slice(0, 36);
+  drawTitle(doc, "个股资金榜", `交易日 ${report.lhb.tradeDate || "--"} · 股票代码去重 · 展示 ${displayed.length}/${stocks.length} 只`);
+  const widths = [24, 102, 69, 69, 73, 182];
   const labels = ["#", "股票", "买入", "卖出", "净额", "上榜原因"];
-  doc.rect(x, y, contentWidth(doc), 25).fill(COLORS.navySoft);
+  const x = PAGE.left;
+  const headerY = 111;
+  doc.rect(x, headerY, 519, 23).fill(COLORS.navy);
   let offset = x;
   labels.forEach((label, index) => {
-    doc.font(FONT).fontSize(7).fillColor("#BFD0E0").text(label, offset + 5, y + 9, { width: widths[index] - 8, lineBreak: false });
+    doc.font(FONT).fontSize(6.4).fillColor("#C5D6E4")
+      .text(label, offset + 5, headerY + 8, { width: widths[index] - 8, lineBreak: false });
     offset += widths[index];
   });
-  doc.y = y + 25;
-}
-
-function drawStocks(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
-  const rows = rankReportStocks(report.lhb.stocks);
-  sectionHeading(doc, "02 / CAPITAL FLOW", "个股资金榜", `交易日 ${report.lhb.tradeDate || "暂无"} · 按净买入额排序 · ${rows.length} 只上榜股票`);
-  drawStockTableHeader(doc);
-  const x = doc.page.margins.left;
-  const widths = [25, 112, 67, 67, 70, 158];
-  rows.forEach((stock, index) => {
-    if (doc.y + 38 > doc.page.height - doc.page.margins.bottom) {
-      addPage(doc);
-      sectionHeading(doc, "02 / CAPITAL FLOW", "个股资金榜 · 续", `交易日 ${report.lhb.tradeDate || "暂无"}`);
-      drawStockTableHeader(doc);
-    }
-    const y = doc.y;
-    const rowHeight = 38;
-    if (index % 2 === 0) doc.rect(x, y, contentWidth(doc), rowHeight).fill("#EBF1F6");
+  const rowHeight = (780 - headerY - 23) / Math.max(1, displayed.length);
+  displayed.forEach((stock, index) => {
+    const y = headerY + 23 + index * rowHeight;
+    doc.rect(x, y, 519, rowHeight).fill(index % 2 === 0 ? COLORS.white : COLORS.row);
     const values = [
       String(index + 1).padStart(2, "0"),
-      `${stock.name}\n${stock.code}${stock.changePercent === null ? "" : ` · ${stock.changePercent >= 0 ? "+" : ""}${stock.changePercent.toFixed(2)}%`}`,
+      `${stock.name} ${stock.code}`,
       amount(stock.buyAmount),
       amount(stock.sellAmount),
       signedAmount(stock.netAmount),
-      shorten(stock.reasons.join(" / "), 48),
+      clip(stock.reasons.join(" / "), 34),
     ];
-    let offset = x;
+    let rx = x;
     values.forEach((value, column) => {
-      const color = column === 4 ? (stock.netAmount >= 0 ? COLORS.red : COLORS.green) : column === 2 ? COLORS.red : column === 3 ? COLORS.green : COLORS.ink;
-      doc.font(FONT).fontSize(column === 1 ? 7.5 : 6.8).fillColor(color)
-        .text(value, offset + 5, y + 8, { width: widths[column] - 8, height: 25, ellipsis: true });
-      offset += widths[column];
+      const color = column === 2 ? COLORS.coral : column === 3 ? COLORS.green : column === 4 ? (stock.netAmount >= 0 ? COLORS.coral : COLORS.green) : COLORS.ink;
+      doc.fontSize(column === 1 ? 5.8 : 5.5).fillColor(color)
+        .text(value, rx + 4, y + Math.max(5, rowHeight / 2 - 3), { width: widths[column] - 7, lineBreak: false, ellipsis: true });
+      rx += widths[column];
     });
-    doc.moveTo(x, y + rowHeight).lineTo(x + contentWidth(doc), y + rowHeight).lineWidth(0.4).strokeColor(COLORS.line).stroke();
-    doc.y = y + rowHeight;
+    doc.moveTo(x, y + rowHeight).lineTo(x + 519, y + rowHeight).lineWidth(0.3).strokeColor(COLORS.line).stroke();
   });
-  doc.moveDown(1.2);
 }
 
-function drawHotMoney(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
+export function drawHotMoneyBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
   const flows = report.lhb.hotMoneyFlows.slice(0, 28);
-  sectionHeading(doc, "03 / HOT MONEY", "游资席位榜", `交易日 ${report.lhb.tradeDate || "暂无"} · 精选前 ${flows.length} 组游资/活跃席位`);
-  for (const flow of flows) {
-    const stocks = flow.stocks.slice(0, 3);
-    const height = 73 + stocks.length * 17;
-    ensureSpace(doc, height + 8);
-    const x = doc.page.margins.left;
-    const y = doc.y;
-    const width = contentWidth(doc);
-    doc.roundedRect(x, y, width, height, 7).fillAndStroke(COLORS.card, COLORS.line);
-    doc.rect(x, y, 4, height).fill(flow.kind === "known" ? COLORS.teal : "#6D7F92");
-    doc.font(FONT).fontSize(10.5).fillColor(COLORS.ink).text(flow.label, x + 14, y + 10, { width: width - 120, lineBreak: false });
-    const badge = flow.kind === "known" ? `观察可信度 ${flow.confidence ?? "C"}` : "活跃席位";
-    doc.roundedRect(x + width - 86, y + 8, 72, 18, 9).fill(COLORS.tealSoft);
-    doc.font(FONT).fontSize(6.5).fillColor("#14777B").text(badge, x + width - 78, y + 14, { lineBreak: false });
-    doc.font(FONT).fontSize(6.5).fillColor(COLORS.muted)
-      .text(shorten(flow.departmentNames.join(" / "), 72), x + 14, y + 29, { width: width - 28, lineBreak: false });
-    doc.font(FONT).fontSize(7.5).fillColor(COLORS.red).text(`买 ${amount(flow.totalBuyAmount)}`, x + 14, y + 44, { lineBreak: false });
-    doc.fillColor(COLORS.green).text(`卖 ${amount(flow.totalSellAmount)}`, x + 112, y + 44, { lineBreak: false });
-    doc.fillColor(flow.totalNetAmount >= 0 ? COLORS.red : COLORS.green).text(`净 ${signedAmount(flow.totalNetAmount)}`, x + 210, y + 44, { lineBreak: false });
-    let stockY = y + 62;
-    stocks.forEach((stock) => {
-      doc.moveTo(x + 14, stockY - 3).lineTo(x + width - 14, stockY - 3).lineWidth(0.35).strokeColor("#E8EDF2").stroke();
-      doc.font(FONT).fontSize(7).fillColor(COLORS.ink).text(`${stock.name}  ${stock.code}`, x + 14, stockY + 1, { width: 180, lineBreak: false });
-      doc.fillColor(COLORS.red).text(`买 ${amount(stock.buyAmount)}`, x + width - 110, stockY + 1, { width: 96, align: "right", lineBreak: false });
-      stockY += 17;
+  drawTitle(doc, "游资席位榜", `交易日 ${report.lhb.tradeDate || "--"} · 前 ${flows.length} 组席位 · 每席仅保留主要买入股票`);
+  const widths = [24, 151, 70, 70, 72, 132];
+  const labels = ["#", "游资/席位", "买入", "卖出", "净额", "主要买入股票"];
+  const x = PAGE.left;
+  const headerY = 111;
+  doc.rect(x, headerY, 519, 23).fill(COLORS.navy);
+  let offset = x;
+  labels.forEach((label, index) => {
+    doc.font(FONT).fontSize(6.4).fillColor("#C5D6E4")
+      .text(label, offset + 5, headerY + 8, { width: widths[index] - 8, lineBreak: false });
+    offset += widths[index];
+  });
+  const rowHeight = (780 - headerY - 23) / Math.max(1, flows.length);
+  flows.forEach((flow, index) => {
+    const y = headerY + 23 + index * rowHeight;
+    doc.rect(x, y, 519, rowHeight).fill(index % 2 === 0 ? COLORS.white : COLORS.row);
+    const lead = [...flow.stocks].sort((left, right) => right.buyAmount - left.buyAmount)[0];
+    const values = [
+      String(index + 1).padStart(2, "0"),
+      flow.label,
+      amount(flow.totalBuyAmount),
+      amount(flow.totalSellAmount),
+      signedAmount(flow.totalNetAmount),
+      lead ? `${lead.name} ${amount(lead.buyAmount)}` : "--",
+    ];
+    let rx = x;
+    values.forEach((value, column) => {
+      const color = column === 2 ? COLORS.coral : column === 3 ? COLORS.green : column === 4 ? (flow.totalNetAmount >= 0 ? COLORS.coral : COLORS.green) : COLORS.ink;
+      doc.fontSize(column === 1 ? 6.1 : 5.7).fillColor(color)
+        .text(clip(value, column === 1 ? 19 : 22), rx + 4, y + Math.max(6, rowHeight / 2 - 3), { width: widths[column] - 7, lineBreak: false, ellipsis: true });
+      rx += widths[column];
     });
-    doc.y = y + height + 8;
-  }
+    doc.moveTo(x, y + rowHeight).lineTo(x + 519, y + rowHeight).lineWidth(0.3).strokeColor(COLORS.line).stroke();
+  });
 }
 
-function drawLegalPanel(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
-  ensureSpace(doc, 88);
-  const x = doc.page.margins.left;
-  const y = doc.y;
-  doc.roundedRect(x, y, contentWidth(doc), 72, 7).fill(COLORS.navy);
-  doc.font(FONT).fontSize(7).fillColor("#82DFE2").text("分享与使用边界", x + 14, y + 11, { lineBreak: false });
-  doc.font(FONT).fontSize(7.2).fillColor("#D5E0EB").text(DAILY_REPORT_DISCLAIMER, x + 14, y + 26, { width: contentWidth(doc) - 28, height: 25, ellipsis: true });
-  doc.font(FONT).fontSize(6.3).fillColor("#8FA3B7")
-    .text(`数据来源：公开财经资讯、交易所及公开龙虎榜数据 · 快照状态：${report.lhb.status}`, x + 14, y + 55, { lineBreak: false });
-  doc.y = y + 84;
-}
-
-function drawPageOverlays(doc: PDFKit.PDFDocument): void {
-  const range = doc.bufferedPageRange();
-  for (let index = range.start; index < range.start + range.count; index += 1) {
-    doc.switchToPage(index);
-    preserveCursor(doc, () => {
-      const originalBottomMargin = doc.page.margins.bottom;
-      doc.page.margins.bottom = 0;
-      const width = contentWidth(doc);
-      const centerX = doc.page.width / 2;
-      const centerY = doc.page.height / 2;
-      doc.save();
-      doc.opacity(0.055).fillColor("#17364A").font(FONT).fontSize(30);
-      doc.rotate(-24, { origin: [centerX, centerY] });
-      doc.text(DAILY_REPORT_WATERMARK, centerX - 175, centerY - 14, { width: 350, align: "center", lineBreak: false });
-      doc.restore();
-      doc.moveTo(doc.page.margins.left, doc.page.height - 44)
-        .lineTo(doc.page.width - doc.page.margins.right, doc.page.height - 44)
-        .lineWidth(0.45)
-        .strokeColor(COLORS.line)
-        .stroke();
-      doc.font(FONT).fontSize(5.5).fillColor(COLORS.slate)
-        .text("本报告基于公开信息自动整理，仅供学习与复盘参考，不构成投资建议或任何买卖依据。", doc.page.margins.left, doc.page.height - 36, { width, lineBreak: false });
-      doc.text("数据可能延迟或存在误差，请以交易所、上市公司及原始来源为准。", doc.page.margins.left, doc.page.height - 27, { width: width - 45, lineBreak: false });
-      doc.fontSize(6).fillColor(COLORS.muted)
-        .text(`${index - range.start + 1} / ${range.count}`, doc.page.width - doc.page.margins.right - 40, doc.page.height - 27, { width: 40, align: "right", lineBreak: false });
-      doc.page.margins.bottom = originalBottomMargin;
-    });
-  }
+function addReportPage(
+  doc: PDFKit.PDFDocument,
+  report: OsintDailyReportSnapshot,
+  pageNumber: number,
+  totalPages: number,
+  draw: (doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot) => void
+): void {
+  doc.addPage({ size: "A4", margin: 0 });
+  doc.font(FONT);
+  drawPageBase(doc, report, pageNumber, totalPages);
+  draw(doc, report);
 }
 
 export async function buildDailyReportPdf(
   report: OsintDailyReportSnapshot,
-  section: PdfSection
+  section: DailyReportExportSection
 ): Promise<Buffer> {
   if (!isDailyReportPdfReady(report)) throw new Error("PDF_EXPORT_NOT_READY");
   const chunks: Buffer[] = [];
   const doc = new PDFDocument({
-    size: "A4",
-    margins: { top: 48, right: 48, bottom: 62, left: 48 },
+    autoFirstPage: false,
     bufferPages: true,
-    autoFirstPage: true,
+    margin: 0,
     info: {
       Title: report.title,
       Author: "AlphaPercept",
       Subject: "OSINT 每日复盘",
-      Keywords: "OSINT, 热点, 个股资金, 游资",
+      Keywords: "OSINT, 热点, 未来事件, 个股资金, 游资",
       CreationDate: new Date(report.generatedAt),
     },
   });
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-  doc.registerFont(FONT, NOTO_SANS_SC_REGULAR);
-  doc.font(FONT);
-  doc.on("pageAdded", () => drawPageBase(doc));
-  drawPageBase(doc);
+  doc.registerFont(FONT, FONT_PATH);
 
-  const curated = curateReportStories(report.stories.stories);
-  drawCover(doc, report, curated.selectedCount);
-  drawLegalPanel(doc, report);
-  if (section === "full" || section === "stories") drawStories(doc, report);
-  if (section === "full" || section === "stocks") drawStocks(doc, report);
-  if (section === "full" || section === "lhb") drawHotMoney(doc, report);
-  drawPageOverlays(doc);
+  const pages = section === "full"
+    ? [drawStoryBoardPage, drawStockBoardPage, drawHotMoneyBoardPage]
+    : section === "stories"
+      ? [drawStoryBoardPage]
+      : section === "stocks"
+        ? [drawStockBoardPage]
+        : [drawHotMoneyBoardPage];
+  pages.forEach((draw, index) => addReportPage(doc, report, index + 1, pages.length, draw));
 
   return new Promise<Buffer>((resolve, reject) => {
     doc.on("end", () => resolve(Buffer.concat(chunks)));

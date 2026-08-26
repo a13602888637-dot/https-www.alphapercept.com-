@@ -25,6 +25,8 @@ function story(input: Partial<OsintStory> & Pick<OsintStory, "id" | "publishedAt
       verification: "single-source",
     },
     analysisStatus: input.analysisStatus ?? "fallback",
+    eventType: input.eventType ?? "news",
+    scheduledFor: input.scheduledFor ?? null,
   };
 }
 
@@ -39,6 +41,16 @@ async function verifyPdfContract() {
       eventType: "upcoming",
       scheduledFor: "2026-08-26T14:00:00.000Z",
       tags: { topic: ["未来事件", "宏观"], region: ["美国"], assets: ["美债"], direction: "neutral", horizon: "1-3d", verification: "official" },
+    }),
+    story({
+      id: "future-later",
+      title: "未来美国就业报告",
+      publishedAt: "2026-08-27T14:00:00.000Z",
+      importance: 9,
+      analysisStatus: "complete",
+      eventType: "upcoming",
+      scheduledFor: "2026-08-27T14:00:00.000Z",
+      tags: { topic: ["未来事件", "宏观"], region: ["美国"], assets: ["美元"], direction: "neutral", horizon: "1-3d", verification: "official" },
     }),
     story({
       id: "tech-new",
@@ -78,10 +90,11 @@ async function verifyPdfContract() {
     }),
   ]);
 
-  assert.equal(curated.totalCount, 6);
-  assert.equal(curated.selectedCount, 4);
+  assert.equal(curated.totalCount, 7);
+  assert.equal(curated.selectedCount, 5);
   assert.deepEqual(curated.categories.map((item: { label: string }) => item.label), ["未来大事", "能源与大宗", "科技与产业"]);
   assert.deepEqual(curated.categories.find((item: { key: string }) => item.key === "technology")?.stories.map((item: OsintStory) => item.id), ["tech-new", "tech-old"]);
+  assert.deepEqual(curated.categories.find((item) => item.key === "upcoming")?.stories.map((item) => item.id), ["future-event", "future-later"]);
   const energyCategory = curated.categories.find((item) => item.key === "energy");
   assert.match(energyCategory?.insight ?? "", /原油/);
   assert.match(energyCategory?.insight ?? "", /多源/);
@@ -96,7 +109,7 @@ async function verifyPdfContract() {
     assert.equal(ranked[0].buyAmount, 100);
     assert.deepEqual(ranked[0].reasons, ["涨幅偏离", "换手率"]);
   }
-  const pdf = await buildDailyReportPdf(composeDailyReportSnapshot({
+  const snapshot = composeDailyReportSnapshot({
       now: new Date("2026-08-25T08:05:00.000Z"),
       markets: {
         schemaVersion: "1.0",
@@ -130,10 +143,16 @@ async function verifyPdfContract() {
         hotMoneyFlows: [{ flowId: "flow-1", kind: "known", label: "测试游资席位", confidence: "A", departmentNames: ["测试证券营业部"], totalBuyAmount: 100_000_000, totalSellAmount: 20_000_000, totalNetAmount: 80_000_000, stockCount: 1, stocks: [{ code: "000001", name: "测试股份", reasons: ["日涨幅偏离值达到7%"], buyAmount: 100_000_000, sellAmount: 20_000_000, netAmount: 80_000_000 }] }],
         disclaimer: "席位映射仅供观察。",
       },
-  }), "full");
+  });
+  const pdf = await buildDailyReportPdf(snapshot, "full");
   assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
   assert.ok(pdf.length > 5_000);
   assert.ok(pdf.length < 5_000_000, `移动端 PDF 体积过大：${pdf.length}`);
+  const pageCount = (buffer: Buffer) => (buffer.toString("latin1").match(/\/Type\s*\/Page\b/g) ?? []).length;
+  assert.equal(pageCount(pdf), 3);
+  assert.equal(pageCount(await buildDailyReportPdf(snapshot, "stories")), 1);
+  assert.equal(pageCount(await buildDailyReportPdf(snapshot, "stocks")), 1);
+  assert.equal(pageCount(await buildDailyReportPdf(snapshot, "lhb")), 1);
 
   console.log("DAILY_REPORT_PDF_CONTRACT_OK");
 }

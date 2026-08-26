@@ -106,8 +106,15 @@ assert.equal(exportHtml.includes("section{break-inside:auto}"), true);
 assert.equal(exportHtml.includes("45mm"), true);
 assert.doesNotMatch(exportHtml, /\.watermark\{[^}]*display:none/);
 assert.doesNotMatch(exportHtml, /\.report-disclaimer\{[^}]*display:none/);
-assert.ok(pdfExport.indexOf("drawLegalPanel(doc, report);") < pdfExport.indexOf('if (section === "full" || section === "stories")'));
+assert.equal(pdfExport.includes("drawPageBase"), true);
+assert.equal(pdfExport.includes("DAILY_REPORT_DISCLAIMER"), true);
 assert.equal(pdfExport.includes("hotMoneyFlows.slice(0, 28)"), true);
+for (const renderer of ["drawStoryBoardPage", "drawStockBoardPage", "drawHotMoneyBoardPage"]) {
+  assert.equal(pdfExport.includes(renderer), true);
+}
+for (const color of ["#0B1B32", "#00B8C4", "#F45B69", "#F59E32", "#11966F", "#F6FAFC"]) {
+  assert.equal(pdfExport.includes(color), true);
+}
 assert.equal(nextConfig.includes("serverExternalPackages: ['pdfkit']"), true);
 assert.equal(nextConfig.includes("./node_modules/pdfkit/js/standard-fonts/**/*"), true);
 assert.equal(worldBriefing.includes('"未来事件"'), true);
