@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  // Daily report PDF embeds one OFL-licensed Simplified Chinese font asset.
+  // Keep the include literal and narrow so only the PDF function traces it.
+  outputFileTracingIncludes: {
+    '/api/osint/v1/reports/[reportId]/export': ['./lib/osint/daily-report/assets/NotoSansSC-Variable.ttf'],
+  },
+
   // Uzi standalone reports are generated HTML. Keep them in an opaque,
   // script-capable sandbox so they cannot access Alpha-Quant auth/API state.
   async headers() {

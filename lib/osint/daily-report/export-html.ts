@@ -2,6 +2,7 @@ import type {
   DailyReportExportSection,
   OsintDailyReportSnapshot,
 } from "./contracts";
+import { rankReportStocks } from "./story-curation";
 
 export const DAILY_REPORT_WATERMARK = "AlphaPercept · 仅供参考";
 export const DAILY_REPORT_DISCLAIMER =
@@ -24,7 +25,7 @@ export function hasRequiredExportNotices(html: string): boolean {
 export function isDailyReportExportReady(
   report: OsintDailyReportSnapshot
 ): boolean {
-  return (["full", "markets", "stories", "lhb"] as const).every((section) =>
+  return (["full", "stories", "stocks", "lhb"] as const).every((section) =>
     hasRequiredExportNotices(buildDailyReportHtml(report, section))
   );
 }
@@ -55,20 +56,22 @@ function formatShanghaiTime(value: string): string {
   });
 }
 
-function marketSection(report: OsintDailyReportSnapshot): string {
-  const rows = report.markets.markets
-    .map((market) => {
-      const change = market.changePercent;
-      const direction = change === null ? "muted" : change >= 0 ? "up" : "down";
+function stockSection(report: OsintDailyReportSnapshot): string {
+  const rankedStocks = rankReportStocks(report.lhb.stocks);
+  const rows = rankedStocks
+    .map((stock, index) => {
+      const direction = stock.netAmount >= 0 ? "up" : "down";
       return `<tr>
-        <td><strong>${escapeHtml(market.name)}</strong><small>${escapeHtml(market.symbol)}</small></td>
-        <td>${formatNumber(market.value, market.instrumentType === "fx" ? 4 : 2)}${market.instrumentType === "yield" ? "%" : ""}</td>
-        <td class="${direction}">${change === null ? "—" : `${change >= 0 ? "+" : ""}${formatNumber(change)}%`}</td>
-        <td><span class="badge">${escapeHtml(market.status)}</span> ${escapeHtml(market.source)}</td>
+        <td>${index + 1}</td>
+        <td><strong>${escapeHtml(stock.name)}</strong><small>${escapeHtml(stock.code)}</small></td>
+        <td>${formatNumber(stock.buyAmount / 10_000, 0)} 万</td>
+        <td>${formatNumber(stock.sellAmount / 10_000, 0)} 万</td>
+        <td class="${direction}">${stock.netAmount >= 0 ? "+" : ""}${formatNumber(stock.netAmount / 10_000, 0)} 万</td>
+        <td>${escapeHtml(stock.reasons.join(" / "))}</td>
       </tr>`;
     })
     .join("");
-  return `<section><h2>全球行情</h2><p class="section-meta">覆盖 ${report.markets.coverage.available}/${report.markets.coverage.total}，陈旧 ${report.markets.coverage.stale}</p><div class="table-wrap"><table><thead><tr><th>指标</th><th>最新</th><th>涨跌</th><th>来源</th></tr></thead><tbody>${rows || '<tr><td colspan="4">暂无行情</td></tr>'}</tbody></table></div></section>`;
+  return `<section><h2>个股资金榜</h2><p class="section-meta">交易日 ${escapeHtml(report.lhb.tradeDate || "暂无")} · ${rankedStocks.length} 只上榜股票</p><div class="table-wrap"><table><thead><tr><th>#</th><th>股票</th><th>买入</th><th>卖出</th><th>净额</th><th>上榜原因</th></tr></thead><tbody>${rows || '<tr><td colspan="6">暂无个股资金数据</td></tr>'}</tbody></table></div></section>`;
 }
 
 function storySection(report: OsintDailyReportSnapshot): string {
@@ -107,8 +110,8 @@ export function buildDailyReportHtml(
   options: { autoPrint?: boolean } = {}
 ): string {
   const sections = [
-    section === "full" || section === "markets" ? marketSection(report) : "",
     section === "full" || section === "stories" ? storySection(report) : "",
+    section === "full" || section === "stocks" ? stockSection(report) : "",
     section === "full" || section === "lhb" ? lhbSection(report) : "",
   ].join("");
   const autoPrint = options.autoPrint

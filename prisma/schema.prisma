@@ -280,6 +280,17 @@ model OsintDailyReport {
   @@index([reportDate, edition, status])
 }
 
+// OSINT 热点持久缓存：复用翻译、摘要和标签，避免 Vercel 冷启动后重复调用 AI。
+model OsintStoryCache {
+  id          String   @id
+  publishedAt DateTime
+  payload     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([publishedAt])
+}
+
 // Uzi 深度研判任务：网页只负责排队与展示，本机 Codex Worker 负责长任务。
 model UziResearchJob {
   id               String    @id @default(cuid())

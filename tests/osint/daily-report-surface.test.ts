@@ -46,8 +46,18 @@ assert.equal(generateRoute.includes("currentUser"), false);
 assert.equal(generateRoute.includes("export async function POST"), false);
 assert.equal(generateRoute.includes("previousShanghaiDate"), true);
 assert.equal(detailRoute.includes("getDailyReport"), true);
-assert.equal(exportRoute.includes("hasRequiredExportNotices"), true);
-assert.equal(exportRoute.includes("text/html; charset=utf-8"), true);
+assert.equal(detailRoute.includes("isDailyReportPdfReady"), true);
+assert.equal(detailRoute.includes("isDailyReportExportReady"), false);
+assert.equal(exportRoute.includes("buildDailyReportPdf"), true);
+assert.equal(exportRoute.includes("application/pdf"), true);
+assert.equal(exportRoute.includes("attachment;"), true);
+assert.equal(exportRoute.includes(".pdf"), true);
+assert.equal(exportRoute.includes("text/html; charset=utf-8"), false);
+assert.equal(exportRoute.includes("autoPrint"), false);
+assert.equal(exportRoute.includes('"markets"'), false);
+assert.equal(exportRoute.includes("pdfPromiseCache"), true);
+assert.equal(exportRoute.includes("s-maxage=31536000"), true);
+assert.equal(exportRoute.includes("immutable"), true);
 
 for (const routeSource of [listRoute, generateRoute, detailRoute, exportRoute]) {
   assert.equal(/watchlist|portfolio|personalNote/i.test(routeSource), false);
@@ -66,26 +76,36 @@ assert.equal(center.includes("max-w-4xl"), false);
 assert.equal(center.includes("selectedReportId"), true);
 assert.equal(center.includes("DailyReportView"), true);
 assert.equal(center.includes("报告直接预览"), true);
+assert.equal(center.includes("个股 {report.lhbStockCount}"), true);
+assert.equal(center.includes("游资 {report.lhbHotMoneyCount}"), true);
+assert.equal(center.includes("行情 {report.marketAvailable}"), false);
 assert.equal(view.includes("text-base"), true);
 assert.equal(view.includes("embedded"), true);
 assert.equal(view.includes("snapshot.lhb.hotMoneyFlows"), true);
 assert.equal(view.includes("另有"), true);
-for (const viewLabel of ["综合", "行情", "热点", "游资"]) {
+for (const viewLabel of ["热点", "个股资金", "游资"]) {
   assert.equal(view.includes(viewLabel), true);
 }
+assert.equal(view.includes('{ value: "markets"'), false);
 assert.equal(printActions.includes("fixed inset-x-3 bottom-3"), true);
-for (const section of ["full", "markets", "stories", "lhb"]) {
+for (const section of ["full", "stories", "stocks", "lhb"]) {
   assert.equal(printActions.includes(`section: "${section}"`), true);
 }
+assert.equal(printActions.includes('section: "markets"'), false);
 assert.equal(printActions.includes("disabled={!exportReady}"), true);
-assert.equal(printActions.includes("window.open"), true);
+assert.equal(printActions.includes("window.open"), false);
+assert.equal(printActions.includes("download"), true);
+assert.equal(printActions.includes("print=1"), false);
 
 const exportHtml = read("lib/osint/daily-report/export-html.ts");
+const pdfExport = read("lib/osint/daily-report/pdf-export.ts");
 assert.equal(exportHtml.includes("z-index:9999"), true);
 assert.equal(exportHtml.includes("section{break-inside:auto}"), true);
 assert.equal(exportHtml.includes("45mm"), true);
 assert.doesNotMatch(exportHtml, /\.watermark\{[^}]*display:none/);
 assert.doesNotMatch(exportHtml, /\.report-disclaimer\{[^}]*display:none/);
+assert.ok(pdfExport.indexOf("drawLegalPanel(doc, report);") < pdfExport.indexOf('if (section === "full" || section === "stories")'));
+assert.equal(pdfExport.includes("hotMoneyFlows.slice(0, 28)"), true);
 
 assert.equal(existsSync(resolve("app/osint/reports/page.tsx")), true);
 assert.equal(existsSync(resolve("app/osint/reports/[reportId]/page.tsx")), true);

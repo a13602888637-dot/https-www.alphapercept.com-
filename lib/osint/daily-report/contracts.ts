@@ -6,8 +6,8 @@ export type DailyReportEdition = "close" | "global";
 export type DailyReportArchiveStatus = "draft" | "final";
 export type DailyReportExportSection =
   | "full"
-  | "markets"
   | "stories"
+  | "stocks"
   | "lhb";
 
 export interface DailyReportSourceHealth {
@@ -67,5 +67,6 @@ export interface OsintDailyReportSummary {
   marketTotal: number;
   storyCount: number;
   lhbStockCount: number;
+  lhbHotMoneyCount: number;
   status: "healthy" | "degraded" | "unavailable";
 }

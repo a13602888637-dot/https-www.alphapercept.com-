@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  isDailyReportExportReady,
-} from "@/lib/osint/daily-report/export-html";
+  isDailyReportPdfReady,
+} from "@/lib/osint/daily-report/pdf-readiness";
 import { getDailyReport } from "@/lib/osint/daily-report/repository";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function GET(
     return NextResponse.json({
       success: true,
       report,
-      exportReady: isDailyReportExportReady(report.snapshot),
+      exportReady: isDailyReportPdfReady(report.snapshot),
     });
   } catch (error) {
     console.error("[osint reports] detail failed", error);

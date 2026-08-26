@@ -115,6 +115,29 @@ async function verifyStories() {
   assert.equal(translated.stories[0].title, "航运风险上升推动油价上涨");
   assert.equal(translated.stories[0].originalTitle, "Oil rises as shipping risk increases");
   assert.equal(translated.stories[0].translationStatus, "translated");
+  let cachedAnalysisCalls = 0;
+  const cachedSnapshot = await buildStorySnapshot(englishRaw, {
+    apiKey: "test-key",
+    now: new Date("2026-08-24T11:00:00.000Z"),
+    cachedStories: new Map([[translated.stories[0].id, translated.stories[0]]]),
+    fetchImpl: async () => {
+      cachedAnalysisCalls += 1;
+      return new Response(null, { status: 500 });
+    },
+  } as Parameters<typeof buildStorySnapshot>[1] & { cachedStories: Map<string, typeof translated.stories[0]> });
+  assert.equal(cachedAnalysisCalls, 0);
+  assert.equal(cachedSnapshot.stories[0].title, "航运风险上升推动油价上涨");
+  assert.equal(cachedSnapshot.stories[0].analysisStatus, "complete");
+  const cachedFallback = await buildStorySnapshot([], {
+    apiKey: "test-key",
+    now: new Date("2026-08-24T11:00:00.000Z"),
+    cachedStories: new Map([[translated.stories[0].id, translated.stories[0]]]),
+    fetchImpl: async () => {
+      throw new Error("cached story must not call DeepSeek");
+    },
+  } as Parameters<typeof buildStorySnapshot>[1] & { cachedStories: Map<string, typeof translated.stories[0]> });
+  assert.equal(cachedFallback.stories.length, 1);
+  assert.equal(cachedFallback.stories[0].title, "航运风险上升推动油价上涨");
   assert.equal(parsePublishedAt("not-a-date"), null);
   assert.equal(parsePublishedAt("20260825T091500Z"), "2026-08-25T09:15:00.000Z");
 

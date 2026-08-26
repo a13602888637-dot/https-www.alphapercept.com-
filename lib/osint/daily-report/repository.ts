@@ -6,6 +6,7 @@ import type {
   OsintDailyReportSnapshot,
   OsintDailyReportSummary,
 } from "./contracts";
+import { rankReportStocks } from "./story-curation";
 
 interface DatabaseReportRow {
   id: string;
@@ -79,7 +80,8 @@ export function summarizeDailyReport(report: OsintDailyReportRecord): OsintDaily
     marketAvailable: snapshot.markets.coverage.available,
     marketTotal: snapshot.markets.coverage.total,
     storyCount: snapshot.stories.stories.length,
-    lhbStockCount: snapshot.lhb.stockCount,
+    lhbStockCount: rankReportStocks(snapshot.lhb.stocks).length,
+    lhbHotMoneyCount: snapshot.lhb.hotMoneyFlows.length,
     status: healthStatus(snapshot),
   };
 }

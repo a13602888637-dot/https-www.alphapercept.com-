@@ -25,6 +25,8 @@ interface BuildStoryOptions {
   page?: number;
   pageSize?: number;
   topic?: string | null;
+  cachedStories?: ReadonlyMap<string, OsintStory>;
+  onStoriesAnalyzed?: (stories: OsintStory[]) => Promise<void>;
 }
 
 interface SourceResult {
@@ -356,14 +358,46 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
     const age = now.getTime() - publishedAt;
     return Number.isFinite(publishedAt) && age >= -5 * 60 * 1_000 && age <= windowMs;
   });
-  const canonicalStories = mergeStories(currentStories, now).slice(0, 200);
+  const canonicalById = new Map(
+    mergeStories(currentStories, now).map((story) => [story.id, story])
+  );
+  for (const cached of options.cachedStories?.values() ?? []) {
+    const publishedAt = new Date(cached.publishedAt).getTime();
+    const age = now.getTime() - publishedAt;
+    if (
+      !canonicalById.has(cached.id) &&
+      Number.isFinite(publishedAt) &&
+      age >= -5 * 60 * 1_000 &&
+      age <= windowMs
+    ) {
+      canonicalById.set(cached.id, cached);
+    }
+  }
+  const canonicalStories = [...canonicalById.values()]
+    .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt) || right.importance - left.importance)
+    .slice(0, 200);
   const filteredStories = options.topic
     ? canonicalStories.filter((story) => story.tags.topic.includes(options.topic!))
     : canonicalStories;
   const total = filteredStories.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(requestedPage, totalPages);
-  let stories = filteredStories.slice((page - 1) * pageSize, page * pageSize);
+  let stories = filteredStories.slice((page - 1) * pageSize, page * pageSize)
+    .map((story) => {
+      const cached = options.cachedStories?.get(story.id);
+      if (!cached) return story;
+      return {
+        ...story,
+        title: cached.title,
+        originalTitle: story.originalTitle || cached.originalTitle,
+        language: cached.language,
+        translationStatus: cached.translationStatus,
+        summary: cached.summary,
+        importance: Math.max(story.importance, cached.importance),
+        tags: { ...cached.tags, verification: story.tags.verification },
+        analysisStatus: "complete" as const,
+      };
+    });
   let advice = fallbackAdvice(stories);
   let adviceConfidence: "high" | "medium" | "low" = "low";
   let generatedAt: string | null = null;
@@ -375,6 +409,17 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
       advice = enriched.advice || advice;
       adviceConfidence = stories.some((story) => story.tags.verification !== "single-source") ? "medium" : "low";
       generatedAt = now.toISOString();
+    }
+  }
+
+  const newlyAnalyzed = stories.filter((story) =>
+    story.analysisStatus === "complete" && !options.cachedStories?.has(story.id)
+  );
+  if (newlyAnalyzed.length > 0 && options.onStoriesAnalyzed) {
+    try {
+      await options.onStoriesAnalyzed(newlyAnalyzed);
+    } catch (error) {
+      console.warn("[osint stories] persistent analysis cache write failed", error instanceof Error ? error.message : "unknown");
     }
   }
 
@@ -618,6 +663,15 @@ export async function getStorySnapshot(options: {
 
   const warmFirstPage = page === 1 && pageSize === 20 && topic === null && options.limit === undefined;
   const buildPageSize = warmFirstPage ? 50 : pageSize;
+  const persistentRepository = fetchImpl === fetch && process.env.NODE_ENV === "production"
+    ? await import("./story-cache")
+    : null;
+  const persistentStories = persistentRepository
+    ? await persistentRepository.getCachedStories(new Date(Date.now() - windowHours * 60 * 60 * 1_000)).catch((error) => {
+        console.warn("[osint stories] persistent analysis cache read failed", error instanceof Error ? error.message : "unknown");
+        return new Map<string, OsintStory>();
+      })
+    : undefined;
   const builtSnapshot = await buildStorySnapshot(results.flatMap((result) => result.stories), {
     apiKey: options.apiKey === undefined ? process.env.DEEPSEEK_API_KEY ?? null : options.apiKey,
     fetchImpl,
@@ -625,9 +679,16 @@ export async function getStorySnapshot(options: {
     page,
     pageSize: buildPageSize,
     topic,
+    cachedStories: persistentStories,
+    onStoriesAnalyzed: persistentRepository?.saveCachedStories,
   });
   const snapshot = warmFirstPage ? sliceStorySnapshot(builtSnapshot, pageSize) : builtSnapshot;
-  snapshot.sources = results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length }));
+  snapshot.sources = [
+    ...results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length })),
+    ...(persistentStories && persistentStories.size > 0
+      ? [{ name: "持久缓存", ok: true, count: persistentStories.size }]
+      : []),
+  ];
   if (fetchImpl === fetch && snapshot.stories.length > 0) pageCache.set(pageKey, { snapshot, timestamp: Date.now() });
   return snapshot;
 }

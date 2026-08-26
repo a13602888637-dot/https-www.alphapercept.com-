@@ -141,8 +141,9 @@ for (const forbidden of ["userid", "clerk", "watchlist", "portfolio"]) {
 }
 
 const fullHtml = buildDailyReportHtml(report, "full", { autoPrint: true });
-assert.match(fullHtml, /全球行情/);
+assert.doesNotMatch(fullHtml, /全球行情/);
 assert.match(fullHtml, /世界热点/);
+assert.match(fullHtml, /个股资金榜/);
 assert.match(fullHtml, /资金龙虎榜/);
 assert.match(fullHtml, /炒股养家观察席/);
 assert.match(fullHtml, /买入 10,000 万/);
@@ -155,9 +156,9 @@ assert.match(fullHtml, /<footer[^>]*>.*本报告基于公开信息自动整理/s
 assert.equal(hasRequiredExportNotices(fullHtml), true);
 assert.equal(hasRequiredExportNotices(fullHtml.replace("z-index:9999", "display:none")), false);
 
-const marketHtml = buildDailyReportHtml(report, "markets");
-assert.match(marketHtml, /全球行情/);
-assert.doesNotMatch(marketHtml, /世界热点/);
-assert.doesNotMatch(marketHtml, /资金龙虎榜/);
+const stockHtml = buildDailyReportHtml(report, "stocks");
+assert.match(stockHtml, /个股资金榜/);
+assert.doesNotMatch(stockHtml, /全球行情/);
+assert.doesNotMatch(stockHtml, /世界热点/);
 
 console.log("DAILY_REPORT_CONTRACT_OK");
