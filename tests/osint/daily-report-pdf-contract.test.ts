@@ -92,12 +92,51 @@ async function verifyPdfContract() {
 
   assert.equal(curated.totalCount, 7);
   assert.equal(curated.selectedCount, 5);
-  assert.deepEqual(curated.categories.map((item: { label: string }) => item.label), ["未来大事", "能源与大宗", "科技与产业"]);
+  assert.deepEqual(curated.categories.map((item: { label: string }) => item.label), ["接下来要留意", "能源怎么走", "科技有什么变化"]);
   assert.deepEqual(curated.categories.find((item: { key: string }) => item.key === "technology")?.stories.map((item: OsintStory) => item.id), ["tech-new", "tech-old"]);
   assert.deepEqual(curated.categories.find((item) => item.key === "upcoming")?.stories.map((item) => item.id), ["future-event", "future-later"]);
   const energyCategory = curated.categories.find((item) => item.key === "energy");
   assert.match(energyCategory?.insight ?? "", /原油/);
-  assert.match(energyCategory?.insight ?? "", /多源/);
+  assert.doesNotMatch(energyCategory?.insight ?? "", /多源|验证|风险偏好/);
+  const plainCategoryLabel = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).plainCategoryLabel;
+  const plainStockReason = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).plainStockReason;
+  const selectReportStocks = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).selectReportStocks;
+  const selectReportHotMoney = (reportCuration as unknown as Record<string, (...args: never[]) => unknown>).selectReportHotMoney;
+  assert.equal(typeof plainCategoryLabel, "function");
+  assert.equal(typeof plainStockReason, "function");
+  assert.equal(typeof selectReportStocks, "function");
+  assert.equal(typeof selectReportHotMoney, "function");
+  if (plainCategoryLabel && plainStockReason && selectReportStocks && selectReportHotMoney) {
+    assert.equal(plainCategoryLabel("macro" as never), "今天市场在看什么");
+    assert.equal(plainStockReason(["日涨幅偏离值达到7%的前5只证券"] as never), "涨幅明显，登上龙虎榜");
+    const selection = selectReportStocks(Array.from({ length: 25 }, (_, index) => ({
+      tradeId: `selection-${index}`,
+      code: String(index).padStart(6, "0"),
+      name: `测试${index}`,
+      changePercent: 0,
+      buyAmount: 10_000 - index * 100,
+      sellAmount: index * 500,
+      netAmount: 10_000 - index * 600,
+      reasons: ["涨幅偏离"],
+      buySeats: [],
+      sellSeats: [],
+    })) as never) as { inflows: unknown[]; outflows: unknown[] };
+    assert.ok(selection.inflows.length <= 10);
+    assert.ok(selection.outflows.length <= 10);
+    const selectedFlows = selectReportHotMoney(Array.from({ length: 20 }, (_, index) => ({
+      flowId: `flow-${index}`,
+      kind: "known",
+      label: `游资${index}`,
+      confidence: "A",
+      departmentNames: [`席位${index}`],
+      totalBuyAmount: 20_000 - index * 100,
+      totalSellAmount: index * 100,
+      totalNetAmount: 20_000 - index * 200,
+      stockCount: 1,
+      stocks: [],
+    })) as never) as unknown[];
+    assert.ok(selectedFlows.length <= 15);
+  }
   const rankReportStocks = (reportCuration as unknown as Record<string, unknown>).rankReportStocks;
   assert.equal(typeof rankReportStocks, "function", "个股资金榜应按股票代码去重");
   if (typeof rankReportStocks === "function") {

@@ -1,5 +1,5 @@
 import type { OsintStory } from "../contracts";
-import type { LhbStock } from "../../lhb/contracts";
+import type { LhbHotMoneyFlow, LhbStock } from "../../lhb/contracts";
 
 export type ReportStoryCategoryKey =
   | "upcoming"
@@ -27,13 +27,17 @@ const CATEGORY_RULES: Array<{
   label: string;
   keywords: string[];
 }> = [
-  { key: "upcoming", label: "未来大事", keywords: ["未来事件"] },
-  { key: "macro", label: "宏观与利率", keywords: ["宏观", "货币政策", "通胀", "央行", "利率", "债券", "macro", "rates"] },
-  { key: "geopolitics", label: "地缘与安全", keywords: ["地缘", "外交", "制裁", "国防", "冲突", "战争"] },
-  { key: "energy", label: "能源与大宗", keywords: ["能源", "原油", "天然气", "大宗商品", "黄金", "白银", "铜"] },
-  { key: "technology", label: "科技与产业", keywords: ["科技", "人工智能", "ai", "芯片", "半导体", "英伟达"] },
-  { key: "markets", label: "市场与公司", keywords: [] },
+  { key: "upcoming", label: "接下来要留意", keywords: ["未来事件"] },
+  { key: "macro", label: "今天市场在看什么", keywords: ["宏观", "货币政策", "通胀", "央行", "利率", "债券", "macro", "rates"] },
+  { key: "geopolitics", label: "海外发生了什么", keywords: ["地缘", "外交", "制裁", "国防", "冲突", "战争"] },
+  { key: "energy", label: "能源怎么走", keywords: ["能源", "原油", "天然气", "大宗商品", "黄金", "白银", "铜"] },
+  { key: "technology", label: "科技有什么变化", keywords: ["科技", "人工智能", "ai", "芯片", "半导体", "英伟达"] },
+  { key: "markets", label: "公司和市场", keywords: [] },
 ];
+
+export function plainCategoryLabel(key: ReportStoryCategoryKey): string {
+  return CATEGORY_RULES.find((rule) => rule.key === key)?.label ?? "今天值得关注";
+}
 
 function categoryForStory(story: OsintStory) {
   if (story.eventType === "upcoming") return CATEGORY_RULES[0];
@@ -75,15 +79,35 @@ function topAssets(stories: OsintStory[]): string[] {
 function categoryInsight(stories: OsintStory[]): string {
   const riskOff = stories.filter((story) => story.tags.direction === "risk-off").length;
   const riskOn = stories.filter((story) => story.tags.direction === "risk-on").length;
-  const verified = stories.filter((story) => story.tags.verification !== "single-source").length;
   const assets = topAssets(stories);
   const direction = riskOff > riskOn
-    ? "风险信号偏谨慎"
+    ? "消息偏谨慎"
     : riskOn > riskOff
-      ? "风险偏好偏积极"
-      : "多空信号分化";
-  const assetText = assets.length > 0 ? assets.join("、") : "相关市场";
-  return `${direction}；主要影响 ${assetText}；${verified}/${stories.length} 条获得官方或多源验证。`;
+      ? "消息偏积极"
+      : "消息有多有空";
+  const assetText = assets.length > 0 ? assets.join("、") : "市场走势";
+  return `${direction}，重点看${assetText}。`;
+}
+
+export function plainStoryImpact(story: OsintStory): string {
+  const assets = [...new Set(story.tags.assets)].slice(0, 3);
+  if (assets.length === 0) return "留意后续消息和市场反应。";
+  const action = story.tags.direction === "risk-off"
+    ? "短期可能带来压力"
+    : story.tags.direction === "risk-on"
+      ? "短期可能带来提振"
+      : "短期可能出现波动";
+  return `${assets.join("、")}${action}。`;
+}
+
+export function plainStockReason(reasons: string[]): string {
+  const text = reasons.join(" ");
+  if (/换手率/i.test(text)) return "换手活跃，登上龙虎榜";
+  if (/涨幅|偏离值达到7%|偏离值达到15%/i.test(text)) return "涨幅明显，登上龙虎榜";
+  if (/跌幅|偏离值达到-7%|偏离值达到-15%/i.test(text)) return "跌幅明显，登上龙虎榜";
+  if (/振幅/i.test(text)) return "盘中波动较大，登上龙虎榜";
+  if (/连续三个交易日/i.test(text)) return "连续三天波动明显";
+  return reasons.find(Boolean)?.replace(/的前\d+只(?:证券|股票)/g, "").slice(0, 18) || "当日登上龙虎榜";
 }
 
 export function curateReportStories(
@@ -139,4 +163,22 @@ export function rankReportStocks(stocks: LhbStock[]): LhbStock[] {
   return [...byCode.values()].sort((left, right) =>
     right.netAmount - left.netAmount || right.buyAmount - left.buyAmount
   );
+}
+
+export function selectReportStocks(stocks: LhbStock[]): { inflows: LhbStock[]; outflows: LhbStock[] } {
+  const ranked = rankReportStocks(stocks);
+  return {
+    inflows: ranked.filter((stock) => stock.netAmount >= 0).slice(0, 10),
+    outflows: ranked.filter((stock) => stock.netAmount < 0).sort((left, right) => left.netAmount - right.netAmount).slice(0, 10),
+  };
+}
+
+export function selectReportHotMoney(flows: LhbHotMoneyFlow[]): LhbHotMoneyFlow[] {
+  return [...flows]
+    .sort((left, right) =>
+      Number(right.kind === "known") - Number(left.kind === "known") ||
+      right.totalBuyAmount - left.totalBuyAmount ||
+      right.totalNetAmount - left.totalNetAmount
+    )
+    .slice(0, 15);
 }
