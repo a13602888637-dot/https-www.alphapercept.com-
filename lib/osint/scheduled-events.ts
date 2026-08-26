@@ -120,6 +120,17 @@ function officialStory(input: {
   };
 }
 
+function fedTitle(baseTitle: string, detail: string, section: string): string {
+  if (/FOMC Minutes/i.test(baseTitle)) return "美联储FOMC会议纪要";
+  if (/FOMC Meeting/i.test(baseTitle) || /FOMC Meetings/i.test(section)) return "美联储FOMC利率决议";
+  if (/Beige Book/i.test(baseTitle) || /Beige Book/i.test(section)) return "美联储Beige Book";
+  const chairman = baseTitle.match(/(?:Speech|Discussion|Testimony)\s*-\s*Chairman\s+(.+)/i);
+  if (chairman) return `美联储主席${chairman[1]}${detail ? `：${detail}` : "讲话"}`;
+  const governor = baseTitle.match(/(?:Speech|Discussion|Testimony)\s*-\s*(?:Governor|Vice Chair(?: for Supervision)?)\s+(.+)/i);
+  if (governor) return `美联储官员${governor[1]}${detail ? `：${detail}` : "讲话"}`;
+  return `美联储${baseTitle}${detail ? `：${detail}` : ""}`;
+}
+
 export function parseFedCalendarHtml(
   html: string,
   options: ParseOptions & { year: number; month: number }
@@ -138,7 +149,7 @@ export function parseFedCalendarHtml(
       .filter((value) => value && !/Watch Live/i.test(value));
     const baseTitle = paragraphs[0] ?? section;
     const detail = paragraphs[1] && paragraphs[1] !== baseTitle ? paragraphs[1] : "";
-    const title = detail ? `${baseTitle}：${detail}` : baseTitle;
+    const title = fedTitle(baseTitle, detail, section);
     const scheduledFor = zonedLocalToIso({
       year: options.year,
       month: options.month,
@@ -154,7 +165,7 @@ export function parseFedCalendarHtml(
     events.push(officialStory({
       source: "Federal Reserve",
       sourceUrl: options.sourceUrl,
-      title: `美联储${decode(title)}`,
+      title: decode(title),
       description: `${decode(paragraphs.slice(1).join("；") || section)}。关注利率路径、美元、美债与风险资产反应。`,
       scheduledFor,
       category: "宏观",

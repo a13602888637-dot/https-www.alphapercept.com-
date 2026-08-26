@@ -36,6 +36,7 @@ interface SourceResult {
   name: string;
   stories: RawStory[];
   ok: boolean;
+  error?: string | null;
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1_000;
@@ -157,7 +158,7 @@ function deterministicTags(story: { title: string; description: string; sources:
   const assets = ASSET_RULES.filter(([, words]) => matchesAny(text, words)).map(([tag]) => tag);
   const riskOff = matchesAny(text, ["冲突", "战争", "制裁", "短缺", "预警", "衰退", "下跌", "risk-off", "earthquake"]);
   const riskOn = matchesAny(text, ["停火", "协议", "刺激", "降息", "缓解", "回升", "risk-on"]);
-  const official = story.sources.some((source) => matchesAny(source.sourceName, ["ReliefWeb", "UN", "政府", "央行", "官方", "Federal Reserve", "SEC"]));
+  const official = story.sources.some((source) => matchesAny(source.sourceName, ["ReliefWeb", "UN", "政府", "央行", "官方", "Federal Reserve", "Bureau of Labor Statistics", "Bureau of Economic Analysis", "NVIDIA IR", "SEC"]));
 
   return {
     topic: topic.length > 0 ? [...new Set(topic)] : ["综合"],
@@ -170,7 +171,7 @@ function deterministicTags(story: { title: string; description: string; sources:
 }
 
 function sourceTier(sourceName: string): number {
-  if (matchesAny(sourceName, ["ReliefWeb", "UN", "官方", "央行", "Federal Reserve", "SEC"])) return 3;
+  if (matchesAny(sourceName, ["ReliefWeb", "UN", "官方", "央行", "Federal Reserve", "Bureau of Labor Statistics", "Bureau of Economic Analysis", "NVIDIA IR", "SEC"])) return 3;
   if (matchesAny(sourceName, ["AIHOT", "Bloomberg", "Reuters", "CNBC", "WSJ", "Wind", "BBC", "财联社", "新浪财经", "东方财富"])) return 2;
   return 1;
 }
@@ -250,7 +251,12 @@ function normalizeArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 6) : [];
 }
 
-async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch): Promise<{ stories: OsintStory[]; advice: string } | null> {
+function hasExplicitFutureDate(story: OsintStory): boolean {
+  const text = `${story.originalTitle} ${story.summary}`;
+  return /(?:\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b|\d{1,2}月\d{1,2}日|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|tomorrow|next\s+(?:week|monday|tuesday|wednesday|thursday|friday))/i.test(text);
+}
+
+async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch, now: Date): Promise<{ stories: OsintStory[]; advice: string } | null> {
   try {
     const response = await fetchImpl("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
@@ -263,7 +269,7 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
           { role: "system", content: "你是全球市场新闻编辑。只输出JSON，不得补写输入中不存在的事实。" },
           {
             role: "user",
-            content: `将以下事件压缩为一句中文摘要并打标签；英文标题同时翻译为中文。advice不超过45字，titleZh不超过35字，summary不超过60字。\n${JSON.stringify(stories.map((story) => ({ id: story.id, title: story.originalTitle, summary: story.summary, language: story.language })))}\n输出：{"advice":"...","stories":[{"id":"...","titleZh":"中文标题","summary":"中文摘要","topic":[],"region":[],"assets":[],"direction":"risk-on|risk-off|mixed|neutral","horizon":"intraday|1-3d|1-3w|medium"}]}`,
+            content: `当前UTC时间为${now.toISOString()}。将以下事件压缩为一句中文摘要并打标签；英文标题同时翻译为中文。advice不超过45字，titleZh不超过35字，summary不超过60字。只有输入正文明确写出未来7天内的日期或时间时，才填写scheduledFor为ISO 8601 UTC；不得根据惯例猜日期，否则必须为null。\n${JSON.stringify(stories.map((story) => ({ id: story.id, title: story.originalTitle, summary: story.summary, language: story.language })))}\n输出：{"advice":"...","stories":[{"id":"...","titleZh":"中文标题","summary":"中文摘要","topic":[],"region":[],"assets":[],"direction":"risk-on|risk-off|mixed|neutral","horizon":"intraday|1-3d|1-3w|medium","scheduledFor":null}]}`,
           },
         ],
       }),
@@ -291,6 +297,10 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
         : story.tags.horizon;
       const titleZh = cleanText(item.titleZh).slice(0, 80);
       const translatedTitle = story.language !== "zh" && titleZh ? titleZh : story.title;
+      const scheduledForText = cleanText(item.scheduledFor);
+      const scheduledTimestamp = Date.parse(scheduledForText);
+      const upcoming = hasExplicitFutureDate(story) && Number.isFinite(scheduledTimestamp) && scheduledTimestamp >= now.getTime() - 5 * 60_000 && scheduledTimestamp <= now.getTime() + 7 * 86_400_000;
+      const topics = normalizeArray(item.topic).length > 0 ? normalizeArray(item.topic) : story.tags.topic;
       return {
         ...story,
         title: translatedTitle,
@@ -298,13 +308,15 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
         summary: cleanText(item.summary || story.summary).slice(0, 120),
         tags: {
           ...story.tags,
-          topic: normalizeArray(item.topic).length > 0 ? normalizeArray(item.topic) : story.tags.topic,
+          topic: upcoming ? [...new Set(["未来事件", ...topics])] : topics,
           region: normalizeArray(item.region).length > 0 ? normalizeArray(item.region) : story.tags.region,
           assets: normalizeArray(item.assets).length > 0 ? normalizeArray(item.assets) : story.tags.assets,
           direction,
           horizon,
         },
         analysisStatus: "complete" as const,
+        eventType: upcoming ? "upcoming" as const : story.eventType ?? "news" as const,
+        scheduledFor: upcoming ? new Date(scheduledTimestamp).toISOString() : story.scheduledFor ?? null,
       };
     });
     return { stories: enriched, advice: cleanText(parsed.advice).slice(0, 90) };
@@ -313,7 +325,7 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
   }
 }
 
-async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch): Promise<{ stories: OsintStory[]; advice: string } | null> {
+async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchImpl: typeof fetch, nowDate: Date): Promise<{ stories: OsintStory[]; advice: string } | null> {
   const now = Date.now();
   const preparedStories = stories.map((story) => {
     if (story.analysisStatus === "complete") return story;
@@ -333,7 +345,7 @@ async function enrichWithDeepSeek(stories: OsintStory[], apiKey: string, fetchIm
   if (pendingStories.length === 0) return { stories: preparedStories, advice: "" };
   const batches: OsintStory[][] = [];
   for (let index = 0; index < pendingStories.length; index += 12) batches.push(pendingStories.slice(index, index + 12));
-  const results = await Promise.all(batches.map((batch) => enrichStoryBatch(batch, apiKey, fetchImpl)));
+  const results = await Promise.all(batches.map((batch) => enrichStoryBatch(batch, apiKey, fetchImpl, nowDate)));
   const successful = results.filter((result): result is { stories: OsintStory[]; advice: string } => result !== null);
   if (successful.length === 0) return preparedStories.some((story) => story.analysisStatus === "complete")
     ? { stories: preparedStories, advice: "" }
@@ -372,6 +384,23 @@ function fallbackAdvice(stories: OsintStory[]): string {
   return "暂无明确跨市场共振信号，优先观察高重要度事件的二次确认。";
 }
 
+function hydrateCachedStory(story: OsintStory, cached: OsintStory | undefined): OsintStory {
+  if (!cached) return story;
+  return {
+    ...story,
+    title: cached.title,
+    originalTitle: story.originalTitle || cached.originalTitle,
+    language: cached.language,
+    translationStatus: cached.translationStatus,
+    summary: cached.summary,
+    importance: Math.max(story.importance, cached.importance),
+    tags: { ...cached.tags, verification: story.tags.verification },
+    analysisStatus: "complete",
+    eventType: cached.eventType ?? story.eventType ?? "news",
+    scheduledFor: cached.scheduledFor ?? story.scheduledFor ?? null,
+  };
+}
+
 export async function buildStorySnapshot(rawStories: RawStory[], options: BuildStoryOptions = {}): Promise<StorySnapshot> {
   const now = options.now ?? new Date();
   const windowHours = Math.max(1, options.windowHours ?? 72);
@@ -391,6 +420,7 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
     }
   }
   const canonicalStories = [...canonicalById.values()]
+    .map((story) => hydrateCachedStory(story, options.cachedStories?.get(story.id)))
     .sort((left, right) => storyTiming(left, right) || right.importance - left.importance)
     .slice(0, 200);
   const filteredStories = options.topic
@@ -399,28 +429,13 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
   const total = filteredStories.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(requestedPage, totalPages);
-  let stories = filteredStories.slice((page - 1) * pageSize, page * pageSize)
-    .map((story) => {
-      const cached = options.cachedStories?.get(story.id);
-      if (!cached) return story;
-      return {
-        ...story,
-        title: cached.title,
-        originalTitle: story.originalTitle || cached.originalTitle,
-        language: cached.language,
-        translationStatus: cached.translationStatus,
-        summary: cached.summary,
-        importance: Math.max(story.importance, cached.importance),
-        tags: { ...cached.tags, verification: story.tags.verification },
-        analysisStatus: "complete" as const,
-      };
-    });
+  let stories = filteredStories.slice((page - 1) * pageSize, page * pageSize);
   let advice = fallbackAdvice(stories);
   let adviceConfidence: "high" | "medium" | "low" = "low";
   let generatedAt: string | null = null;
 
   if (options.apiKey) {
-    const enriched = await enrichWithDeepSeek(stories, options.apiKey, options.fetchImpl ?? fetch);
+    const enriched = await enrichWithDeepSeek(stories, options.apiKey, options.fetchImpl ?? fetch, now);
     if (enriched) {
       stories = enriched.stories;
       advice = enriched.advice || advice;
@@ -428,6 +443,7 @@ export async function buildStorySnapshot(rawStories: RawStory[], options: BuildS
       generatedAt = now.toISOString();
     }
   }
+  stories = [...stories].sort((left, right) => storyTiming(left, right) || right.importance - left.importance);
 
   const newlyAnalyzed = stories.filter((story) =>
     story.analysisStatus === "complete" && !options.cachedStories?.has(story.id)
@@ -686,6 +702,7 @@ export async function getStorySnapshot(options: {
     const scheduledResults = scheduled.sources.map((source) => ({
       name: source.name,
       ok: source.ok,
+      error: source.error,
       stories: scheduled.stories.filter((story) => story.sourceName === storySourceNames[source.name]),
     }));
     results = [...standardResults, ...scheduledResults];
@@ -718,7 +735,7 @@ export async function getStorySnapshot(options: {
   });
   const snapshot = warmFirstPage ? sliceStorySnapshot(builtSnapshot, pageSize) : builtSnapshot;
   snapshot.sources = [
-    ...results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length })),
+    ...results.map((result) => ({ name: result.name, ok: result.ok, count: result.stories.length, error: result.error ?? null })),
     ...(persistentStories && persistentStories.size > 0
       ? [{ name: "持久缓存", ok: true, count: persistentStories.size }]
       : []),

@@ -98,7 +98,7 @@ export interface StorySnapshot {
     confidence: "high" | "medium" | "low";
     generatedAt: string | null;
   };
-  sources: Array<{ name: string; ok: boolean; count: number }>;
+  sources: Array<{ name: string; ok: boolean; count: number; error?: string | null }>;
 }
 
 export interface MarketManifestEntry {

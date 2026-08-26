@@ -138,6 +138,42 @@ async function verifyStories() {
   } as Parameters<typeof buildStorySnapshot>[1] & { cachedStories: Map<string, typeof translated.stories[0]> });
   assert.equal(cachedFallback.stories.length, 1);
   assert.equal(cachedFallback.stories[0].title, "航运风险上升推动油价上涨");
+  const futureRaw: RawStory[] = [{
+    sourceId: "future-news-1",
+    sourceName: "Reuters",
+    sourceUrl: "https://example.com/future-news",
+    title: "NVIDIA will report earnings on August 27 at 5:00 PM ET",
+    description: "The company explicitly scheduled its earnings call for August 27 at 5:00 PM ET.",
+    publishedAt: "2026-08-25T10:30:00.000Z",
+  }];
+  const futureAnalyzed = await buildStorySnapshot(futureRaw, {
+    apiKey: "test-key",
+    now: new Date("2026-08-25T11:00:00.000Z"),
+    fetchImpl: async () => Response.json({ choices: [{ message: { content: JSON.stringify({
+      advice: "关注英伟达财报。",
+      stories: [{
+        id: (await buildStorySnapshot(futureRaw, { apiKey: null, now: new Date("2026-08-25T11:00:00.000Z") })).stories[0].id,
+        titleZh: "英伟达将公布财报",
+        summary: "公司将在明确时间公布财报。",
+        topic: ["科技"],
+        region: ["美国"],
+        assets: ["NVDA", "半导体"],
+        direction: "neutral",
+        horizon: "1-3d",
+        scheduledFor: "2026-08-27T21:00:00.000Z",
+      }],
+    }) } }] }),
+  });
+  assert.equal(futureAnalyzed.stories[0].eventType, "upcoming");
+  assert.equal(futureAnalyzed.stories[0].scheduledFor, "2026-08-27T21:00:00.000Z");
+  assert.equal(futureAnalyzed.stories[0].tags.topic.includes("未来事件"), true);
+  const cachedFutureFiltered = await buildStorySnapshot(futureRaw, {
+    apiKey: null,
+    now: new Date("2026-08-25T11:00:00.000Z"),
+    topic: "未来事件",
+    cachedStories: new Map([[futureAnalyzed.stories[0].id, futureAnalyzed.stories[0]]]),
+  } as Parameters<typeof buildStorySnapshot>[1] & { cachedStories: Map<string, typeof futureAnalyzed.stories[0]> });
+  assert.equal(cachedFutureFiltered.stories.length, 1);
   assert.equal(parsePublishedAt("not-a-date"), null);
   assert.equal(parsePublishedAt("20260825T091500Z"), "2026-08-25T09:15:00.000Z");
 
@@ -272,6 +308,20 @@ async function verifyStories() {
   ], { apiKey: null, now: pagingNow, windowHours: 72, pageSize: 20 });
   assert.deepEqual(mixedTiming.stories.map((story) => story.id.length > 0 ? story.eventType : ""), ["upcoming", "news"]);
   assert.equal(mixedTiming.stories[0].tags.topic.includes("未来事件"), true);
+  const officialCalendar = await buildStorySnapshot([{
+    sourceId: "bls-official",
+    sourceName: "U.S. Bureau of Labor Statistics",
+    sourceUrl: "https://www.bls.gov/schedule/",
+    title: "美国非农就业报告",
+    description: "官方日历事件。",
+    publishedAt: "2026-08-25T14:00:00.000Z",
+    scheduledFor: "2026-08-25T14:00:00.000Z",
+    eventType: "upcoming",
+    topicHints: ["未来事件", "宏观"],
+    preAnalyzed: true,
+    importanceHint: 10,
+  }], { apiKey: null, now: pagingNow, windowHours: 72, pageSize: 20 });
+  assert.equal(officialCalendar.stories[0].tags.verification, "official");
 
   const manyRaw: RawStory[] = Array.from({ length: 13 }, (_, index) => ({
     sourceId: `many-${index}`,

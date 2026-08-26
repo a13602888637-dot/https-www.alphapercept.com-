@@ -25,6 +25,7 @@ async function verifyScheduledEvents() {
   assert.equal(fed.length, 1);
   assert.equal(fed[0].eventType, "upcoming");
   assert.equal(fed[0].scheduledFor, "2026-08-28T14:00:00.000Z");
+  assert.equal(fed[0].title, "美联储主席Kevin Warsh：Keynote Remarks");
   assert.equal(fed[0].topicHints.includes("未来事件"), true);
   assert.equal(fed[0].preAnalyzed, true);
 
