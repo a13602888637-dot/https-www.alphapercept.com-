@@ -38,12 +38,23 @@ export async function saveCachedStories(stories: OsintStory[]): Promise<void> {
     .filter((story) => story.analysisStatus === "complete")
     .map((story) => [story.id, story])).values()];
   if (complete.length === 0) return;
-  await prisma.$transaction(complete.map((story) => prisma.$executeRaw`
+  const rows = complete.map((story) => ({
+    id: story.id,
+    publishedAt: story.publishedAt,
+    payload: story,
+  }));
+  await prisma.$executeRaw`
     INSERT INTO "OsintStoryCache" ("id", "publishedAt", "payload", "createdAt", "updatedAt")
-    VALUES (${story.id}, ${new Date(story.publishedAt)}, ${JSON.stringify(story)}::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    SELECT
+      item->>'id',
+      ((item->>'publishedAt')::timestamptz AT TIME ZONE 'UTC'),
+      item->'payload',
+      CURRENT_TIMESTAMP,
+      CURRENT_TIMESTAMP
+    FROM jsonb_array_elements(${JSON.stringify(rows)}::jsonb) AS item
     ON CONFLICT ("id") DO UPDATE SET
       "publishedAt" = EXCLUDED."publishedAt",
       "payload" = EXCLUDED."payload",
       "updatedAt" = CURRENT_TIMESTAMP
-  `));
+  `;
 }

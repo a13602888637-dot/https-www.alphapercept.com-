@@ -25,6 +25,8 @@ const repository = read("lib/osint/story-cache.ts");
 assert.equal(repository.includes("getCachedStories"), true);
 assert.equal(repository.includes("saveCachedStories"), true);
 assert.equal(repository.includes("ON CONFLICT"), true);
+assert.equal(repository.includes("jsonb_array_elements"), true);
+assert.equal(repository.includes("$transaction"), false);
 
 const service = read("lib/osint/story-service.ts");
 assert.equal(service.includes("cachedStories"), true);
