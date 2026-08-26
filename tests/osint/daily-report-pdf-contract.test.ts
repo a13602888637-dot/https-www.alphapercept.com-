@@ -185,6 +185,7 @@ async function verifyPdfContract() {
   });
   const pdf = await buildDailyReportPdf(snapshot, "full");
   assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
+  assert.match(pdf.toString("latin1"), /\/MediaBox\s*\[0 0 1080 1350\]/);
   assert.ok(pdf.length > 5_000);
   assert.ok(pdf.length < 5_000_000, `移动端 PDF 体积过大：${pdf.length}`);
   const pageCount = (buffer: Buffer) => (buffer.toString("latin1").match(/\/Type\s*\/Page\b/g) ?? []).length;

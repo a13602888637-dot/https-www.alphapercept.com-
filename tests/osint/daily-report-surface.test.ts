@@ -99,6 +99,7 @@ assert.equal(printActions.includes("print=1"), false);
 
 const exportHtml = read("lib/osint/daily-report/export-html.ts");
 const pdfExport = read("lib/osint/daily-report/pdf-export.ts");
+const pdfReadiness = read("lib/osint/daily-report/pdf-readiness.ts");
 const nextConfig = read("next.config.js");
 const worldBriefing = read("components/osint-v2/WorldBriefing.tsx");
 assert.equal(exportHtml.includes("z-index:9999"), true);
@@ -108,7 +109,12 @@ assert.doesNotMatch(exportHtml, /\.watermark\{[^}]*display:none/);
 assert.doesNotMatch(exportHtml, /\.report-disclaimer\{[^}]*display:none/);
 assert.equal(pdfExport.includes("drawPageBase"), true);
 assert.equal(pdfExport.includes("DAILY_REPORT_DISCLAIMER"), true);
-assert.equal(pdfExport.includes("hotMoneyFlows.slice(0, 28)"), true);
+assert.equal(pdfReadiness.includes('DAILY_REPORT_PDF_LAYOUT_VERSION = "social-v2"'), true);
+assert.equal(pdfExport.includes("width: 1080"), true);
+assert.equal(pdfExport.includes("height: 1350"), true);
+for (const machineCopy of ["暂无达到展示门槛", "获得官方或多源验证", "重要度", "结构化日历"]) {
+  assert.equal(pdfExport.includes(machineCopy), false);
+}
 for (const renderer of ["drawStoryBoardPage", "drawStockBoardPage", "drawHotMoneyBoardPage"]) {
   assert.equal(pdfExport.includes(renderer), true);
 }
