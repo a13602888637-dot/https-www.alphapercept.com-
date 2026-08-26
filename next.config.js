@@ -1,11 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ['pdfkit'],
 
   // Daily report PDF embeds one OFL-licensed Simplified Chinese font asset.
   // Keep the include literal and narrow so only the PDF function traces it.
   outputFileTracingIncludes: {
-    '/api/osint/v1/reports/[reportId]/export': ['./lib/osint/daily-report/assets/NotoSansSC-Variable.ttf'],
+    '/api/osint/v1/reports/[reportId]/export': [
+      './lib/osint/daily-report/assets/NotoSansSC-Variable.ttf',
+      './node_modules/pdfkit/js/standard-fonts/**/*',
+    ],
   },
 
   // Uzi standalone reports are generated HTML. Keep them in an opaque,

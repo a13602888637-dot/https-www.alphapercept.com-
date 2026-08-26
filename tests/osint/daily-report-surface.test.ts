@@ -99,6 +99,7 @@ assert.equal(printActions.includes("print=1"), false);
 
 const exportHtml = read("lib/osint/daily-report/export-html.ts");
 const pdfExport = read("lib/osint/daily-report/pdf-export.ts");
+const nextConfig = read("next.config.js");
 assert.equal(exportHtml.includes("z-index:9999"), true);
 assert.equal(exportHtml.includes("section{break-inside:auto}"), true);
 assert.equal(exportHtml.includes("45mm"), true);
@@ -106,6 +107,8 @@ assert.doesNotMatch(exportHtml, /\.watermark\{[^}]*display:none/);
 assert.doesNotMatch(exportHtml, /\.report-disclaimer\{[^}]*display:none/);
 assert.ok(pdfExport.indexOf("drawLegalPanel(doc, report);") < pdfExport.indexOf('if (section === "full" || section === "stories")'));
 assert.equal(pdfExport.includes("hotMoneyFlows.slice(0, 28)"), true);
+assert.equal(nextConfig.includes("serverExternalPackages: ['pdfkit']"), true);
+assert.equal(nextConfig.includes("./node_modules/pdfkit/js/standard-fonts/**/*"), true);
 
 assert.equal(existsSync(resolve("app/osint/reports/page.tsx")), true);
 assert.equal(existsSync(resolve("app/osint/reports/[reportId]/page.tsx")), true);
