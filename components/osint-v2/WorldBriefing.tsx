@@ -4,10 +4,28 @@ import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { OsintStory, StorySnapshot } from "@/lib/osint/contracts";
 
-const TOPICS = ["全部", "地缘", "宏观", "能源", "科技"] as const;
+const TOPICS = ["全部", "未来事件", "地缘", "宏观", "能源", "科技"] as const;
 
-function timeLabel(publishedAt: string): { time: string; age: string } {
-  const date = new Date(publishedAt);
+function shanghaiDay(date: Date): number {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return Math.floor(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day)) / 86_400_000);
+}
+
+function timeLabel(story: OsintStory): { time: string; age: string } {
+  const date = new Date(story.scheduledFor || story.publishedAt);
+  if (story.eventType === "upcoming") {
+    const days = Math.max(0, shanghaiDay(date) - shanghaiDay(new Date()));
+    return {
+      time: date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai", hour12: false }),
+      age: days === 0 ? "今天" : days === 1 ? "明天" : `${days}天后`,
+    };
+  }
   const ageHours = Math.max(0, Math.floor((Date.now() - date.getTime()) / 3_600_000));
   return {
     time: date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" }),
@@ -92,7 +110,7 @@ export function WorldBriefing() {
       <div className="border-b border-[#1F2A3A] px-4 py-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h2 className="text-sm font-semibold tracking-wide text-[#D6DEE8]">财经热点 · 过去3天</h2>
+            <h2 className="text-sm font-semibold tracking-wide text-[#D6DEE8]">财经热点 · 过去3天新闻 + 未来7天事件</h2>
             <p className="mt-0.5 text-[11px] text-[#718096]">{pagination.total} 条去重事件 · 服务端分类后分页 · 摘要与标签可供 Agent 分析</p>
           </div>
           <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
@@ -128,19 +146,20 @@ export function WorldBriefing() {
         {loading && !snapshot ? (
           <div className="space-y-2">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-md border border-[#1F2A3A] bg-[#0D1420]" />)}</div>
         ) : visibleStories.length === 0 ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-1 text-xs text-[#718096]"><span>过去3天暂无“{topic}”分类新闻</span><span className="text-[10px] text-[#4b586b]">可切换分类、来源或清空搜索</span></div>
+          <div className="flex h-48 flex-col items-center justify-center gap-1 text-xs text-[#718096]"><span>{topic === "未来事件" ? "未来7天暂无已确认事件" : `过去3天暂无“${topic}”分类新闻`}</span><span className="text-[10px] text-[#4b586b]">可切换分类、来源或清空搜索</span></div>
         ) : (
           <div className="relative space-y-2 before:absolute before:bottom-0 before:left-[51px] before:top-0 before:w-px before:bg-[#263348] sm:before:left-[61px]">
             {visibleStories.map((story) => {
-              const published = timeLabel(story.publishedAt);
+              const published = timeLabel(story);
+              const upcoming = story.eventType === "upcoming";
               return (
-                <article key={story.id} className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 sm:grid-cols-[52px_minmax(0,1fr)] sm:gap-4">
+                <article key={story.id} className="relative grid grid-cols-[58px_minmax(0,1fr)] gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:gap-4">
                   <div className="pt-3 text-right font-mono"><div className="text-xs text-[#AAB5C4] sm:text-[11px]">{published.time}</div><div className="text-[10px] text-[#536177] sm:text-[9px]">{published.age}</div></div>
-                  <div className="relative min-w-0 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-3 py-3 transition-colors hover:border-[#314158] hover:bg-[#101927] sm:px-4">
-                    <span className="absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-[#070B12] bg-[#2EC4C7] sm:-left-[21px]" />
+                  <div className={`relative min-w-0 rounded-md border px-3 py-3 transition-colors sm:px-4 ${upcoming ? "border-[#F59E32]/45 bg-[#F59E32]/[0.08] hover:border-[#F59E32]/70" : "border-[#1F2A3A] bg-[#0D1420] hover:border-[#314158] hover:bg-[#101927]"}`}>
+                    <span className={`absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-[#070B12] sm:-left-[21px] ${upcoming ? "bg-[#F59E32]" : "bg-[#2EC4C7]"}`} />
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0"><h3 className="text-sm font-medium leading-5 text-[#D6DEE8] sm:text-[13px]">{story.title}</h3>{story.translationStatus === "translated" && story.originalTitle !== story.title && <p className="mt-0.5 truncate text-[10px] text-[#536177] sm:text-[9px]" title={story.originalTitle}>{story.originalTitle}</p>}<p className="mt-1 text-sm leading-6 text-[#8B98AA] sm:text-[11px] sm:leading-5">{story.summary}</p></div>
-                      <span className="shrink-0 font-mono text-[10px] text-[#F2B84B]">重要度 {story.importance.toFixed(1)}/10</span>
+                      <div className="flex shrink-0 flex-col items-end gap-1">{upcoming && <span className="rounded-full bg-[#F59E32]/15 px-2 py-0.5 text-[9px] text-[#FFC66D]">未来事件</span>}<span className="font-mono text-[10px] text-[#F2B84B]">重要度 {story.importance.toFixed(1)}/10</span></div>
                     </div>
                     <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-1.5">{tagList(story).map((tag) => <span key={tag} className="rounded border border-[#2b3a50] bg-[#111b2a] px-1.5 py-0.5 text-[9px] text-[#91A1B7]">{tag}</span>)}</div>

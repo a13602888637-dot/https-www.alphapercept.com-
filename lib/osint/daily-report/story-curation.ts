@@ -2,6 +2,7 @@ import type { OsintStory } from "../contracts";
 import type { LhbStock } from "../../lhb/contracts";
 
 export type ReportStoryCategoryKey =
+  | "upcoming"
   | "macro"
   | "geopolitics"
   | "energy"
@@ -26,6 +27,7 @@ const CATEGORY_RULES: Array<{
   label: string;
   keywords: string[];
 }> = [
+  { key: "upcoming", label: "未来大事", keywords: ["未来事件"] },
   { key: "macro", label: "宏观与利率", keywords: ["宏观", "货币政策", "通胀", "央行", "利率", "债券", "macro", "rates"] },
   { key: "geopolitics", label: "地缘与安全", keywords: ["地缘", "外交", "制裁", "国防", "冲突", "战争"] },
   { key: "energy", label: "能源与大宗", keywords: ["能源", "原油", "天然气", "大宗商品", "黄金", "白银", "铜"] },
@@ -34,6 +36,7 @@ const CATEGORY_RULES: Array<{
 ];
 
 function categoryForStory(story: OsintStory) {
+  if (story.eventType === "upcoming") return CATEGORY_RULES[0];
   const labels = [...story.tags.topic, ...story.tags.assets].map((label) => label.toLowerCase());
   return CATEGORY_RULES.find((rule) =>
     rule.key !== "markets" && rule.keywords.some((keyword) =>
@@ -43,6 +46,7 @@ function categoryForStory(story: OsintStory) {
 }
 
 function reportWorthy(story: OsintStory, category: ReportStoryCategoryKey): boolean {
+  if (category === "upcoming") return story.importance >= 8;
   if (category !== "markets") {
     return (
       story.importance >= 4 ||

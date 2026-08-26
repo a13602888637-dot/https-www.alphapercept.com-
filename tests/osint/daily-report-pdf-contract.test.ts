@@ -31,6 +31,16 @@ function story(input: Partial<OsintStory> & Pick<OsintStory, "id" | "publishedAt
 async function verifyPdfContract() {
   const curated = curateReportStories([
     story({
+      id: "future-event",
+      title: "未来美联储主席讲话",
+      publishedAt: "2026-08-26T14:00:00.000Z",
+      importance: 9,
+      analysisStatus: "complete",
+      eventType: "upcoming",
+      scheduledFor: "2026-08-26T14:00:00.000Z",
+      tags: { topic: ["未来事件", "宏观"], region: ["美国"], assets: ["美债"], direction: "neutral", horizon: "1-3d", verification: "official" },
+    }),
+    story({
       id: "tech-new",
       title: "芯片产业更新",
       publishedAt: "2026-08-25T10:00:00.000Z",
@@ -68,12 +78,13 @@ async function verifyPdfContract() {
     }),
   ]);
 
-  assert.equal(curated.totalCount, 5);
-  assert.equal(curated.selectedCount, 3);
-  assert.deepEqual(curated.categories.map((item: { label: string }) => item.label), ["能源与大宗", "科技与产业"]);
+  assert.equal(curated.totalCount, 6);
+  assert.equal(curated.selectedCount, 4);
+  assert.deepEqual(curated.categories.map((item: { label: string }) => item.label), ["未来大事", "能源与大宗", "科技与产业"]);
   assert.deepEqual(curated.categories.find((item: { key: string }) => item.key === "technology")?.stories.map((item: OsintStory) => item.id), ["tech-new", "tech-old"]);
-  assert.match(curated.categories[0].insight, /原油/);
-  assert.match(curated.categories[0].insight, /多源/);
+  const energyCategory = curated.categories.find((item) => item.key === "energy");
+  assert.match(energyCategory?.insight ?? "", /原油/);
+  assert.match(energyCategory?.insight ?? "", /多源/);
   const rankReportStocks = (reportCuration as unknown as Record<string, unknown>).rankReportStocks;
   assert.equal(typeof rankReportStocks, "function", "个股资金榜应按股票代码去重");
   if (typeof rankReportStocks === "function") {

@@ -37,6 +37,7 @@ const COLORS = {
 } as const;
 
 const CATEGORY_COLORS: Record<CuratedStoryCategory["key"], string> = {
+  upcoming: "#F59E32",
   macro: "#2D78C4",
   geopolitics: "#C94755",
   energy: "#D99B22",

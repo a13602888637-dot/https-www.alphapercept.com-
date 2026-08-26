@@ -100,6 +100,7 @@ assert.equal(printActions.includes("print=1"), false);
 const exportHtml = read("lib/osint/daily-report/export-html.ts");
 const pdfExport = read("lib/osint/daily-report/pdf-export.ts");
 const nextConfig = read("next.config.js");
+const worldBriefing = read("components/osint-v2/WorldBriefing.tsx");
 assert.equal(exportHtml.includes("z-index:9999"), true);
 assert.equal(exportHtml.includes("section{break-inside:auto}"), true);
 assert.equal(exportHtml.includes("45mm"), true);
@@ -109,6 +110,10 @@ assert.ok(pdfExport.indexOf("drawLegalPanel(doc, report);") < pdfExport.indexOf(
 assert.equal(pdfExport.includes("hotMoneyFlows.slice(0, 28)"), true);
 assert.equal(nextConfig.includes("serverExternalPackages: ['pdfkit']"), true);
 assert.equal(nextConfig.includes("./node_modules/pdfkit/js/standard-fonts/**/*"), true);
+assert.equal(worldBriefing.includes('"未来事件"'), true);
+assert.equal(worldBriefing.includes("scheduledFor"), true);
+assert.equal(worldBriefing.includes("天后"), true);
+assert.equal(worldBriefing.includes("过去3天新闻 + 未来7天事件"), true);
 
 assert.equal(existsSync(resolve("app/osint/reports/page.tsx")), true);
 assert.equal(existsSync(resolve("app/osint/reports/[reportId]/page.tsx")), true);
