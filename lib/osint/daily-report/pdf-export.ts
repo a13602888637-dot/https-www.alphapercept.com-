@@ -248,7 +248,7 @@ function measureStockRow(doc: PDFKit.PDFDocument, stock: LhbStock, width: number
   const inner = width - 36;
   const nameLine = `${stock.name}  ${stock.code}`;
   const amountLine = `${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`;
-  return 13 + textHeight(doc, nameLine, 18, inner) + 5 + textHeight(doc, amountLine, 16, inner) + 5 + textHeight(doc, plainStockReason(stock.reasons), 16, inner) + 13;
+  return 9 + textHeight(doc, nameLine, 17, inner) + 3 + textHeight(doc, amountLine, 16, inner) + 3 + textHeight(doc, plainStockReason(stock.reasons), 16, inner) + 9;
 }
 
 function fitSingleColumn<T>(items: T[], measure: (item: T) => number, maxHeight: number, gap: number): Positioned<T>[] {
@@ -275,11 +275,11 @@ function drawStockColumn(doc: PDFKit.PDFDocument, title: string, stocks: LhbStoc
   selected.forEach(({ item: stock, height }, index) => {
     doc.roundedRect(x, cursor, width, height, 10).fillAndStroke(index % 2 === 0 ? COLORS.white : soft, COLORS.satin);
     const inner = width - 36;
-    let textY = cursor + 11;
-    doc.fontSize(18).fillColor(COLORS.ink).text(`${index + 1}. ${stock.name}  ${stock.code}`, x + 18, textY, { width: inner });
-    textY += textHeight(doc, `${index + 1}. ${stock.name}  ${stock.code}`, 18, inner) + 5;
+    let textY = cursor + 7;
+    doc.fontSize(17).fillColor(COLORS.ink).text(`${index + 1}. ${stock.name}  ${stock.code}`, x + 18, textY, { width: inner });
+    textY += textHeight(doc, `${index + 1}. ${stock.name}  ${stock.code}`, 17, inner) + 3;
     doc.fontSize(16).fillColor(accent).text(`${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`, x + 18, textY, { width: inner });
-    textY += textHeight(doc, `${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`, 16, inner) + 5;
+    textY += textHeight(doc, `${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`, 16, inner) + 3;
     doc.fontSize(16).fillColor(COLORS.ink).text(clean(plainStockReason(stock.reasons)), x + 18, textY, { width: inner });
     cursor += height + gap;
   });
@@ -305,7 +305,7 @@ function measureHotMoneyRow(doc: PDFKit.PDFDocument, flow: LhbHotMoneyFlow, widt
   const nameLine = `${flow.label} · ${flow.totalNetAmount >= 0 ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`;
   const departments = flow.departmentNames.join(" / ") || "席位观察";
   const detail = `买入 ${amount(flow.totalBuyAmount)} · 卖出 ${amount(flow.totalSellAmount)} · 主要买入 ${leadStocks(flow)}`;
-  return 13 + textHeight(doc, nameLine, 18, inner) + 5 + textHeight(doc, departments, 16, inner, 1) + 5 + textHeight(doc, detail, 16, inner, 1) + 13;
+  return 9 + textHeight(doc, nameLine, 17, inner) + 3 + textHeight(doc, departments, 16, inner, 1) + 3 + textHeight(doc, detail, 16, inner, 1) + 9;
 }
 
 function drawHotMoneyColumn(doc: PDFKit.PDFDocument, flows: Positioned<LhbHotMoneyFlow>[], startIndex: number, x: number, y: number, width: number): void {
@@ -316,13 +316,13 @@ function drawHotMoneyColumn(doc: PDFKit.PDFDocument, flows: Positioned<LhbHotMon
     doc.roundedRect(x, cursor, width, height, 10).fillAndStroke(index % 2 === 0 ? COLORS.white : COLORS.row, COLORS.satin);
     doc.rect(x, cursor, 8, height).fill(accent);
     const inner = width - 38;
-    let textY = cursor + 11;
+    let textY = cursor + 7;
     const nameLine = `${startIndex + index + 1}. ${flow.label} · ${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`;
-    doc.fontSize(18).fillColor(accent).text(clean(nameLine), x + 20, textY, { width: inner });
-    textY += textHeight(doc, nameLine, 18, inner) + 5;
+    doc.fontSize(17).fillColor(accent).text(clean(nameLine), x + 20, textY, { width: inner });
+    textY += textHeight(doc, nameLine, 17, inner) + 3;
     const departments = flow.departmentNames.join(" / ") || "席位观察";
     doc.fontSize(16).fillColor(COLORS.ink).text(clean(departments), x + 20, textY, { width: inner, lineGap: 1 });
-    textY += textHeight(doc, departments, 16, inner, 1) + 5;
+    textY += textHeight(doc, departments, 16, inner, 1) + 3;
     const detail = `买入 ${amount(flow.totalBuyAmount)} · 卖出 ${amount(flow.totalSellAmount)} · 主要买入 ${leadStocks(flow)}`;
     doc.fontSize(16).fillColor(COLORS.ink).text(clean(detail), x + 20, textY, { width: inner, lineGap: 1 });
     cursor += height + 5;
