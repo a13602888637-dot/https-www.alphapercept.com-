@@ -179,6 +179,31 @@ assert.equal(pdfExport.includes("drawAlignedHotMoneyRows"), true);
 
 生成 2026-08-26 三页 PDF，确认热点仍约 10 条、游资左右边缘对齐、文字完整且无重叠。
 
+### Task 5: 游资卡片统一为三行资金结构
+
+**Files:**
+- Modify: `lib/osint/daily-report/pdf-export.ts`
+- Modify: `tests/osint/daily-report-surface.test.ts`
+
+**Interfaces:**
+- Produces: `hotMoneyAmountLine()` 和 `hotMoneyStockLine()`，由测量和绘制共同使用。
+
+- [ ] **Step 1: 写失败测试**
+
+```ts
+assert.equal(pdfExport.includes("hotMoneyAmountLine"), true);
+assert.equal(pdfExport.includes("hotMoneyStockLine"), true);
+assert.equal(pdfExport.includes("departmentNames.join"), false);
+```
+
+- [ ] **Step 2: 实现三行结构**
+
+第一行绘制排名、游资名和净额；第二行分别绘制红色买入额和绿色卖出额；第三行绘制红色主要买入股票。测量函数使用完全相同的三行文字和字号。
+
+- [ ] **Step 3: 回归与上线**
+
+生成真实样稿确认左右等高、三行无重叠；升级 PDF 缓存版本并完成生产部署。
+
 ## Plan Self-Review
 
 - Spec coverage: Pantone 配色、固定三页、数量上限、字号下限、无截断、去重、水印、上线均有对应步骤。
