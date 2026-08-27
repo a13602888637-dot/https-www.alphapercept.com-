@@ -132,6 +132,9 @@ for (const color of ["#F0EFEB", "#2B2C30", "#9F2336", "#2A5D69", "#97637C", "#D6
 assert.equal(pdfExport.includes("function clip("), false);
 assert.equal(pdfExport.includes("clip("), false);
 assert.equal(pdfExport.includes("ellipsis"), false);
+for (const alignedRenderer of ["fitAlignedRows", "drawAlignedStoryRows", "drawAlignedHotMoneyRows"]) {
+  assert.equal(pdfExport.includes(alignedRenderer), true);
+}
 assert.equal(nextConfig.includes("serverExternalPackages: ['pdfkit']"), true);
 assert.equal(nextConfig.includes("./node_modules/pdfkit/js/standard-fonts/**/*"), true);
 assert.equal(worldBriefing.includes('"未来事件"'), true);

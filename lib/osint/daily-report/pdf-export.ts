@@ -55,6 +55,8 @@ const CATEGORY_COLORS: Record<CuratedStoryCategory["key"], string> = {
 
 type StoryCard = { story: OsintStory; label: string; accent: string };
 type Positioned<T> = { item: T; height: number };
+type AlignedRow<T> = { left: Positioned<T>; right?: Positioned<T>; height: number };
+type RankedFlow = { flow: LhbHotMoneyFlow; rank: number };
 
 function clean(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -171,46 +173,48 @@ function storyCards(curated: ReturnType<typeof curateReportStories>, limit: numb
 function measureStoryCard(doc: PDFKit.PDFDocument, card: StoryCard, width: number): number {
   const inner = width - 40;
   const meta = `${card.label} · ${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
-  return 12 +
-    textHeight(doc, meta, 14, inner, 1) + 5 +
-    textHeight(doc, card.story.title, 20, inner, 1) + 6 +
-    textHeight(doc, card.story.summary, 16, inner, 1) + 12;
+  return 14 +
+    textHeight(doc, meta, 14, inner, 2) + 6 +
+    textHeight(doc, card.story.title, 20, inner, 3) + 8 +
+    textHeight(doc, card.story.summary, 16, inner, 3) + 14;
 }
 
-function fitTwoColumns<T>(items: T[], measure: (item: T) => number, maxHeight: number, gap: number): [Positioned<T>[], Positioned<T>[]] {
-  const columns: [Positioned<T>[], Positioned<T>[]] = [[], []];
-  const heights = [0, 0];
-  for (const item of items) {
-    const height = measure(item);
-    const preferred = heights[0] <= heights[1] ? 0 : 1;
-    const fallback = preferred === 0 ? 1 : 0;
-    const preferredNext = heights[preferred] + (columns[preferred].length > 0 ? gap : 0) + height;
-    const fallbackNext = heights[fallback] + (columns[fallback].length > 0 ? gap : 0) + height;
-    const column = preferredNext <= maxHeight ? preferred : fallbackNext <= maxHeight ? fallback : -1;
-    if (column === 0) {
-      columns[0].push({ item, height });
-      heights[0] += (columns[0].length > 1 ? gap : 0) + height;
-    } else if (column === 1) {
-      columns[1].push({ item, height });
-      heights[1] += (columns[1].length > 1 ? gap : 0) + height;
-    } else {
-      break;
-    }
+function fitAlignedRows<T>(items: T[], measure: (item: T) => number, maxHeight: number, gap: number): AlignedRow<T>[] {
+  const rows: AlignedRow<T>[] = [];
+  let used = 0;
+  for (let index = 0; index < items.length; index += 2) {
+    const left = { item: items[index], height: measure(items[index]) };
+    const rightItem = items[index + 1];
+    const right = rightItem === undefined ? undefined : { item: rightItem, height: measure(rightItem) };
+    const height = Math.max(left.height, right?.height ?? 0);
+    const next = used + (rows.length > 0 ? gap : 0) + height;
+    if (next > maxHeight) break;
+    rows.push({ left, right, height });
+    used = next;
   }
-  return columns;
+  return rows;
 }
 
 function drawStoryCard(doc: PDFKit.PDFDocument, card: StoryCard, x: number, y: number, width: number, height: number): void {
   const inner = width - 40;
   doc.roundedRect(x, y, width, height, 14).fillAndStroke(COLORS.white, COLORS.satin);
   doc.rect(x, y, 9, height).fill(card.accent);
-  let cursor = y + 10;
+  let cursor = y + 12;
   const meta = `${card.label} · ${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
-  doc.font(FONT).fontSize(14).fillColor(card.accent).text(clean(meta), x + 22, cursor, { width: inner, lineGap: 1 });
-  cursor += textHeight(doc, meta, 14, inner, 1) + 5;
-  doc.fontSize(20).fillColor(COLORS.ink).text(clean(card.story.title), x + 22, cursor, { width: inner, lineGap: 1 });
-  cursor += textHeight(doc, card.story.title, 20, inner, 1) + 6;
-  doc.fontSize(16).fillColor(COLORS.ink).text(clean(card.story.summary), x + 22, cursor, { width: inner, lineGap: 1 });
+  doc.font(FONT).fontSize(14).fillColor(card.accent).text(clean(meta), x + 22, cursor, { width: inner, lineGap: 2 });
+  cursor += textHeight(doc, meta, 14, inner, 2) + 6;
+  doc.fontSize(20).fillColor(COLORS.ink).text(clean(card.story.title), x + 22, cursor, { width: inner, lineGap: 3 });
+  cursor += textHeight(doc, card.story.title, 20, inner, 3) + 8;
+  doc.fontSize(16).fillColor(COLORS.ink).text(clean(card.story.summary), x + 22, cursor, { width: inner, lineGap: 3 });
+}
+
+function drawAlignedStoryRows(doc: PDFKit.PDFDocument, rows: AlignedRow<StoryCard>[], y: number, width: number, gap: number): void {
+  let cursor = y;
+  rows.forEach((row) => {
+    drawStoryCard(doc, row.left.item, PAGE.left, cursor, width, row.height);
+    if (row.right) drawStoryCard(doc, row.right.item, PAGE.left + width + gap, cursor, width, row.height);
+    cursor += row.height + gap;
+  });
 }
 
 export function drawStoryBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
@@ -221,17 +225,11 @@ export function drawStoryBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyRe
   const lead = candidates[0]?.story;
   const contentStart = drawTitle(doc, "热点复盘", `${report.reportDate} · 重点新闻与未来事件${lead ? ` · ${clean(lead.tags.topic[0] || "市场")}` : ""}`);
   const gridY = drawUpcoming(doc, upcoming, contentStart);
-  const gap = 16;
+  const gap = 18;
   const width = (PAGE.right - PAGE.left - gap) / 2;
   const available = PAGE.contentBottom - gridY;
-  const columns = fitTwoColumns(candidates, (card) => measureStoryCard(doc, card, width), available, gap);
-  columns.forEach((column, columnIndex) => {
-    let y = gridY;
-    column.forEach(({ item, height }) => {
-      drawStoryCard(doc, item, PAGE.left + columnIndex * (width + gap), y, width, height);
-      y += height + gap;
-    });
-  });
+  const rows = fitAlignedRows(candidates, (card) => measureStoryCard(doc, card, width), available, gap);
+  drawAlignedStoryRows(doc, rows, gridY, width, gap);
 }
 
 function measureStockRow(doc: PDFKit.PDFDocument, stock: LhbStock, width: number): number {
@@ -298,16 +296,15 @@ function measureHotMoneyRow(doc: PDFKit.PDFDocument, flow: LhbHotMoneyFlow, widt
   return 9 + textHeight(doc, nameLine, 17, inner) + 3 + textHeight(doc, departments, 16, inner, 1) + 3 + textHeight(doc, detail, 16, inner, 1) + 9;
 }
 
-function drawHotMoneyColumn(doc: PDFKit.PDFDocument, flows: Positioned<LhbHotMoneyFlow>[], startIndex: number, x: number, y: number, width: number): void {
-  let cursor = y;
-  flows.forEach(({ item: flow, height }, index) => {
+function drawHotMoneyCard(doc: PDFKit.PDFDocument, ranked: RankedFlow, x: number, y: number, width: number, height: number): void {
+    const flow = ranked.flow;
     const positive = flow.totalNetAmount >= 0;
     const accent = positive ? COLORS.red : COLORS.teal;
-    doc.roundedRect(x, cursor, width, height, 10).fillAndStroke(index % 2 === 0 ? COLORS.white : COLORS.row, COLORS.satin);
-    doc.rect(x, cursor, 8, height).fill(accent);
+    doc.roundedRect(x, y, width, height, 10).fillAndStroke(ranked.rank % 2 === 1 ? COLORS.white : COLORS.row, COLORS.satin);
+    doc.rect(x, y, 8, height).fill(accent);
     const inner = width - 38;
-    let textY = cursor + 7;
-    const nameLine = `${startIndex + index + 1}. ${flow.label} · ${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`;
+    let textY = y + 7;
+    const nameLine = `${ranked.rank}. ${flow.label} · ${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`;
     doc.fontSize(17).fillColor(accent).text(clean(nameLine), x + 20, textY, { width: inner });
     textY += textHeight(doc, nameLine, 17, inner) + 3;
     const departments = flow.departmentNames.join(" / ") || "席位观察";
@@ -315,19 +312,26 @@ function drawHotMoneyColumn(doc: PDFKit.PDFDocument, flows: Positioned<LhbHotMon
     textY += textHeight(doc, departments, 16, inner, 1) + 3;
     const detail = `买入 ${amount(flow.totalBuyAmount)} · 卖出 ${amount(flow.totalSellAmount)} · 主要买入 ${leadStocks(flow)}`;
     doc.fontSize(16).fillColor(COLORS.ink).text(clean(detail), x + 20, textY, { width: inner, lineGap: 1 });
-    cursor += height + 5;
+}
+
+function drawAlignedHotMoneyRows(doc: PDFKit.PDFDocument, rows: AlignedRow<RankedFlow>[], y: number, width: number, gap: number): void {
+  let cursor = y;
+  rows.forEach((row) => {
+    drawHotMoneyCard(doc, row.left.item, PAGE.left, cursor, width, row.height);
+    if (row.right) drawHotMoneyCard(doc, row.right.item, PAGE.left + width + gap, cursor, width, row.height);
+    cursor += row.height + 5;
   });
 }
 
 export function drawHotMoneyBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
-  const flows = selectReportHotMoney(report.lhb.hotMoneyFlows);
+  const flows = selectReportHotMoney(report.lhb.hotMoneyFlows).slice(0, 14);
   const contentStart = drawTitle(doc, "游资席位", `交易日 ${report.lhb.tradeDate || "--"} · 看谁在买、买了什么`);
   const gap = 18;
   const width = (PAGE.right - PAGE.left - gap) / 2;
   const available = PAGE.contentBottom - contentStart;
-  const columns = fitTwoColumns(flows, (flow) => measureHotMoneyRow(doc, flow, width), available, 5);
-  drawHotMoneyColumn(doc, columns[0], 0, PAGE.left, contentStart, width);
-  drawHotMoneyColumn(doc, columns[1], columns[0].length, PAGE.left + width + gap, contentStart, width);
+  const paired: RankedFlow[] = flows.map((flow, index) => ({ flow, rank: index + 1 }));
+  const rows = fitAlignedRows(paired, (item) => measureHotMoneyRow(doc, item.flow, width), available, 5);
+  drawAlignedHotMoneyRows(doc, rows, contentStart, width, gap);
 }
 
 function addReportPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot, pageNumber: number, totalPages: number, draw: (doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot) => void): void {
