@@ -21,7 +21,7 @@ import {
   type CuratedStoryCategory,
 } from "./story-curation";
 
-export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v5";
+export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v6";
 
 const FONT = "NotoSansSC";
 const FONT_PATH = `${process.cwd()}/${DAILY_REPORT_PDF_FONT_ASSET}`;
@@ -312,12 +312,11 @@ function drawHotMoneyCard(doc: PDFKit.PDFDocument, ranked: RankedFlow, x: number
     const nameLine = `${ranked.rank}. ${flow.label}`;
     doc.fontSize(17).fillColor(COLORS.ink).text(clean(nameLine), x + 20, textY, { width: inner });
     textY += textHeight(doc, nameLine, 17, inner) + 5;
-    const fieldWidth = inner / 3;
-    doc.fontSize(15).fillColor(accent).text(`${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`, x + 20, textY, { width: fieldWidth, lineBreak: false });
-    doc.fillColor(COLORS.red).text(`买入 ${amount(flow.totalBuyAmount)}`, x + 20 + fieldWidth, textY, { width: fieldWidth, align: "center", lineBreak: false });
-    doc.fillColor(COLORS.teal).text(`卖出 ${amount(flow.totalSellAmount)}`, x + 20 + fieldWidth * 2, textY, { width: fieldWidth, align: "right", lineBreak: false });
+    doc.fontSize(15).fillColor(accent).text(`${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`, x + 20, textY, { width: inner, continued: true });
+    doc.fillColor(COLORS.red).text(` · 买入 ${amount(flow.totalBuyAmount)}`, { continued: true });
+    doc.fillColor(COLORS.teal).text(` · 卖出 ${amount(flow.totalSellAmount)}`);
     textY += textHeight(doc, hotMoneyAmountLine(flow), 15, inner) + 5;
-    doc.fontSize(16).fillColor(COLORS.red).text(clean(hotMoneyStockLine(flow)), x + 20, textY, { width: inner, lineGap: 1 });
+    doc.fontSize(16).fillColor(COLORS.ink).text(clean(hotMoneyStockLine(flow)), x + 20, textY, { width: inner, lineGap: 1 });
 }
 
 function drawAlignedHotMoneyRows(doc: PDFKit.PDFDocument, rows: AlignedRow<RankedFlow>[], y: number, width: number, gap: number): void {
