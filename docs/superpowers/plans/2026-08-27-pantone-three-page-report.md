@@ -149,6 +149,36 @@ Expected: 契约全部通过，Next.js 构建成功。
 
 用户已明确授权发布。先 `git push origin HEAD:main`，再 `vercel deploy --prod --yes`，最后验证生产 PDF 为 1080×1350、三页且 URL 带 `layout=pantone-v3`。
 
+### Task 4: 热点与游资等高对齐
+
+**Files:**
+- Modify: `lib/osint/daily-report/pdf-export.ts`
+- Modify: `tests/osint/daily-report-surface.test.ts`
+
+**Interfaces:**
+- Produces: `fitAlignedRows()`，将左右卡片按行配对并使用同一行最大高度。
+- Consumes: 已测量的热点卡片和游资卡片高度。
+
+- [ ] **Step 1: 写失败测试**
+
+```ts
+assert.equal(pdfExport.includes("fitAlignedRows"), true);
+assert.equal(pdfExport.includes("drawAlignedStoryRows"), true);
+assert.equal(pdfExport.includes("drawAlignedHotMoneyRows"), true);
+```
+
+- [ ] **Step 2: 实现等高行**
+
+热点候选按顺序两两配对，行高取两张卡片的最大值；游资固定左右 7+7，逐行用最大卡片高度。总高度超出时删除最后一整行，不缩小字体。
+
+- [ ] **Step 3: 调整文字节奏**
+
+热点元信息、标题和摘要分别使用 2/3/3 的 `lineGap`，卡片之间使用统一的 18pt 间距。
+
+- [ ] **Step 4: 真实样稿验收**
+
+生成 2026-08-26 三页 PDF，确认热点仍约 10 条、游资左右边缘对齐、文字完整且无重叠。
+
 ## Plan Self-Review
 
 - Spec coverage: Pantone 配色、固定三页、数量上限、字号下限、无截断、去重、水印、上线均有对应步骤。
