@@ -117,7 +117,7 @@ assert.doesNotMatch(exportHtml, /\.watermark\{[^}]*display:none/);
 assert.doesNotMatch(exportHtml, /\.report-disclaimer\{[^}]*display:none/);
 assert.equal(pdfExport.includes("drawPageBase"), true);
 assert.equal(pdfExport.includes("DAILY_REPORT_DISCLAIMER"), true);
-assert.equal(pdfReadiness.includes('DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v6"'), true);
+assert.equal(pdfReadiness.includes('DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v7"'), true);
 assert.equal(pdfExport.includes("width: 1080"), true);
 assert.equal(pdfExport.includes("height: 1350"), true);
 for (const machineCopy of ["暂无达到展示门槛", "获得官方或多源验证", "重要度", "结构化日历"]) {
@@ -141,6 +141,9 @@ assert.equal(pdfExport.includes("departmentNames.join"), false);
 assert.equal(pdfExport.includes("const fieldWidth"), false);
 assert.equal(pdfExport.includes("continued: true"), true);
 assert.equal(pdfExport.includes("fillColor(COLORS.ink).text(clean(hotMoneyStockLine(flow))"), true);
+assert.equal(pdfExport.includes("drawSemiboldText"), true);
+assert.equal(pdfExport.includes("stroke: true"), true);
+assert.equal(pdfExport.includes("fill: true"), true);
 assert.equal(nextConfig.includes("serverExternalPackages: ['pdfkit']"), true);
 assert.equal(nextConfig.includes("./node_modules/pdfkit/js/standard-fonts/**/*"), true);
 assert.equal(worldBriefing.includes('"未来事件"'), true);

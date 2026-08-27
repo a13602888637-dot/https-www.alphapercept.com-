@@ -21,7 +21,7 @@ import {
   type CuratedStoryCategory,
 } from "./story-curation";
 
-export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v6";
+export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v7";
 
 const FONT = "NotoSansSC";
 const FONT_PATH = `${process.cwd()}/${DAILY_REPORT_PDF_FONT_ASSET}`;
@@ -103,6 +103,21 @@ function textHeight(doc: PDFKit.PDFDocument, text: string, size: number, width: 
   return doc.heightOfString(clean(text), { width, lineGap });
 }
 
+function drawSemiboldText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  color: string,
+  options: PDFKit.Mixins.TextOptions = {}
+): void {
+  const strokeWidth = Math.min(0.9, Math.max(0.3, size * 0.018));
+  doc.font(FONT).fontSize(size).fillColor(color).strokeColor(color).lineWidth(strokeWidth)
+    .text(clean(text), x, y, { ...options, fill: true, stroke: true });
+  doc.lineWidth(1);
+}
+
 function drawPageBase(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot, pageNumber: number, totalPages: number): void {
   doc.rect(0, 0, PAGE.width, PAGE.height).fill(COLORS.canvas);
   doc.rect(0, 0, 12, PAGE.height).fill(COLORS.teal);
@@ -120,10 +135,10 @@ function drawPageBase(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot,
 function drawTitle(doc: PDFKit.PDFDocument, title: string, subtitle: string): number {
   doc.rect(PAGE.left, 92, 12, 104).fill(COLORS.red);
   doc.font(FONT).fontSize(18).fillColor(COLORS.teal).text("每日复盘", 96, 92, { characterSpacing: 2, lineBreak: false });
-  doc.fontSize(50).fillColor(COLORS.ink).text(title, 96, 120, { lineBreak: false });
+  drawSemiboldText(doc, title, 96, 120, 50, COLORS.ink, { lineBreak: false });
   const subtitleY = 180;
   const subtitleHeight = textHeight(doc, subtitle, 22, 880, 2);
-  doc.fontSize(22).fillColor(COLORS.ink).text(clean(subtitle), 96, subtitleY, { width: 880, lineGap: 2 });
+  drawSemiboldText(doc, subtitle, 96, subtitleY, 22, COLORS.ink, { width: 880, lineGap: 2 });
   return Math.max(232, subtitleY + subtitleHeight + 22);
 }
 
@@ -152,7 +167,7 @@ function drawUpcoming(doc: PDFKit.PDFDocument, stories: Positioned<OsintStory>[]
   doc.roundedRect(PAGE.left, startY, width, totalHeight, 14).fillAndStroke(COLORS.white, COLORS.satin);
   doc.roundedRect(PAGE.left, startY, width, 50, 14).fill(COLORS.teal);
   doc.rect(PAGE.left, startY + 28, width, 22).fill(COLORS.teal);
-  doc.font(FONT).fontSize(27).fillColor(COLORS.white).text("接下来要留意", PAGE.left + 22, startY + 12, { lineBreak: false });
+  drawSemiboldText(doc, "接下来要留意", PAGE.left + 22, startY + 12, 27, COLORS.white, { lineBreak: false });
   let y = startY + 50;
   stories.forEach(({ item: story, height }, index) => {
     if (index % 2 === 1) doc.rect(PAGE.left, y, width, height).fill(COLORS.row);
@@ -203,7 +218,7 @@ function drawStoryCard(doc: PDFKit.PDFDocument, card: StoryCard, x: number, y: n
   const meta = `${card.label} · ${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
   doc.font(FONT).fontSize(14).fillColor(card.accent).text(clean(meta), x + 22, cursor, { width: inner, lineGap: 2 });
   cursor += textHeight(doc, meta, 14, inner, 2) + 6;
-  doc.fontSize(20).fillColor(COLORS.ink).text(clean(card.story.title), x + 22, cursor, { width: inner, lineGap: 3 });
+  drawSemiboldText(doc, card.story.title, x + 22, cursor, 20, COLORS.ink, { width: inner, lineGap: 3 });
   cursor += textHeight(doc, card.story.title, 20, inner, 3) + 8;
   doc.fontSize(16).fillColor(COLORS.ink).text(clean(card.story.summary), x + 22, cursor, { width: inner, lineGap: 3 });
 }
@@ -257,14 +272,14 @@ function drawStockColumn(doc: PDFKit.PDFDocument, title: string, stocks: LhbStoc
   const headerHeight = 54;
   const gap = 5;
   doc.roundedRect(x, y, width, headerHeight, 12).fill(accent);
-  doc.font(FONT).fontSize(27).fillColor(COLORS.white).text(title, x + 20, y + 13, { lineBreak: false });
+  drawSemiboldText(doc, title, x + 20, y + 13, 27, COLORS.white, { lineBreak: false });
   const selected = fitSingleColumn(stocks, (stock) => measureStockRow(doc, stock, width), PAGE.contentBottom - y - headerHeight - 10, gap);
   let cursor = y + headerHeight + 10;
   selected.forEach(({ item: stock, height }, index) => {
     doc.roundedRect(x, cursor, width, height, 10).fillAndStroke(index % 2 === 0 ? COLORS.white : soft, COLORS.satin);
     const inner = width - 36;
     let textY = cursor + 7;
-    doc.fontSize(17).fillColor(COLORS.ink).text(`${index + 1}. ${stock.name}  ${stock.code}`, x + 18, textY, { width: inner });
+    drawSemiboldText(doc, `${index + 1}. ${stock.name}  ${stock.code}`, x + 18, textY, 17, COLORS.ink, { width: inner });
     textY += textHeight(doc, `${index + 1}. ${stock.name}  ${stock.code}`, 17, inner) + 3;
     doc.fontSize(16).fillColor(accent).text(`${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`, x + 18, textY, { width: inner });
     textY += textHeight(doc, `${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`, 16, inner) + 3;
@@ -310,7 +325,7 @@ function drawHotMoneyCard(doc: PDFKit.PDFDocument, ranked: RankedFlow, x: number
     const inner = width - 38;
     let textY = y + 7;
     const nameLine = `${ranked.rank}. ${flow.label}`;
-    doc.fontSize(17).fillColor(COLORS.ink).text(clean(nameLine), x + 20, textY, { width: inner });
+    drawSemiboldText(doc, nameLine, x + 20, textY, 17, COLORS.ink, { width: inner });
     textY += textHeight(doc, nameLine, 17, inner) + 5;
     doc.fontSize(15).fillColor(accent).text(`${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`, x + 20, textY, { width: inner, continued: true });
     doc.fillColor(COLORS.red).text(` · 买入 ${amount(flow.totalBuyAmount)}`, { continued: true });
