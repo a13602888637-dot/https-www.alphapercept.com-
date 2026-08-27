@@ -204,6 +204,31 @@ assert.equal(pdfExport.includes("departmentNames.join"), false);
 
 生成真实样稿确认左右等高、三行无重叠；升级 PDF 缓存版本并完成生产部署。
 
+### Task 6: 建立标题半粗体层级
+
+**Files:**
+- Modify: `lib/osint/daily-report/pdf-export.ts`
+- Modify: `tests/osint/daily-report-surface.test.ts`
+
+**Interfaces:**
+- Produces: `drawSemiboldText()`，使用 PDFKit 文本 `fill:true`、`stroke:true` 和按字号计算的细描边。
+
+- [ ] **Step 1: 写失败测试**
+
+```ts
+assert.equal(pdfExport.includes("drawSemiboldText"), true);
+assert.equal(pdfExport.includes("stroke: true"), true);
+assert.equal(pdfExport.includes("fill: true"), true);
+```
+
+- [ ] **Step 2: 实现半粗体绘制**
+
+`drawSemiboldText` 复用 Noto Sans SC，描边宽度限制在 0.3–0.9pt；绘制结束后恢复 1pt 线宽。替换页标题、子标题、模块表头、新闻标题、个股名称行和游资名称行，正文和金额保持常规字重。
+
+- [ ] **Step 3: 视觉验收与上线**
+
+渲染三页 PNG，确认加粗清晰且没有文字粘连、换行变化或溢出；升级缓存版本后发布生产。
+
 ## Plan Self-Review
 
 - Spec coverage: Pantone 配色、固定三页、数量上限、字号下限、无截断、去重、水印、上线均有对应步骤。
