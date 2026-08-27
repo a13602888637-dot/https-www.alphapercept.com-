@@ -16,7 +16,6 @@ import {
 import {
   curateReportStories,
   plainStockReason,
-  plainStoryImpact,
   selectReportHotMoney,
   selectReportStocks,
   type CuratedStoryCategory,
@@ -129,8 +128,7 @@ function drawTitle(doc: PDFKit.PDFDocument, title: string, subtitle: string): nu
 function measureUpcoming(doc: PDFKit.PDFDocument, story: OsintStory, width: number): number {
   const inner = width - 44;
   const titleHeight = textHeight(doc, story.title, 23, inner - 170, 2);
-  const impactHeight = textHeight(doc, plainStoryImpact(story), 17, inner - 170, 1);
-  return Math.max(68, 18 + titleHeight + 6 + impactHeight + 16);
+  return Math.max(58, 16 + titleHeight + 16);
 }
 
 function fitUpcoming(doc: PDFKit.PDFDocument, stories: OsintStory[], width: number, maxHeight: number): Positioned<OsintStory>[] {
@@ -158,29 +156,25 @@ function drawUpcoming(doc: PDFKit.PDFDocument, stories: Positioned<OsintStory>[]
     if (index % 2 === 1) doc.rect(PAGE.left, y, width, height).fill(COLORS.row);
     doc.fontSize(19).fillColor(COLORS.red).text(eventTime(story), PAGE.left + 22, y + 20, { width: 148 });
     doc.fontSize(23).fillColor(COLORS.ink).text(clean(story.title), PAGE.left + 188, y + 14, { width: width - 232, lineGap: 2 });
-    const titleHeight = textHeight(doc, story.title, 23, width - 232, 2);
-    doc.fontSize(17).fillColor(COLORS.teal).text(clean(plainStoryImpact(story)), PAGE.left + 188, y + 18 + titleHeight, { width: width - 232, lineGap: 1 });
     y += height;
   });
   return startY + totalHeight + 18;
 }
 
-function storyCards(curated: ReturnType<typeof curateReportStories>): StoryCard[] {
+function storyCards(curated: ReturnType<typeof curateReportStories>, limit: number): StoryCard[] {
   const categories = curated.categories.filter((category) => category.key !== "upcoming");
   const primary = categories.flatMap((category) => category.stories.slice(0, 1).map((story) => ({ story, label: category.label, accent: CATEGORY_COLORS[category.key] })));
   const secondary = categories.flatMap((category) => category.stories.slice(1).map((story) => ({ story, label: category.label, accent: CATEGORY_COLORS[category.key] })));
-  return [...primary, ...secondary].slice(0, 6);
+  return [...primary, ...secondary].slice(0, limit);
 }
 
 function measureStoryCard(doc: PDFKit.PDFDocument, card: StoryCard, width: number): number {
   const inner = width - 40;
-  const meta = `${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
-  return 22 +
-    textHeight(doc, card.label, 18, inner) + 7 +
-    textHeight(doc, card.story.title, 22, inner, 2) + 8 +
-    textHeight(doc, card.story.summary, 18, inner, 2) + 8 +
-    textHeight(doc, plainStoryImpact(card.story), 17, inner, 1) + 8 +
-    textHeight(doc, meta, 16, inner, 1) + 18;
+  const meta = `${card.label} · ${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
+  return 12 +
+    textHeight(doc, meta, 14, inner, 1) + 5 +
+    textHeight(doc, card.story.title, 20, inner, 1) + 6 +
+    textHeight(doc, card.story.summary, 16, inner, 1) + 12;
 }
 
 function fitTwoColumns<T>(items: T[], measure: (item: T) => number, maxHeight: number, gap: number): [Positioned<T>[], Positioned<T>[]] {
@@ -210,26 +204,22 @@ function drawStoryCard(doc: PDFKit.PDFDocument, card: StoryCard, x: number, y: n
   const inner = width - 40;
   doc.roundedRect(x, y, width, height, 14).fillAndStroke(COLORS.white, COLORS.satin);
   doc.rect(x, y, 9, height).fill(card.accent);
-  let cursor = y + 18;
-  doc.font(FONT).fontSize(18).fillColor(card.accent).text(clean(card.label), x + 22, cursor, { width: inner });
-  cursor += textHeight(doc, card.label, 18, inner) + 7;
-  doc.fontSize(22).fillColor(COLORS.ink).text(clean(card.story.title), x + 22, cursor, { width: inner, lineGap: 2 });
-  cursor += textHeight(doc, card.story.title, 22, inner, 2) + 8;
-  doc.fontSize(18).fillColor(COLORS.ink).text(clean(card.story.summary), x + 22, cursor, { width: inner, lineGap: 2 });
-  cursor += textHeight(doc, card.story.summary, 18, inner, 2) + 8;
-  doc.fontSize(17).fillColor(card.accent).text(clean(plainStoryImpact(card.story)), x + 22, cursor, { width: inner, lineGap: 1 });
-  cursor += textHeight(doc, plainStoryImpact(card.story), 17, inner, 1) + 8;
-  const meta = `${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
-  doc.fontSize(16).fillColor(COLORS.muted).text(clean(meta), x + 22, cursor, { width: inner, lineGap: 1 });
+  let cursor = y + 10;
+  const meta = `${card.label} · ${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
+  doc.font(FONT).fontSize(14).fillColor(card.accent).text(clean(meta), x + 22, cursor, { width: inner, lineGap: 1 });
+  cursor += textHeight(doc, meta, 14, inner, 1) + 5;
+  doc.fontSize(20).fillColor(COLORS.ink).text(clean(card.story.title), x + 22, cursor, { width: inner, lineGap: 1 });
+  cursor += textHeight(doc, card.story.title, 20, inner, 1) + 6;
+  doc.fontSize(16).fillColor(COLORS.ink).text(clean(card.story.summary), x + 22, cursor, { width: inner, lineGap: 1 });
 }
 
 export function drawStoryBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
   const curated = curateReportStories(report.stories.stories, { maxPerCategory: 2 });
   const upcomingCategory = curated.categories.find((category) => category.key === "upcoming");
-  const candidates = storyCards(curated);
+  const upcoming = fitUpcoming(doc, upcomingCategory?.stories ?? [], PAGE.right - PAGE.left, 230);
+  const candidates = storyCards(curated, Math.max(0, 10 - upcoming.length));
   const lead = candidates[0]?.story;
-  const contentStart = drawTitle(doc, "热点复盘", lead ? `今天重点：${clean(lead.title)}` : "把今天最值得关注的消息放在一页里");
-  const upcoming = fitUpcoming(doc, upcomingCategory?.stories ?? [], PAGE.right - PAGE.left, 270);
+  const contentStart = drawTitle(doc, "热点复盘", `${report.reportDate} · 重点新闻与未来事件${lead ? ` · ${clean(lead.tags.topic[0] || "市场")}` : ""}`);
   const gridY = drawUpcoming(doc, upcoming, contentStart);
   const gap = 16;
   const width = (PAGE.right - PAGE.left - gap) / 2;
