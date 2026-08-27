@@ -21,7 +21,7 @@ import {
   type CuratedStoryCategory,
 } from "./story-curation";
 
-export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v4";
+export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v5";
 
 const FONT = "NotoSansSC";
 const FONT_PATH = `${process.cwd()}/${DAILY_REPORT_PDF_FONT_ASSET}`;
@@ -288,12 +288,17 @@ function leadStocks(flow: LhbHotMoneyFlow): string {
     .map((stock) => `${stock.name} ${amount(stock.buyAmount)}`).join("、") || "--";
 }
 
+function hotMoneyAmountLine(flow: LhbHotMoneyFlow): string {
+  return `${flow.totalNetAmount >= 0 ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)} · 买入 ${amount(flow.totalBuyAmount)} · 卖出 ${amount(flow.totalSellAmount)}`;
+}
+
+function hotMoneyStockLine(flow: LhbHotMoneyFlow): string {
+  return `主要买入：${leadStocks(flow)}`;
+}
+
 function measureHotMoneyRow(doc: PDFKit.PDFDocument, flow: LhbHotMoneyFlow, width: number): number {
   const inner = width - 38;
-  const nameLine = `${flow.label} · ${flow.totalNetAmount >= 0 ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`;
-  const departments = flow.departmentNames.join(" / ") || "席位观察";
-  const detail = `买入 ${amount(flow.totalBuyAmount)} · 卖出 ${amount(flow.totalSellAmount)} · 主要买入 ${leadStocks(flow)}`;
-  return 9 + textHeight(doc, nameLine, 17, inner) + 3 + textHeight(doc, departments, 16, inner, 1) + 3 + textHeight(doc, detail, 16, inner, 1) + 9;
+  return 9 + textHeight(doc, flow.label, 17, inner) + 5 + textHeight(doc, hotMoneyAmountLine(flow), 15, inner) + 5 + textHeight(doc, hotMoneyStockLine(flow), 16, inner, 1) + 9;
 }
 
 function drawHotMoneyCard(doc: PDFKit.PDFDocument, ranked: RankedFlow, x: number, y: number, width: number, height: number): void {
@@ -304,14 +309,15 @@ function drawHotMoneyCard(doc: PDFKit.PDFDocument, ranked: RankedFlow, x: number
     doc.rect(x, y, 8, height).fill(accent);
     const inner = width - 38;
     let textY = y + 7;
-    const nameLine = `${ranked.rank}. ${flow.label} · ${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`;
-    doc.fontSize(17).fillColor(accent).text(clean(nameLine), x + 20, textY, { width: inner });
-    textY += textHeight(doc, nameLine, 17, inner) + 3;
-    const departments = flow.departmentNames.join(" / ") || "席位观察";
-    doc.fontSize(16).fillColor(COLORS.ink).text(clean(departments), x + 20, textY, { width: inner, lineGap: 1 });
-    textY += textHeight(doc, departments, 16, inner, 1) + 3;
-    const detail = `买入 ${amount(flow.totalBuyAmount)} · 卖出 ${amount(flow.totalSellAmount)} · 主要买入 ${leadStocks(flow)}`;
-    doc.fontSize(16).fillColor(COLORS.ink).text(clean(detail), x + 20, textY, { width: inner, lineGap: 1 });
+    const nameLine = `${ranked.rank}. ${flow.label}`;
+    doc.fontSize(17).fillColor(COLORS.ink).text(clean(nameLine), x + 20, textY, { width: inner });
+    textY += textHeight(doc, nameLine, 17, inner) + 5;
+    const fieldWidth = inner / 3;
+    doc.fontSize(15).fillColor(accent).text(`${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`, x + 20, textY, { width: fieldWidth, lineBreak: false });
+    doc.fillColor(COLORS.red).text(`买入 ${amount(flow.totalBuyAmount)}`, x + 20 + fieldWidth, textY, { width: fieldWidth, align: "center", lineBreak: false });
+    doc.fillColor(COLORS.teal).text(`卖出 ${amount(flow.totalSellAmount)}`, x + 20 + fieldWidth * 2, textY, { width: fieldWidth, align: "right", lineBreak: false });
+    textY += textHeight(doc, hotMoneyAmountLine(flow), 15, inner) + 5;
+    doc.fontSize(16).fillColor(COLORS.red).text(clean(hotMoneyStockLine(flow)), x + 20, textY, { width: inner, lineGap: 1 });
 }
 
 function drawAlignedHotMoneyRows(doc: PDFKit.PDFDocument, rows: AlignedRow<RankedFlow>[], y: number, width: number, gap: number): void {
@@ -324,7 +330,7 @@ function drawAlignedHotMoneyRows(doc: PDFKit.PDFDocument, rows: AlignedRow<Ranke
 }
 
 export function drawHotMoneyBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
-  const flows = selectReportHotMoney(report.lhb.hotMoneyFlows).slice(0, 14);
+  const flows = selectReportHotMoney(report.lhb.hotMoneyFlows);
   const contentStart = drawTitle(doc, "游资席位", `交易日 ${report.lhb.tradeDate || "--"} · 看谁在买、买了什么`);
   const gap = 18;
   const width = (PAGE.right - PAGE.left - gap) / 2;
