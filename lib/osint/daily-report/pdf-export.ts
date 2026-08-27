@@ -22,40 +22,43 @@ import {
   type CuratedStoryCategory,
 } from "./story-curation";
 
-export const DAILY_REPORT_PDF_LAYOUT_VERSION = "social-v2";
+export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v3";
 
 const FONT = "NotoSansSC";
 const FONT_PATH = `${process.cwd()}/${DAILY_REPORT_PDF_FONT_ASSET}`;
-const PAGE = { width: 1080, height: 1350, left: 64, right: 1016, footer: 1272 };
+const PAGE = { width: 1080, height: 1350, left: 64, right: 1016, footer: 1272, contentBottom: 1240 };
 const COLORS = {
-  canvas: "#F6FAFC",
+  canvas: "#F0EFEB",
   white: "#FFFFFF",
-  ink: "#0B1B32",
-  navy: "#0B1B32",
-  cyan: "#00B8C4",
-  coral: "#F45B69",
-  coralSoft: "#FFF0F2",
-  orange: "#F59E32",
-  green: "#11966F",
-  greenSoft: "#E8F7F1",
-  slate: "#607489",
-  muted: "#8C9BAD",
-  line: "#D6E3EB",
-  row: "#EDF4F7",
+  ink: "#2B2C30",
+  dark: "#2B2C30",
+  red: "#9F2336",
+  redSoft: "#F4E6E8",
+  teal: "#2A5D69",
+  tealSoft: "#E4EEED",
+  bordeaux: "#97637C",
+  gold: "#D6CD95",
+  graphite: "#55543B",
+  satin: "#948A76",
+  muted: "#646667",
+  line: "#948A76",
+  row: "#F7F6F2",
 } as const;
 
 const CATEGORY_COLORS: Record<CuratedStoryCategory["key"], string> = {
-  upcoming: COLORS.orange,
-  macro: "#2F7DD1",
-  geopolitics: COLORS.coral,
-  energy: "#DB9B22",
-  technology: COLORS.cyan,
-  markets: "#7758B5",
+  upcoming: COLORS.gold,
+  macro: COLORS.teal,
+  geopolitics: COLORS.red,
+  energy: COLORS.graphite,
+  technology: COLORS.bordeaux,
+  markets: COLORS.dark,
 };
 
-function clip(value: string, max: number): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= max ? normalized : `${normalized.slice(0, max - 1)}…`;
+type StoryCard = { story: OsintStory; label: string; accent: string };
+type Positioned<T> = { item: T; height: number };
+
+function clean(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function amount(value: number): string {
@@ -82,7 +85,7 @@ function shortShanghaiTime(value: string): string {
   });
 }
 
-function shortEventTime(story: OsintStory): string {
+function eventTime(story: OsintStory): string {
   const value = story.scheduledFor || story.publishedAt;
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "--";
@@ -94,114 +97,202 @@ function shortEventTime(story: OsintStory): string {
   return shortShanghaiTime(value);
 }
 
+function textHeight(doc: PDFKit.PDFDocument, text: string, size: number, width: number, lineGap = 0): number {
+  doc.font(FONT).fontSize(size);
+  return doc.heightOfString(clean(text), { width, lineGap });
+}
+
 function drawPageBase(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot, pageNumber: number, totalPages: number): void {
   doc.rect(0, 0, PAGE.width, PAGE.height).fill(COLORS.canvas);
-  doc.rect(0, 0, 10, PAGE.height).fill(COLORS.cyan);
-  doc.font(FONT).fontSize(17).fillColor(COLORS.muted).text("ALPHAPERCEPT 每日复盘", PAGE.left, 30, { lineBreak: false });
-  doc.moveTo(PAGE.left, 62).lineTo(PAGE.right, 62).lineWidth(1).strokeColor(COLORS.line).stroke();
-  doc.save().opacity(0.035).font(FONT).fontSize(76).fillColor(COLORS.navy)
+  doc.rect(0, 0, 12, PAGE.height).fill(COLORS.teal);
+  doc.rect(PAGE.left, 24, PAGE.right - PAGE.left, 44).fill(COLORS.dark);
+  doc.font(FONT).fontSize(17).fillColor(COLORS.canvas).text("ALPHAPERCEPT 每日复盘", PAGE.left + 18, 36, { lineBreak: false });
+  doc.save().opacity(0.045).font(FONT).fontSize(76).fillColor(COLORS.dark)
     .rotate(-22, { origin: [PAGE.width / 2, PAGE.height / 2] })
     .text(DAILY_REPORT_WATERMARK, 210, 620, { width: 660, align: "center", lineBreak: false }).restore();
-  doc.moveTo(PAGE.left, PAGE.footer).lineTo(PAGE.right, PAGE.footer).lineWidth(1).strokeColor(COLORS.line).stroke();
-  doc.font(FONT).fontSize(14).fillColor(COLORS.slate)
-    .text(DAILY_REPORT_DISCLAIMER, PAGE.left, 1282, { width: 810, height: 38, lineGap: 2 });
-  doc.fontSize(16).fillColor(COLORS.muted)
-    .text(`${pageNumber} / ${totalPages}`, PAGE.right - 76, 1288, { width: 76, align: "right", lineBreak: false });
+  doc.moveTo(PAGE.left, PAGE.footer).lineTo(PAGE.right, PAGE.footer).lineWidth(1.5).strokeColor(COLORS.satin).stroke();
+  doc.font(FONT).fontSize(14).fillColor(COLORS.ink).text(DAILY_REPORT_DISCLAIMER, PAGE.left, 1282, { width: 810, lineGap: 2 });
+  doc.fontSize(16).fillColor(COLORS.ink).text(`${pageNumber} / ${totalPages}`, PAGE.right - 76, 1288, { width: 76, align: "right", lineBreak: false });
   doc.fontSize(14).fillColor(COLORS.muted).text(`数据截至 ${shanghaiTime(report.asOf)}`, PAGE.left, 1323, { lineBreak: false });
 }
 
-function drawTitle(doc: PDFKit.PDFDocument, title: string, subtitle: string, accent = COLORS.cyan): void {
-  doc.rect(PAGE.left, 88, 10, 106).fill(accent);
-  doc.font(FONT).fontSize(18).fillColor(accent).text("每日复盘", 94, 88, { characterSpacing: 2, lineBreak: false });
-  doc.fontSize(48).fillColor(COLORS.ink).text(title, 94, 116, { lineBreak: false });
-  doc.fontSize(22).fillColor(COLORS.slate).text(clip(subtitle, 44), 94, 174, { width: 900, lineBreak: false, ellipsis: true });
+function drawTitle(doc: PDFKit.PDFDocument, title: string, subtitle: string): number {
+  doc.rect(PAGE.left, 92, 12, 104).fill(COLORS.red);
+  doc.font(FONT).fontSize(18).fillColor(COLORS.teal).text("每日复盘", 96, 92, { characterSpacing: 2, lineBreak: false });
+  doc.fontSize(50).fillColor(COLORS.ink).text(title, 96, 120, { lineBreak: false });
+  const subtitleY = 180;
+  const subtitleHeight = textHeight(doc, subtitle, 22, 880, 2);
+  doc.fontSize(22).fillColor(COLORS.ink).text(clean(subtitle), 96, subtitleY, { width: 880, lineGap: 2 });
+  return Math.max(232, subtitleY + subtitleHeight + 22);
 }
 
-function drawUpcoming(doc: PDFKit.PDFDocument, stories: OsintStory[], startY: number): number {
-  const events = stories.slice(0, 4);
-  if (events.length === 0) return startY;
+function measureUpcoming(doc: PDFKit.PDFDocument, story: OsintStory, width: number): number {
+  const inner = width - 44;
+  const titleHeight = textHeight(doc, story.title, 23, inner - 170, 2);
+  const impactHeight = textHeight(doc, plainStoryImpact(story), 17, inner - 170, 1);
+  return Math.max(68, 18 + titleHeight + 6 + impactHeight + 16);
+}
+
+function fitUpcoming(doc: PDFKit.PDFDocument, stories: OsintStory[], width: number, maxHeight: number): Positioned<OsintStory>[] {
+  const selected: Positioned<OsintStory>[] = [];
+  let used = 50;
+  for (const story of stories.slice(0, 3)) {
+    const height = measureUpcoming(doc, story, width);
+    if (used + height > maxHeight) break;
+    selected.push({ item: story, height });
+    used += height;
+  }
+  return selected;
+}
+
+function drawUpcoming(doc: PDFKit.PDFDocument, stories: Positioned<OsintStory>[], startY: number): number {
+  if (stories.length === 0) return startY;
   const width = PAGE.right - PAGE.left;
-  const headerHeight = 50;
-  const rowHeight = 80;
-  doc.roundedRect(PAGE.left, startY, width, headerHeight + events.length * rowHeight, 14).fillAndStroke(COLORS.white, COLORS.line);
-  doc.roundedRect(PAGE.left, startY, width, headerHeight, 14).fill(COLORS.navy);
-  doc.rect(PAGE.left, startY + 28, width, 22).fill(COLORS.navy);
+  const totalHeight = 50 + stories.reduce((sum, story) => sum + story.height, 0);
+  doc.roundedRect(PAGE.left, startY, width, totalHeight, 14).fillAndStroke(COLORS.white, COLORS.satin);
+  doc.roundedRect(PAGE.left, startY, width, 50, 14).fill(COLORS.teal);
+  doc.rect(PAGE.left, startY + 28, width, 22).fill(COLORS.teal);
   doc.font(FONT).fontSize(27).fillColor(COLORS.white).text("接下来要留意", PAGE.left + 22, startY + 12, { lineBreak: false });
-  events.forEach((story, index) => {
-    const y = startY + headerHeight + index * rowHeight;
-    if (index % 2 === 1) doc.rect(PAGE.left, y, width, rowHeight).fill(COLORS.row);
-    doc.fontSize(21).fillColor(COLORS.orange).text(shortEventTime(story), PAGE.left + 22, y + 24, { width: 158, lineBreak: false });
-    doc.fontSize(25).fillColor(COLORS.ink).text(clip(story.title, 24), PAGE.left + 188, y + 18, { width: 474, height: 36, ellipsis: true });
-    doc.fontSize(19).fillColor(COLORS.slate).text(clip(plainStoryImpact(story), 22), PAGE.left + 674, y + 21, { width: 254, height: 32, align: "right", ellipsis: true });
+  let y = startY + 50;
+  stories.forEach(({ item: story, height }, index) => {
+    if (index % 2 === 1) doc.rect(PAGE.left, y, width, height).fill(COLORS.row);
+    doc.fontSize(19).fillColor(COLORS.red).text(eventTime(story), PAGE.left + 22, y + 20, { width: 148 });
+    doc.fontSize(23).fillColor(COLORS.ink).text(clean(story.title), PAGE.left + 188, y + 14, { width: width - 232, lineGap: 2 });
+    const titleHeight = textHeight(doc, story.title, 23, width - 232, 2);
+    doc.fontSize(17).fillColor(COLORS.teal).text(clean(plainStoryImpact(story)), PAGE.left + 188, y + 18 + titleHeight, { width: width - 232, lineGap: 1 });
+    y += height;
   });
-  return startY + headerHeight + events.length * rowHeight + 20;
+  return startY + totalHeight + 18;
 }
 
-function drawStoryModule(doc: PDFKit.PDFDocument, category: CuratedStoryCategory, x: number, y: number, width: number, height: number): void {
-  const accent = CATEGORY_COLORS[category.key];
-  doc.roundedRect(x, y, width, height, 14).fillAndStroke(COLORS.white, COLORS.line);
-  doc.rect(x, y, 9, height).fill(accent);
-  doc.font(FONT).fontSize(28).fillColor(COLORS.ink).text(category.label, x + 24, y + 18, { width: width - 48, lineBreak: false });
-  doc.fontSize(19).fillColor(COLORS.slate).text(clip(category.insight, 30), x + 24, y + 58, { width: width - 48, height: 30, ellipsis: true });
-  const stories = category.stories.slice(0, 2);
-  const contentTop = y + 104;
-  const slotHeight = Math.max(116, (height - 112) / Math.max(1, stories.length));
-  stories.forEach((story, index) => {
-    const storyY = contentTop + index * slotHeight;
-    doc.moveTo(x + 24, storyY - 8).lineTo(x + width - 24, storyY - 8).lineWidth(1).strokeColor(COLORS.line).stroke();
-    doc.fontSize(24).fillColor(COLORS.ink).text(clip(story.title, 28), x + 24, storyY + 3, { width: width - 48, height: 35, ellipsis: true });
-    doc.fontSize(20).fillColor(COLORS.slate).text(clip(story.summary, 52), x + 24, storyY + 42, { width: width - 48, height: 54, ellipsis: true });
-    doc.fontSize(18).fillColor(accent).text(clip(plainStoryImpact(story), 32), x + 24, storyY + 100, { width: width - 48, height: 28, ellipsis: true });
-  });
+function storyCards(curated: ReturnType<typeof curateReportStories>): StoryCard[] {
+  const categories = curated.categories.filter((category) => category.key !== "upcoming");
+  const primary = categories.flatMap((category) => category.stories.slice(0, 1).map((story) => ({ story, label: category.label, accent: CATEGORY_COLORS[category.key] })));
+  const secondary = categories.flatMap((category) => category.stories.slice(1).map((story) => ({ story, label: category.label, accent: CATEGORY_COLORS[category.key] })));
+  return [...primary, ...secondary].slice(0, 6);
+}
+
+function measureStoryCard(doc: PDFKit.PDFDocument, card: StoryCard, width: number): number {
+  const inner = width - 40;
+  const meta = `${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
+  return 22 +
+    textHeight(doc, card.label, 18, inner) + 7 +
+    textHeight(doc, card.story.title, 22, inner, 2) + 8 +
+    textHeight(doc, card.story.summary, 18, inner, 2) + 8 +
+    textHeight(doc, plainStoryImpact(card.story), 17, inner, 1) + 8 +
+    textHeight(doc, meta, 16, inner, 1) + 18;
+}
+
+function fitTwoColumns<T>(items: T[], measure: (item: T) => number, maxHeight: number, gap: number): [Positioned<T>[], Positioned<T>[]] {
+  const columns: [Positioned<T>[], Positioned<T>[]] = [[], []];
+  const heights = [0, 0];
+  for (const item of items) {
+    const height = measure(item);
+    const preferred = heights[0] <= heights[1] ? 0 : 1;
+    const fallback = preferred === 0 ? 1 : 0;
+    const preferredNext = heights[preferred] + (columns[preferred].length > 0 ? gap : 0) + height;
+    const fallbackNext = heights[fallback] + (columns[fallback].length > 0 ? gap : 0) + height;
+    const column = preferredNext <= maxHeight ? preferred : fallbackNext <= maxHeight ? fallback : -1;
+    if (column === 0) {
+      columns[0].push({ item, height });
+      heights[0] += (columns[0].length > 1 ? gap : 0) + height;
+    } else if (column === 1) {
+      columns[1].push({ item, height });
+      heights[1] += (columns[1].length > 1 ? gap : 0) + height;
+    } else {
+      break;
+    }
+  }
+  return columns;
+}
+
+function drawStoryCard(doc: PDFKit.PDFDocument, card: StoryCard, x: number, y: number, width: number, height: number): void {
+  const inner = width - 40;
+  doc.roundedRect(x, y, width, height, 14).fillAndStroke(COLORS.white, COLORS.satin);
+  doc.rect(x, y, 9, height).fill(card.accent);
+  let cursor = y + 18;
+  doc.font(FONT).fontSize(18).fillColor(card.accent).text(clean(card.label), x + 22, cursor, { width: inner });
+  cursor += textHeight(doc, card.label, 18, inner) + 7;
+  doc.fontSize(22).fillColor(COLORS.ink).text(clean(card.story.title), x + 22, cursor, { width: inner, lineGap: 2 });
+  cursor += textHeight(doc, card.story.title, 22, inner, 2) + 8;
+  doc.fontSize(18).fillColor(COLORS.ink).text(clean(card.story.summary), x + 22, cursor, { width: inner, lineGap: 2 });
+  cursor += textHeight(doc, card.story.summary, 18, inner, 2) + 8;
+  doc.fontSize(17).fillColor(card.accent).text(clean(plainStoryImpact(card.story)), x + 22, cursor, { width: inner, lineGap: 1 });
+  cursor += textHeight(doc, plainStoryImpact(card.story), 17, inner, 1) + 8;
+  const meta = `${shortShanghaiTime(card.story.publishedAt)} · ${card.story.sources.map((source) => source.name).join("、")}`;
+  doc.fontSize(16).fillColor(COLORS.muted).text(clean(meta), x + 22, cursor, { width: inner, lineGap: 1 });
 }
 
 export function drawStoryBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
   const curated = curateReportStories(report.stories.stories, { maxPerCategory: 2 });
-  const upcoming = curated.categories.find((category) => category.key === "upcoming");
-  const categories = curated.categories.filter((category) => category.key !== "upcoming").slice(0, 4);
-  const lead = categories.flatMap((category) => category.stories).sort((left, right) => right.importance - left.importance)[0];
-  drawTitle(doc, "热点复盘", lead ? `今天重点：${lead.title}` : "把今天最值得关注的消息放在一页里");
-  const gridY = drawUpcoming(doc, upcoming?.stories ?? [], 225);
-  if (categories.length === 0) return;
-  const gap = 20;
-  const columns = categories.length === 1 ? 1 : 2;
-  const rows = Math.ceil(categories.length / columns);
-  const width = (PAGE.right - PAGE.left - gap * (columns - 1)) / columns;
-  const height = (1240 - gridY - gap * (rows - 1)) / rows;
-  categories.forEach((category, index) => {
-    const row = Math.floor(index / columns);
-    const column = index % columns;
-    drawStoryModule(doc, category, PAGE.left + column * (width + gap), gridY + row * (height + gap), width, height);
+  const upcomingCategory = curated.categories.find((category) => category.key === "upcoming");
+  const candidates = storyCards(curated);
+  const lead = candidates[0]?.story;
+  const contentStart = drawTitle(doc, "热点复盘", lead ? `今天重点：${clean(lead.title)}` : "把今天最值得关注的消息放在一页里");
+  const upcoming = fitUpcoming(doc, upcomingCategory?.stories ?? [], PAGE.right - PAGE.left, 270);
+  const gridY = drawUpcoming(doc, upcoming, contentStart);
+  const gap = 16;
+  const width = (PAGE.right - PAGE.left - gap) / 2;
+  const available = PAGE.contentBottom - gridY;
+  const columns = fitTwoColumns(candidates, (card) => measureStoryCard(doc, card, width), available, gap);
+  columns.forEach((column, columnIndex) => {
+    let y = gridY;
+    column.forEach(({ item, height }) => {
+      drawStoryCard(doc, item, PAGE.left + columnIndex * (width + gap), y, width, height);
+      y += height + gap;
+    });
   });
+}
+
+function measureStockRow(doc: PDFKit.PDFDocument, stock: LhbStock, width: number): number {
+  const inner = width - 36;
+  const nameLine = `${stock.name}  ${stock.code}`;
+  const amountLine = `${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`;
+  return 13 + textHeight(doc, nameLine, 18, inner) + 5 + textHeight(doc, amountLine, 16, inner) + 5 + textHeight(doc, plainStockReason(stock.reasons), 16, inner) + 13;
+}
+
+function fitSingleColumn<T>(items: T[], measure: (item: T) => number, maxHeight: number, gap: number): Positioned<T>[] {
+  const selected: Positioned<T>[] = [];
+  let used = 0;
+  for (const item of items) {
+    const height = measure(item);
+    const next = used + (selected.length > 0 ? gap : 0) + height;
+    if (next > maxHeight) break;
+    selected.push({ item, height });
+    used = next;
+  }
+  return selected;
 }
 
 function drawStockColumn(doc: PDFKit.PDFDocument, title: string, stocks: LhbStock[], x: number, y: number, width: number, accent: string, soft: string): void {
   if (stocks.length === 0) return;
-  doc.roundedRect(x, y, width, 58, 14).fill(accent);
-  doc.font(FONT).fontSize(28).fillColor(COLORS.white).text(title, x + 22, y + 14, { lineBreak: false });
-  const rowHeight = Math.min(96, (1238 - y - 70) / stocks.length);
-  stocks.forEach((stock, index) => {
-    const rowY = y + 70 + index * rowHeight;
-    doc.roundedRect(x, rowY, width, rowHeight - 8, 12).fillAndStroke(index % 2 === 0 ? COLORS.white : soft, COLORS.line);
-    doc.fontSize(18).fillColor(COLORS.muted).text(String(index + 1).padStart(2, "0"), x + 16, rowY + 14, { width: 32, lineBreak: false });
-    doc.fontSize(24).fillColor(COLORS.ink).text(clip(stock.name, 8), x + 54, rowY + 10, { width: 160, lineBreak: false, ellipsis: true });
-    doc.fontSize(16).fillColor(COLORS.muted).text(stock.code, x + 54, rowY + 43, { lineBreak: false });
-    const netLabel = stock.netAmount >= 0 ? "净买入" : "净卖出";
-    doc.fontSize(18).fillColor(COLORS.slate).text(netLabel, x + width - 174, rowY + 17, { width: 66, lineBreak: false });
-    doc.fontSize(24).fillColor(accent).text(amount(stock.netAmount), x + width - 106, rowY + 12, { width: 88, align: "right", lineBreak: false });
-    doc.fontSize(16).fillColor(COLORS.slate).text(`买入 ${amount(stock.buyAmount)}  卖出 ${amount(stock.sellAmount)}`, x + 218, rowY + 43, { width: width - 236, align: "right", lineBreak: false });
-    doc.fontSize(17).fillColor(COLORS.slate).text(clip(plainStockReason(stock.reasons), 18), x + 54, rowY + 67, { width: width - 72, lineBreak: false, ellipsis: true });
+  const headerHeight = 54;
+  const gap = 5;
+  doc.roundedRect(x, y, width, headerHeight, 12).fill(accent);
+  doc.font(FONT).fontSize(27).fillColor(COLORS.white).text(title, x + 20, y + 13, { lineBreak: false });
+  const selected = fitSingleColumn(stocks, (stock) => measureStockRow(doc, stock, width), PAGE.contentBottom - y - headerHeight - 10, gap);
+  let cursor = y + headerHeight + 10;
+  selected.forEach(({ item: stock, height }, index) => {
+    doc.roundedRect(x, cursor, width, height, 10).fillAndStroke(index % 2 === 0 ? COLORS.white : soft, COLORS.satin);
+    const inner = width - 36;
+    let textY = cursor + 11;
+    doc.fontSize(18).fillColor(COLORS.ink).text(`${index + 1}. ${stock.name}  ${stock.code}`, x + 18, textY, { width: inner });
+    textY += textHeight(doc, `${index + 1}. ${stock.name}  ${stock.code}`, 18, inner) + 5;
+    doc.fontSize(16).fillColor(accent).text(`${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`, x + 18, textY, { width: inner });
+    textY += textHeight(doc, `${stock.netAmount >= 0 ? "净买入" : "净卖出"} ${amount(stock.netAmount)} · 买入 ${amount(stock.buyAmount)} · 卖出 ${amount(stock.sellAmount)}`, 16, inner) + 5;
+    doc.fontSize(16).fillColor(COLORS.ink).text(clean(plainStockReason(stock.reasons)), x + 18, textY, { width: inner });
+    cursor += height + gap;
   });
 }
 
 export function drawStockBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
   const { inflows, outflows } = selectReportStocks(report.lhb.stocks);
-  drawTitle(doc, "个股资金", `交易日 ${report.lhb.tradeDate || "--"} · 左边看净买入，右边看净卖出`);
-  const gap = 22;
+  const contentStart = drawTitle(doc, "个股资金", `交易日 ${report.lhb.tradeDate || "--"} · 左边看净买入，右边看净卖出`);
+  const gap = 18;
   const hasBoth = inflows.length > 0 && outflows.length > 0;
   const width = hasBoth ? (PAGE.right - PAGE.left - gap) / 2 : PAGE.right - PAGE.left;
-  if (inflows.length > 0) drawStockColumn(doc, "净买入靠前", inflows, PAGE.left, 225, width, COLORS.coral, COLORS.coralSoft);
-  if (outflows.length > 0) drawStockColumn(doc, "净卖出靠前", outflows, hasBoth ? PAGE.left + width + gap : PAGE.left, 225, width, COLORS.green, COLORS.greenSoft);
+  if (inflows.length > 0) drawStockColumn(doc, "净买入靠前", inflows, PAGE.left, contentStart, width, COLORS.red, COLORS.redSoft);
+  if (outflows.length > 0) drawStockColumn(doc, "净卖出靠前", outflows, hasBoth ? PAGE.left + width + gap : PAGE.left, contentStart, width, COLORS.teal, COLORS.tealSoft);
 }
 
 function leadStocks(flow: LhbHotMoneyFlow): string {
@@ -209,32 +300,44 @@ function leadStocks(flow: LhbHotMoneyFlow): string {
     .map((stock) => `${stock.name} ${amount(stock.buyAmount)}`).join("、") || "--";
 }
 
-function drawHotMoneyColumn(doc: PDFKit.PDFDocument, flows: LhbHotMoneyFlow[], startIndex: number, x: number, y: number, width: number): void {
-  const rowHeight = Math.min(126, (1238 - y) / Math.max(1, flows.length));
-  flows.forEach((flow, index) => {
-    const rowY = y + index * rowHeight;
-    const netPositive = flow.totalNetAmount >= 0;
-    const accent = netPositive ? COLORS.coral : COLORS.green;
-    doc.roundedRect(x, rowY, width, rowHeight - 10, 14).fillAndStroke(index % 2 === 0 ? COLORS.white : COLORS.row, COLORS.line);
-    doc.rect(x, rowY, 8, rowHeight - 10).fill(accent);
-    doc.fontSize(17).fillColor(COLORS.muted).text(String(startIndex + index + 1).padStart(2, "0"), x + 20, rowY + 17, { width: 30, lineBreak: false });
-    doc.fontSize(23).fillColor(COLORS.ink).text(clip(flow.label, 12), x + 58, rowY + 13, { width: width - 245, lineBreak: false, ellipsis: true });
-    doc.fontSize(16).fillColor(COLORS.slate).text(netPositive ? "净买入" : "净卖出", x + width - 184, rowY + 18, { width: 62, lineBreak: false });
-    doc.fontSize(20).fillColor(accent).text(amount(flow.totalNetAmount), x + width - 118, rowY + 14, { width: 98, align: "right", lineBreak: false });
-    doc.fontSize(16).fillColor(COLORS.slate).text(clip(flow.departmentNames[0] || "席位观察", 20), x + 58, rowY + 46, { width: width - 78, lineBreak: false, ellipsis: true });
-    doc.fontSize(16).fillColor(COLORS.slate).text(`买入 ${amount(flow.totalBuyAmount)}  卖出 ${amount(flow.totalSellAmount)}`, x + 58, rowY + 70, { width: width - 78, lineBreak: false });
-    doc.fontSize(16).fillColor(accent).text(`主要买入：${clip(leadStocks(flow), 20)}`, x + 58, rowY + 94, { width: width - 78, lineBreak: false, ellipsis: true });
+function measureHotMoneyRow(doc: PDFKit.PDFDocument, flow: LhbHotMoneyFlow, width: number): number {
+  const inner = width - 38;
+  const nameLine = `${flow.label} · ${flow.totalNetAmount >= 0 ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`;
+  const departments = flow.departmentNames.join(" / ") || "席位观察";
+  const detail = `买入 ${amount(flow.totalBuyAmount)} · 卖出 ${amount(flow.totalSellAmount)} · 主要买入 ${leadStocks(flow)}`;
+  return 13 + textHeight(doc, nameLine, 18, inner) + 5 + textHeight(doc, departments, 16, inner, 1) + 5 + textHeight(doc, detail, 16, inner, 1) + 13;
+}
+
+function drawHotMoneyColumn(doc: PDFKit.PDFDocument, flows: Positioned<LhbHotMoneyFlow>[], startIndex: number, x: number, y: number, width: number): void {
+  let cursor = y;
+  flows.forEach(({ item: flow, height }, index) => {
+    const positive = flow.totalNetAmount >= 0;
+    const accent = positive ? COLORS.red : COLORS.teal;
+    doc.roundedRect(x, cursor, width, height, 10).fillAndStroke(index % 2 === 0 ? COLORS.white : COLORS.row, COLORS.satin);
+    doc.rect(x, cursor, 8, height).fill(accent);
+    const inner = width - 38;
+    let textY = cursor + 11;
+    const nameLine = `${startIndex + index + 1}. ${flow.label} · ${positive ? "净买入" : "净卖出"} ${amount(flow.totalNetAmount)}`;
+    doc.fontSize(18).fillColor(accent).text(clean(nameLine), x + 20, textY, { width: inner });
+    textY += textHeight(doc, nameLine, 18, inner) + 5;
+    const departments = flow.departmentNames.join(" / ") || "席位观察";
+    doc.fontSize(16).fillColor(COLORS.ink).text(clean(departments), x + 20, textY, { width: inner, lineGap: 1 });
+    textY += textHeight(doc, departments, 16, inner, 1) + 5;
+    const detail = `买入 ${amount(flow.totalBuyAmount)} · 卖出 ${amount(flow.totalSellAmount)} · 主要买入 ${leadStocks(flow)}`;
+    doc.fontSize(16).fillColor(COLORS.ink).text(clean(detail), x + 20, textY, { width: inner, lineGap: 1 });
+    cursor += height + 5;
   });
 }
 
 export function drawHotMoneyBoardPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot): void {
   const flows = selectReportHotMoney(report.lhb.hotMoneyFlows);
-  drawTitle(doc, "游资席位", `交易日 ${report.lhb.tradeDate || "--"} · 看谁在买、买了什么`);
-  const gap = 22;
+  const contentStart = drawTitle(doc, "游资席位", `交易日 ${report.lhb.tradeDate || "--"} · 看谁在买、买了什么`);
+  const gap = 18;
   const width = (PAGE.right - PAGE.left - gap) / 2;
-  const split = Math.ceil(flows.length / 2);
-  drawHotMoneyColumn(doc, flows.slice(0, split), 0, PAGE.left, 225, width);
-  drawHotMoneyColumn(doc, flows.slice(split), split, PAGE.left + width + gap, 225, width);
+  const available = PAGE.contentBottom - contentStart;
+  const columns = fitTwoColumns(flows, (flow) => measureHotMoneyRow(doc, flow, width), available, 5);
+  drawHotMoneyColumn(doc, columns[0], 0, PAGE.left, contentStart, width);
+  drawHotMoneyColumn(doc, columns[1], columns[0].length, PAGE.left + width + gap, contentStart, width);
 }
 
 function addReportPage(doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot, pageNumber: number, totalPages: number, draw: (doc: PDFKit.PDFDocument, report: OsintDailyReportSnapshot) => void): void {

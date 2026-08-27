@@ -117,7 +117,7 @@ assert.doesNotMatch(exportHtml, /\.watermark\{[^}]*display:none/);
 assert.doesNotMatch(exportHtml, /\.report-disclaimer\{[^}]*display:none/);
 assert.equal(pdfExport.includes("drawPageBase"), true);
 assert.equal(pdfExport.includes("DAILY_REPORT_DISCLAIMER"), true);
-assert.equal(pdfReadiness.includes('DAILY_REPORT_PDF_LAYOUT_VERSION = "social-v2"'), true);
+assert.equal(pdfReadiness.includes('DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v3"'), true);
 assert.equal(pdfExport.includes("width: 1080"), true);
 assert.equal(pdfExport.includes("height: 1350"), true);
 for (const machineCopy of ["暂无达到展示门槛", "获得官方或多源验证", "重要度", "结构化日历"]) {
@@ -126,9 +126,12 @@ for (const machineCopy of ["暂无达到展示门槛", "获得官方或多源验
 for (const renderer of ["drawStoryBoardPage", "drawStockBoardPage", "drawHotMoneyBoardPage"]) {
   assert.equal(pdfExport.includes(renderer), true);
 }
-for (const color of ["#0B1B32", "#00B8C4", "#F45B69", "#F59E32", "#11966F", "#F6FAFC"]) {
+for (const color of ["#F0EFEB", "#2B2C30", "#9F2336", "#2A5D69", "#97637C", "#D6CD95"]) {
   assert.equal(pdfExport.includes(color), true);
 }
+assert.equal(pdfExport.includes("function clip("), false);
+assert.equal(pdfExport.includes("clip("), false);
+assert.equal(pdfExport.includes("ellipsis"), false);
 assert.equal(nextConfig.includes("serverExternalPackages: ['pdfkit']"), true);
 assert.equal(nextConfig.includes("./node_modules/pdfkit/js/standard-fonts/**/*"), true);
 assert.equal(worldBriefing.includes('"未来事件"'), true);
