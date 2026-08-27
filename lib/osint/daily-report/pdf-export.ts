@@ -21,7 +21,7 @@ import {
   type CuratedStoryCategory,
 } from "./story-curation";
 
-export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v3";
+export const DAILY_REPORT_PDF_LAYOUT_VERSION = "pantone-v4";
 
 const FONT = "NotoSansSC";
 const FONT_PATH = `${process.cwd()}/${DAILY_REPORT_PDF_FONT_ASSET}`;
