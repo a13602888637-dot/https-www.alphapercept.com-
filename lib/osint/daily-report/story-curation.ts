@@ -174,8 +174,8 @@ export function rankReportStocks(stocks: LhbStock[]): LhbStock[] {
 export function selectReportStocks(stocks: LhbStock[]): { inflows: LhbStock[]; outflows: LhbStock[] } {
   const ranked = rankReportStocks(stocks);
   return {
-    inflows: ranked.filter((stock) => stock.netAmount >= 0).slice(0, 10),
-    outflows: ranked.filter((stock) => stock.netAmount < 0).sort((left, right) => left.netAmount - right.netAmount).slice(0, 10),
+    inflows: ranked.filter((stock) => stock.netAmount >= 0).slice(0, 15),
+    outflows: ranked.filter((stock) => stock.netAmount < 0).sort((left, right) => left.netAmount - right.netAmount).slice(0, 15),
   };
 }
 
@@ -186,5 +186,5 @@ export function selectReportHotMoney(flows: LhbHotMoneyFlow[]): LhbHotMoneyFlow[
       right.totalBuyAmount - left.totalBuyAmount ||
       right.totalNetAmount - left.totalNetAmount
     )
-    .slice(0, 15);
+    .slice(0, 20);
 }

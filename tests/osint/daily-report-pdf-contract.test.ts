@@ -112,21 +112,21 @@ async function verifyPdfContract() {
     assert.equal(plainCategoryLabel("macro" as never), "今天市场在看什么");
     assert.equal(plainStoryImpact(story({ id: "english-asset", title: "测试", publishedAt: "2026-08-26T08:00:00.000Z", tags: { topic: ["宏观"], region: [], assets: ["equities", "bonds"], direction: "risk-off", horizon: "1-3d", verification: "single-source" } }) as never), "股票、债券短期可能带来压力。");
     assert.equal(plainStockReason(["日涨幅偏离值达到7%的前5只证券"] as never), "涨幅明显，登上龙虎榜");
-    const selection = selectReportStocks(Array.from({ length: 25 }, (_, index) => ({
+    const selection = selectReportStocks(Array.from({ length: 40 }, (_, index) => ({
       tradeId: `selection-${index}`,
       code: String(index).padStart(6, "0"),
       name: `测试${index}`,
       changePercent: 0,
-      buyAmount: 10_000 - index * 100,
-      sellAmount: index * 500,
-      netAmount: 10_000 - index * 600,
+      buyAmount: index < 20 ? 20_000 - index * 100 : 1_000,
+      sellAmount: index < 20 ? 1_000 : 2_000 + index * 100,
+      netAmount: index < 20 ? 19_000 - index * 100 : -(1_000 + index * 100),
       reasons: ["涨幅偏离"],
       buySeats: [],
       sellSeats: [],
     })) as never) as { inflows: unknown[]; outflows: unknown[] };
-    assert.ok(selection.inflows.length <= 10);
-    assert.ok(selection.outflows.length <= 10);
-    const selectedFlows = selectReportHotMoney(Array.from({ length: 20 }, (_, index) => ({
+    assert.equal(selection.inflows.length, 15);
+    assert.equal(selection.outflows.length, 15);
+    const selectedFlows = selectReportHotMoney(Array.from({ length: 40 }, (_, index) => ({
       flowId: `flow-${index}`,
       kind: "known",
       label: `游资${index}`,
@@ -138,7 +138,7 @@ async function verifyPdfContract() {
       stockCount: 1,
       stocks: [],
     })) as never) as unknown[];
-    assert.ok(selectedFlows.length <= 15);
+    assert.equal(selectedFlows.length, 20);
   }
   const rankReportStocks = (reportCuration as unknown as Record<string, unknown>).rankReportStocks;
   assert.equal(typeof rankReportStocks, "function", "个股资金榜应按股票代码去重");
