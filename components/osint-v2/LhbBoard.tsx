@@ -106,7 +106,7 @@ function StockRank({ title, stocks }: { title: string; stocks: LhbStockRank[] })
       <h3 className="px-1 pb-2 text-[10px] font-medium tracking-wide text-[#718096]">{title}</h3>
       <div className="space-y-0.5">
         {stocks.map((stock, index) => (
-          <div key={`${title}-${stock.tradeId}`} className="grid min-h-10 grid-cols-[24px_1fr_auto] items-center gap-2 rounded px-2 hover:bg-[#101927]">
+          <div key={`${title}-${stock.code}`} className="grid min-h-10 grid-cols-[24px_1fr_auto] items-center gap-2 rounded px-2 hover:bg-[#101927]">
             <span className="font-mono text-[9px] text-[#536177]">{index + 1}</span>
             <div className="min-w-0"><div className="truncate text-[11px] text-[#C7D0DD]">{stock.name} <span className="font-mono text-[9px] text-[#536177]">{stock.code}</span></div><div className="truncate text-[9px] text-[#536177]">{stock.reasons.join(" / ")}</div></div>
             <span className={`font-mono text-[11px] ${amountClass(stock.netAmount)}`}>{formatAmount(stock.netAmount)}</span>

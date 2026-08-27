@@ -1,5 +1,6 @@
 import type { LhbDashboardSnapshot, LhbHotMoneyFlow, LhbHotMoneyStock, LhbSeat, LhbSeatFlow, LhbSnapshot, LhbStock } from "./contracts";
 import { EXACT_SEAT_ALIASES } from "./seat-aliases";
+import { aggregateLhbStocksByCode } from "./stock-aggregation";
 
 type RawRow = Record<string, unknown>;
 type FetchRowsResult = { rows: RawRow[]; ok: boolean; error: string | null };
@@ -231,11 +232,13 @@ export function normalizeLhbSnapshot(
 
 export function toLhbDashboardSnapshot(snapshot: LhbSnapshot): LhbDashboardSnapshot {
   const { seatFlows: _seatFlows, stocks, hotMoneyFlows, ...metadata } = snapshot;
+  const aggregatedStocks = aggregateLhbStocksByCode(stocks);
   const knownFlows = hotMoneyFlows.filter((flow) => flow.kind === "known");
   const activeFlows = hotMoneyFlows.filter((flow) => flow.kind === "active").slice(0, 20);
   return {
     ...metadata,
-    stocks: stocks.map(({ buySeats: _buySeats, sellSeats: _sellSeats, ...stock }) => stock),
+    stockCount: aggregatedStocks.length,
+    stocks: aggregatedStocks.map(({ buySeats: _buySeats, sellSeats: _sellSeats, ...stock }) => stock),
     hotMoneyFlows: [...knownFlows, ...activeFlows]
       .sort((left, right) => right.totalBuyAmount - left.totalBuyAmount)
       .map((flow) => ({ ...flow, stockCount: Math.max(flow.stockCount, flow.stocks.length), stocks: flow.stocks.slice(0, 3) })),

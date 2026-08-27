@@ -1,5 +1,6 @@
 import type { OsintStory } from "../contracts";
 import type { LhbHotMoneyFlow, LhbStock } from "../../lhb/contracts";
+import { aggregateLhbStocksByCode } from "../../lhb/stock-aggregation";
 
 export type ReportStoryCategoryKey =
   | "upcoming"
@@ -167,22 +168,7 @@ export function curateReportStories(
 }
 
 export function rankReportStocks(stocks: LhbStock[]): LhbStock[] {
-  const byCode = new Map<string, LhbStock>();
-  for (const stock of stocks) {
-    const existing = byCode.get(stock.code);
-    if (!existing) {
-      byCode.set(stock.code, { ...stock, reasons: [...new Set(stock.reasons)] });
-      continue;
-    }
-    const reasons = [...new Set([...existing.reasons, ...stock.reasons])];
-    const existingTurnover = existing.buyAmount + existing.sellAmount;
-    const currentTurnover = stock.buyAmount + stock.sellAmount;
-    const preferred = currentTurnover > existingTurnover ? stock : existing;
-    byCode.set(stock.code, { ...preferred, reasons });
-  }
-  return [...byCode.values()].sort((left, right) =>
-    right.netAmount - left.netAmount || right.buyAmount - left.buyAmount
-  );
+  return aggregateLhbStocksByCode(stocks);
 }
 
 export function selectReportStocks(stocks: LhbStock[]): { inflows: LhbStock[]; outflows: LhbStock[] } {

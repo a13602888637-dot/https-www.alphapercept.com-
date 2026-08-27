@@ -183,7 +183,13 @@ assert.equal(activeFlow?.confidence, null);
 assert.equal(activeFlow?.totalBuyAmount, 150000000);
 assert.equal(snapshot.disclaimer.includes("连续多日榜不与单日榜加总"), true);
 const dashboard = toLhbDashboardSnapshot(snapshot);
-assert.equal(dashboard.stocks.length, 3);
+assert.equal(dashboard.stocks.length, 2);
+assert.equal(dashboard.stockCount, 2);
+assert.equal(new Set(dashboard.stocks.map((stock) => stock.code)).size, dashboard.stocks.length);
+const dashboardStock = dashboard.stocks.find((stock) => stock.code === "000620");
+assert.equal(dashboardStock?.tradeId, "100400463");
+assert.equal(dashboardStock?.netAmount, 372709471.19);
+assert.deepEqual(dashboardStock?.reasons, ["日涨幅偏离值达到7%的前5只证券", "连续三个交易日内涨幅偏离值累计达到20%"]);
 assert.equal("buySeats" in dashboard.stocks[0], false);
 assert.equal("sellSeats" in dashboard.stocks[0], false);
 assert.equal(dashboard.hotMoneyFlows.length, 2);
@@ -219,6 +225,7 @@ assert.equal(boardSource.includes("selectedTradeId"), false);
 assert.equal(boardSource.includes("游资买入股票"), true);
 assert.equal(boardSource.includes("活跃席位"), true);
 assert.equal(boardSource.includes("另有"), true);
+assert.equal(boardSource.includes("stock.code}"), true);
 assert.equal(screenSource.includes("LhbBoard"), true);
 
 async function verifyUnavailable() {
