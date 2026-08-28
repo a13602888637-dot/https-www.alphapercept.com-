@@ -4,7 +4,7 @@ import { ImageResponse } from "next/og";
 import type { OsintStory } from "../contracts";
 import type { LhbHotMoneyFlow, LhbStock } from "../../lhb/contracts";
 import type { OsintDailyReportSnapshot } from "./contracts";
-import { compactShareHeadline, compactShareLabel } from "./image-copy";
+import { compactShareHeadline, compactShareLabel, sharePosterDate } from "./image-copy";
 import { DAILY_REPORT_DISCLAIMER, DAILY_REPORT_WATERMARK } from "./export-html";
 import {
   curateReportStories,
@@ -99,7 +99,7 @@ function posterShell(
           <h1 style={{ margin: "12px 0 0", fontSize: 76, lineHeight: 1.05, fontWeight: 700, letterSpacing: -2 }}>{title}</h1>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-          <span style={{ fontSize: 34, fontWeight: 700 }}>{report.reportDate}</span>
+          <span style={{ fontSize: 34, fontWeight: 700 }}>{sharePosterDate(title === "当日热点" ? "stories" : "hotlist", { reportDate: report.reportDate, generatedAt: report.generatedAt, tradeDate: report.lhb.tradeDate })}</span>
           <span style={{ marginTop: 8, fontSize: 26, color: COLORS.muted }}>{title === "当日热点" ? "早间热点" : "收盘热榜"}</span>
         </div>
       </header>

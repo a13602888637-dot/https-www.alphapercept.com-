@@ -4,6 +4,7 @@ import {
   type DailyReportImageSection,
 } from "@/lib/osint/daily-report/image-export";
 import { DAILY_REPORT_IMAGE_LAYOUT_VERSION } from "@/lib/osint/daily-report/image-contract";
+import { sharePosterDate } from "@/lib/osint/daily-report/image-copy";
 import { getDailyReport } from "@/lib/osint/daily-report/repository";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +50,12 @@ export async function GET(
       () => buildDailyReportPng(report.snapshot, requestedSection as DailyReportImageSection)
     );
     const label = requestedSection === "stories" ? "morning-hotspots" : "stock-hotlist";
-    const filename = `alphapercept-${report.reportDate}-${label}-${DAILY_REPORT_IMAGE_LAYOUT_VERSION}.png`;
+    const posterDate = sharePosterDate(requestedSection as DailyReportImageSection, {
+      reportDate: report.reportDate,
+      generatedAt: report.generatedAt,
+      tradeDate: report.snapshot.lhb.tradeDate,
+    });
+    const filename = `alphapercept-${posterDate}-${label}-${DAILY_REPORT_IMAGE_LAYOUT_VERSION}.png`;
     return new NextResponse(new Uint8Array(png), {
       headers: {
         "Content-Type": "image/png",

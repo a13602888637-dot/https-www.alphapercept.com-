@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import {
   compactShareHeadline,
   compactShareLabel,
+  sharePosterDate,
 } from "../../lib/osint/daily-report/image-copy.ts";
 
 function read(path: string): string {
@@ -48,6 +49,22 @@ assert.equal(compactHeadline.endsWith("…"), true);
 const compactLabel = compactShareLabel("某某证券股份有限公司超长地区证券营业部观察席");
 assert.ok(Array.from(compactLabel).length <= 12);
 assert.equal(/[\r\n]/.test(compactLabel), false);
+assert.equal(
+  sharePosterDate("stories", {
+    reportDate: "2026-08-27",
+    generatedAt: "2026-08-28T01:03:10.814Z",
+    tradeDate: "2026-08-27",
+  }),
+  "2026-08-28"
+);
+assert.equal(
+  sharePosterDate("hotlist", {
+    reportDate: "2026-08-27",
+    generatedAt: "2026-08-28T01:03:10.814Z",
+    tradeDate: "2026-08-27",
+  }),
+  "2026-08-27"
+);
 
 const imageContract = read("lib/osint/daily-report/image-contract.ts");
 assert.equal(imageContract.includes('DAILY_REPORT_IMAGE_LAYOUT_VERSION = "tiktok-v1"'), true);
