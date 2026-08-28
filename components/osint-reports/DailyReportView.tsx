@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { OsintStory } from "@/lib/osint/contracts";
 import type { OsintDailyReportRecord } from "@/lib/osint/daily-report/contracts";
 import { DAILY_REPORT_DISCLAIMER } from "@/lib/osint/daily-report/export-html";
+import {
+  compactShareHeadline,
+  isChineseReadableText,
+  isShareHeadlineReady,
+  shareSourceKey,
+} from "@/lib/osint/daily-report/image-copy";
 import {
   curateReportStories,
   plainStockReason,
@@ -30,6 +37,17 @@ function signedAmount(value: number): string {
   return `${value >= 0 ? "+" : "−"}${amount(value)}`;
 }
 
+function dedupeWebStories(stories: OsintStory[]): OsintStory[] {
+  const seen = new Set<string>();
+  return stories.filter((story) => {
+    if (!isShareHeadlineReady(story.title)) return false;
+    const key = shareSourceKey(story.sources[0]?.url, story.title);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function DailyReportView({
   reportId,
   embedded = false,
@@ -41,12 +59,14 @@ export function DailyReportView({
   const [exportReady, setExportReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("stories");
+  const [storyTopic, setStoryTopic] = useState("all");
 
   useEffect(() => {
     const controller = new AbortController();
     setReport(null);
     setExportReady(false);
     setError(null);
+    setStoryTopic("all");
     void fetch(`/api/osint/v1/reports/${encodeURIComponent(reportId)}`, {
       cache: "no-store",
       signal: controller.signal,
@@ -73,7 +93,10 @@ export function DailyReportView({
   }
 
   const snapshot = report.snapshot;
-  const curatedStories = curateReportStories(snapshot.stories.stories, { maxPerCategory: 2 });
+  const curatedStories = curateReportStories(dedupeWebStories(snapshot.stories.stories), { maxPerCategory: 8 });
+  const visibleStoryCategories = storyTopic === "all"
+    ? curatedStories.categories
+    : curatedStories.categories.filter((category) => category.key === storyTopic);
   const stockGroups = selectReportStocks(snapshot.lhb.stocks);
   const hotMoney = selectReportHotMoney(snapshot.lhb.hotMoneyFlows);
 
@@ -97,22 +120,38 @@ export function DailyReportView({
         {viewMode === "stories" && (
           <section className="rounded-xl border border-[#1F2A3A] bg-[#0D1420] p-4 sm:p-5">
             <div><h2 className="text-xl font-semibold text-white">当日热点</h2><p className="mt-1 text-sm text-[#718096]">早间发布 · 按主题保留真正值得看的消息</p></div>
-            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <div className="mt-4 flex flex-wrap gap-2" aria-label="热点主题">
+              <button type="button" onClick={() => setStoryTopic("all")} className={`min-h-9 rounded-md border px-3 text-sm ${storyTopic === "all" ? "border-[#2EC4C7]/50 bg-[#173044] text-[#9DE7E8]" : "border-[#1F2A3A] text-[#718096] hover:text-white"}`}>全部</button>
               {curatedStories.categories.map((category) => (
-                <section key={category.key} className="overflow-hidden rounded-xl border border-[#243248] bg-[#0A111C]">
-                  <header className="border-b border-[#243248] bg-[#101B2A] px-4 py-3">
+                <button key={category.key} type="button" onClick={() => setStoryTopic(category.key)} className={`min-h-9 rounded-md border px-3 text-sm ${storyTopic === category.key ? "border-[#2EC4C7]/50 bg-[#173044] text-[#9DE7E8]" : "border-[#1F2A3A] text-[#718096] hover:text-white"}`}>{category.label}</button>
+              ))}
+            </div>
+            <div className="mt-4 space-y-5">
+              {visibleStoryCategories.map((category) => (
+                <section key={category.key} className="overflow-hidden rounded-lg border border-[#243248] bg-[#0A111C]">
+                  <header className="flex flex-col gap-1 border-b border-[#243248] bg-[#101B2A] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <h3 className="text-base font-semibold text-[#9DE7E8]">{category.label}</h3>
-                    <p className="mt-1 text-sm leading-6 text-[#AAB5C4]">{category.insight}</p>
+                    <p className="text-sm leading-6 text-[#AAB5C4]">{category.insight}</p>
                   </header>
-                  <div className="divide-y divide-[#1F2A3A] px-4">
-                    {category.stories.map((story) => (
-                      <article key={story.id} className="py-4">
-                        <h4 className="text-base font-semibold leading-7 text-white">{story.title}</h4>
-                        <time className="mt-1 block text-sm text-[#718096]">{new Date(story.scheduledFor || story.publishedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}</time>
-                        <p className="mt-2 text-base leading-7 text-[#AAB5C4]">{story.summary}</p>
-                        <p className="mt-2 text-sm text-[#9DE7E8]">{plainStoryImpact(story)}</p>
-                      </article>
-                    ))}
+                  <div className="divide-y divide-[#1F2A3A]">
+                    {category.stories.map((story) => {
+                      const eventTime = new Date(story.scheduledFor || story.publishedAt);
+                      return (
+                        <article key={story.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-5">
+                          <div className="font-mono text-sm text-[#718096]">
+                            <time className="block text-[#AAB5C4]">{eventTime.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit" })}</time>
+                            <span className="mt-1 block">{eventTime.toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+                            {story.eventType === "upcoming" && <span className="mt-2 inline-flex rounded border border-[#9F2336]/35 bg-[#9F2336]/10 px-2 py-0.5 text-xs text-[#F08A98]">未来事件</span>}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-base font-semibold leading-7 text-white">{compactShareHeadline(story.title)}</h4>
+                            {isChineseReadableText(story.summary) && <p className="mt-2 text-base leading-7 text-[#AAB5C4]">{story.summary}</p>}
+                            <p className="mt-2 text-sm text-[#9DE7E8]">{plainStoryImpact(story)}</p>
+                            <p className="mt-2 text-xs text-[#536177]">{story.sources.map((source) => source.name).join(" · ")}</p>
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 </section>
               ))}

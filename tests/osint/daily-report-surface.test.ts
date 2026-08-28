@@ -85,6 +85,15 @@ assert.equal(view.includes("text-base"), true);
 assert.equal(view.includes("embedded"), true);
 assert.equal(view.includes("selectReportStocks"), true);
 assert.equal(view.includes("selectReportHotMoney"), true);
+assert.equal(view.includes("dedupeWebStories"), true);
+assert.equal(view.includes("shareSourceKey"), true);
+assert.equal(view.includes("compactShareHeadline"), true);
+assert.equal(view.includes("isChineseReadableText"), true);
+assert.equal(view.includes("storyTopic"), true);
+assert.equal(view.includes('aria-label="热点主题"'), true);
+assert.equal(view.includes("sm:grid-cols-[140px_minmax(0,1fr)]"), true);
+assert.equal(view.includes("maxPerCategory: 8"), true);
+assert.equal(view.includes("maxPerCategory: 2"), false);
 for (const machineCopy of ["低重要度单源杂讯", "达到日报筛选标准", "观察可信度", "组内最新优先", "重要度"] ) {
   assert.equal(view.includes(machineCopy), false);
 }

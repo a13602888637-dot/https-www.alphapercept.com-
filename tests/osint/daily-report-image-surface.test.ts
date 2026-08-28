@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import {
   compactShareHeadline,
   compactShareLabel,
+  isChineseReadableText,
   isShareHeadlineReady,
   shareSourceKey,
   sharePosterDate,
@@ -61,6 +62,8 @@ assert.equal(
   shareSourceKey("https://www.bloomberg.com/a?utm_source=x", "Yotta董事长称将IPO"),
   shareSourceKey("https://www.bloomberg.com/a", "Yotta CEO称将IPO")
 );
+assert.equal(isChineseReadableText("Keynote Remarks at Jackson Hole。关注利率路径、美元和美债。"), false);
+assert.equal(isChineseReadableText("数据中心运营商Yotta正在推进IPO，以满足AI需求。"), true);
 const compactLabel = compactShareLabel("某某证券股份有限公司超长地区证券营业部观察席");
 assert.ok(Array.from(compactLabel).length <= 12);
 assert.equal(/[\r\n]/.test(compactLabel), false);

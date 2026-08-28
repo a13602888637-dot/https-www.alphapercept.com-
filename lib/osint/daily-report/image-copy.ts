@@ -16,6 +16,14 @@ export function isShareHeadlineReady(value: string): boolean {
   return characters.length > 0 && characters.length <= 46 && hanCount >= 6;
 }
 
+export function isChineseReadableText(value: string): boolean {
+  const characters = Array.from(value);
+  const hanCount = characters.filter((character) => /\p{Script=Han}/u.test(character)).length;
+  const latinCount = characters.filter((character) => /[A-Za-z]/.test(character)).length;
+  const languageCharacters = hanCount + latinCount;
+  return hanCount >= 6 && languageCharacters > 0 && hanCount / languageCharacters >= 0.45;
+}
+
 export function shareSourceKey(sourceUrl: string | undefined, title: string): string {
   if (sourceUrl) {
     try {
