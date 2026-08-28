@@ -302,12 +302,9 @@ async function waitUntilPublished(report, timeoutMs = 10 * 60 * 1000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${SITE_URL}/uzi-assets/manifest.json?publish=${Date.now()}`, { cache: "no-store" });
-      if (response.ok) {
-        const manifest = await response.json();
-        const deployed = manifest.reports?.find((item) => item.id === report.id);
-        if (deployed?.deployedSha256 === report.deployedSha256) return;
-      }
+      const payload = await api("/api/uzi/worker/report-manifest");
+      const deployed = payload.manifest?.reports?.find((item) => item.id === report.id);
+      if (deployed?.deployedSha256 === report.deployedSha256) return;
     } catch {}
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 20_000));
   }

@@ -20,7 +20,6 @@ import { toast } from "sonner";
 import { StockChart } from "@/components/charts/StockChart";
 import { TechnicalIndicators } from "@/components/charts/TechnicalIndicators";
 import { ChatInterface } from "@/components/ai-chat/ChatInterface";
-import { findLatestUziReport, getUziReportViewerPath } from "@/lib/uzi-reports";
 
 interface StockDetail {
   symbol: string;
@@ -277,8 +276,6 @@ export default function StockDetailPage() {
   // A股惯例：红涨绿跌
   const priceChangeColor = stockDetail.change >= 0 ? "text-red-600" : "text-green-600";
   const priceChangeIcon = stockDetail.change >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />;
-  const uziReport = findLatestUziReport(stockCode);
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -287,14 +284,12 @@ export default function StockDetailPage() {
           返回
         </Button>
         <div className="flex gap-2">
-          {uziReport && (
-            <Button asChild variant="outline">
-              <Link href={getUziReportViewerPath(uziReport)}>
-                <FileChartColumnIncreasing className="mr-2 h-4 w-4" />
-                Uzi 报告 {uziReport.overallScore?.toFixed(1) ?? "—"}
-              </Link>
-            </Button>
-          )}
+          <Button asChild variant="outline">
+            <Link href={`/uzi-reports?stock=${encodeURIComponent(stockCode)}&name=${encodeURIComponent(stockDetail.name)}`}>
+              <FileChartColumnIncreasing className="mr-2 h-4 w-4" />
+              深度研究
+            </Link>
+          </Button>
           <Button variant="outline" onClick={handleTriggerAnalysis}>刷新AI分析</Button>
           {!isInWatchlist ? (
             <Button onClick={handleAddToWatchlist} disabled={isAddingToWatchlist}>

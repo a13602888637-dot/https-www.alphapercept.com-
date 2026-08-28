@@ -16,7 +16,7 @@ import {
   ShieldAlert,
   Sparkles,
 } from "lucide-react";
-import { getUziReportViewerPath, type UziReport } from "@/lib/uzi-reports";
+import { getUziReportViewerPath, type UziReport } from "@/lib/uzi/report-types";
 
 interface StockOption {
   code: string;

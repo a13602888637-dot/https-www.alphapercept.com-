@@ -3,12 +3,16 @@ const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ['pdfkit'],
 
-  // Daily report PDF embeds one OFL-licensed Simplified Chinese font asset.
-  // Keep the include literal and narrow so only the PDF function traces it.
+  // Daily report exports use OFL-licensed Simplified Chinese font assets.
+  // Keep the includes literal and narrow so only the export function traces them.
   outputFileTracingIncludes: {
     '/api/osint/v1/reports/[reportId]/export': [
       './lib/osint/daily-report/assets/NotoSansSC-Variable.ttf',
+      './lib/osint/daily-report/assets/NotoSansSC-Medium-static.ttf',
       './node_modules/pdfkit/js/standard-fonts/**/*',
+    ],
+    '/api/uzi/reports/[reportId]/content': [
+      './public/uzi-assets/reports/*.html',
     ],
   },
 

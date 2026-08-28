@@ -1,7 +1,7 @@
-import { PersonalInvestmentAssistant } from "@/components/dashboard/PersonalInvestmentAssistant";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "今日决策簿 | AlphaPercept" };
+export const metadata = { title: "深度研究 | AlphaPercept" };
 
 export default function DashboardPage() {
-  return <PersonalInvestmentAssistant />;
+  redirect("/uzi-reports");
 }

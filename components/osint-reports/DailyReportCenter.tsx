@@ -61,7 +61,7 @@ export function DailyReportCenter() {
             <div>
               <p className="mb-1 text-sm tracking-[0.16em] text-[#2EC4C7]">ALPHAPERCEPT REVIEW</p>
               <h1 className="text-2xl font-semibold text-white sm:text-3xl">每日复盘中心</h1>
-              <p className="mt-2 text-base leading-7 text-[#8B98AA]">把热点、个股资金榜和游资席位锁定为可回看的当日快照。</p>
+              <p className="mt-2 text-base leading-7 text-[#8B98AA]">早上发布当日热点，收盘发布个股热榜；两类内容都可直接下载竖版图片。</p>
             </div>
             <div className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#2EC4C7]/30 bg-[#2EC4C7]/10 px-4 text-sm text-[#9DE7E8]"><ShieldCheck className="h-4 w-4" />后台每日自动归档</div>
           </div>
@@ -110,10 +110,9 @@ export function DailyReportCenter() {
                           </div>
                           <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#2A394E] px-2 py-1 text-[11px] text-[#8B98AA]"><ShieldCheck className="h-3 w-3" />{STATUS_LABELS[report.status]}</span>
                         </div>
-                        <div className="mt-3 grid grid-cols-3 gap-1 text-center text-xs">
-                          <span className="rounded bg-[#111B2A] px-1 py-1.5">热点 {report.storyCount}</span>
-                          <span className="rounded bg-[#111B2A] px-1 py-1.5">个股 {report.lhbStockCount}</span>
-                          <span className="rounded bg-[#111B2A] px-1 py-1.5">游资 {report.lhbHotMoneyCount}</span>
+                        <div className="mt-3 grid grid-cols-2 gap-1 text-center text-xs">
+                          <span className="rounded bg-[#111B2A] px-1 py-1.5">当日热点 {report.storyCount}</span>
+                          <span className="rounded bg-[#111B2A] px-1 py-1.5">热榜 {report.lhbStockCount + report.lhbHotMoneyCount}</span>
                         </div>
                       </button>
                       <Link href={`/osint/reports/${encodeURIComponent(report.id)}`} className="mt-2 inline-flex min-h-9 items-center gap-1 text-xs text-[#8B98AA] hover:text-[#9DE7E8]">独立打开 <ExternalLink className="h-3 w-3" /></Link>
@@ -127,7 +126,7 @@ export function DailyReportCenter() {
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-white">报告直接预览</h2>
-                  <p className="mt-1 text-sm text-[#718096]">页面内阅读，也可直接下载完整、热点、个股资金和游资 PDF</p>
+                  <p className="mt-1 text-sm text-[#718096]">页面内阅读，也可直接下载当日热点和个股热榜 PNG 图片</p>
                 </div>
               </div>
               {selectedReportId && <DailyReportView reportId={selectedReportId} embedded />}

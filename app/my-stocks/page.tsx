@@ -23,7 +23,6 @@ import {
 import { toast } from "sonner";
 import { AddEditPositionDialog } from "@/components/my-stocks/AddEditPositionDialog";
 import { Button } from "@/components/ui/button";
-import { findLatestUziReport, getUziReportViewerPath, type UziReport } from "@/lib/uzi-reports";
 
 interface Position {
   id: string;
@@ -129,11 +128,6 @@ function isRiskLevelActionable(plan: WatchlistItem | undefined, kind: "stop" | "
   return Number.isFinite(computedAt) && Date.now() - computedAt <= 96 * 60 * 60 * 1000;
 }
 
-function reportAgeDays(report: UziReport): number {
-  const time = new Date(`${report.reportDate}T00:00:00+08:00`).getTime();
-  return Number.isFinite(time) ? Math.floor((Date.now() - time) / 86_400_000) : 999;
-}
-
 function DecisionRail({ positions, watchlistByCode, summary }: {
   positions: Position[];
   watchlistByCode: Map<string, WatchlistItem>;
@@ -155,11 +149,6 @@ function DecisionRail({ positions, watchlistByCode, summary }: {
     const plan = watchlistByCode.get(position.stockCode);
     return !isRiskLevelActionable(plan, "stop") || !isRiskLevelActionable(plan, "target");
   }).length;
-  const staleReports = positions.filter((position) => {
-    const report = findLatestUziReport(position.stockCode);
-    return report && reportAgeDays(report) > 7;
-  }).length;
-
   const items = [
     {
       label: "行情状态",
@@ -177,9 +166,9 @@ function DecisionRail({ positions, watchlistByCode, summary }: {
     },
     {
       label: "待补齐",
-      value: `${missingRiskPlan} 风控 / ${staleReports} 旧报告`,
+      value: `${missingRiskPlan} 项风控待补`,
       detail: missingRiskPlan > 0 ? "先补止损与目标位" : "风控计划已登记",
-      tone: missingRiskPlan + staleReports > 0 ? "text-amber-200" : "text-slate-200",
+      tone: missingRiskPlan > 0 ? "text-amber-200" : "text-slate-200",
       icon: ShieldCheck,
     },
   ];
@@ -237,24 +226,9 @@ function RiskCell({ position, watchlist }: { position: Position; watchlist?: Wat
 }
 
 function ResearchCell({ position }: { position: Position }) {
-  const report = findLatestUziReport(position.stockCode);
-  if (!report) {
-    return (
-      <Link href={`/uzi-reports?symbol=${position.stockCode}`} className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] px-2.5 py-1.5 text-[10px] text-slate-400 hover:border-cyan-300/20 hover:text-cyan-200">
-        查游资 <ArrowRight className="h-3 w-3" />
-      </Link>
-    );
-  }
-
   return (
-    <Link href={getUziReportViewerPath(report)} className="group/report block min-w-[160px]">
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-lg font-semibold text-cyan-200">{report.overallScore?.toFixed(1) ?? "--"}</span>
-        <span className={`rounded border px-1.5 py-0.5 text-[9px] ${report.agentReviewed ? "border-emerald-300/20 text-emerald-300" : "border-amber-300/15 text-amber-200/70"}`}>
-          {report.agentReviewed ? "已复核" : "机械"}
-        </span>
-      </div>
-      <p className="mt-1 max-w-[220px] truncate text-[10px] text-slate-500 group-hover/report:text-slate-300">{report.verdict}</p>
+    <Link href={`/uzi-reports?stock=${encodeURIComponent(position.stockCode)}&name=${encodeURIComponent(position.stockName)}`} className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] px-2.5 py-1.5 text-[10px] text-slate-400 hover:border-cyan-300/20 hover:text-cyan-200">
+      深度研究 <ArrowRight className="h-3 w-3" />
     </Link>
   );
 }
@@ -485,8 +459,8 @@ export default function MyStocksPage() {
         )}
 
         <footer className="mt-5 flex flex-col gap-3 rounded-lg border border-white/[0.07] bg-white/[0.018] px-4 py-3 text-[10px] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-          <span className="inline-flex items-center gap-2"><FileChartColumnIncreasing className="h-3.5 w-3.5" /> Uzi 报告是研究证据，不替代止损纪律。</span>
-          <div className="flex gap-3"><Link href="/portfolio" className="text-slate-400 hover:text-white">管理止盈止损</Link><Link href="/uzi-reports" className="text-cyan-200/70 hover:text-cyan-200">扫描游资</Link></div>
+          <span className="inline-flex items-center gap-2"><FileChartColumnIncreasing className="h-3.5 w-3.5" /> 研究报告只在深度研究页按账号保存。</span>
+          <div className="flex gap-3"><Link href="/portfolio" className="text-slate-400 hover:text-white">管理止盈止损</Link><Link href="/uzi-reports" className="text-cyan-200/70 hover:text-cyan-200">深度研究</Link></div>
         </footer>
       </div>
 

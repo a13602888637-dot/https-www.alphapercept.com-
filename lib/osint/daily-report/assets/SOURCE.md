@@ -7,5 +7,8 @@
 - Font SHA-256: `a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`
 - License SHA-256: `1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9`
 
-The font is used only by the Node.js daily-report PDF export route. PDFKit
-embeds a glyph subset into each generated report.
+The variable font is used by the Node.js daily-report PDF export route. PDFKit
+embeds a glyph subset into each generated report. `NotoSansSC-Medium-static.ttf`
+is a local weight-500 instance produced from the same licensed source with
+`fonttools varLib.instancer`; it is used by the TikTok PNG renderer because
+`ImageResponse` does not accept this variable CJK font reliably.

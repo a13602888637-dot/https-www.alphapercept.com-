@@ -8,12 +8,10 @@ import {
   Aperture,
   FileChartColumnIncreasing,
   Globe,
-  LayoutDashboard,
   LogIn,
 } from "lucide-react";
 
 const NAV_LINKS = [
-  { href: "/dashboard", label: "今日", icon: LayoutDashboard },
   { href: "/uzi-reports", label: "深度研究", icon: FileChartColumnIncreasing },
   { href: "/osint", label: "OSINT 情报", icon: Globe },
 ];
@@ -38,7 +36,7 @@ export function TopNavBar() {
       <div className="w-px h-4 bg-[#1a2035]" />
 
       {/* Branding */}
-      <Link href="/dashboard" prefetch={false} className="flex items-center gap-1.5 mr-2">
+      <Link href="/uzi-reports" prefetch={false} className="flex items-center gap-1.5 mr-2">
         <div className="h-5 w-5 rounded border border-cyan-300/25 bg-cyan-300/[0.07] flex items-center justify-center">
           <Aperture className="h-3 w-3 text-cyan-300" />
         </div>
@@ -88,7 +86,7 @@ export function TopNavBar() {
               afterSignOutUrl="/sign-in"
             />
           ) : (
-            <SignInButton mode="redirect" forceRedirectUrl="/dashboard">
+            <SignInButton mode="redirect" forceRedirectUrl="/uzi-reports">
               <button className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-white bg-[#111827] hover:bg-[#1a2035] px-2.5 py-1 rounded transition-colors">
                 <LogIn className="h-3 w-3" />
                 <span>登录</span>

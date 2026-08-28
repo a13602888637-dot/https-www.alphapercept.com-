@@ -1,32 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildDailyReportPdf } from "@/lib/osint/daily-report/pdf-export";
-import type { DailyReportExportSection } from "@/lib/osint/daily-report/contracts";
-import { DAILY_REPORT_PDF_LAYOUT_VERSION } from "@/lib/osint/daily-report/pdf-readiness";
+import {
+  buildDailyReportPng,
+  type DailyReportImageSection,
+} from "@/lib/osint/daily-report/image-export";
+import { DAILY_REPORT_IMAGE_LAYOUT_VERSION } from "@/lib/osint/daily-report/image-contract";
 import { getDailyReport } from "@/lib/osint/daily-report/repository";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const SECTIONS = new Set<DailyReportExportSection>([
-  "full",
-  "stories",
-  "stocks",
-  "lhb",
-]);
-const pdfPromiseCache = new Map<string, Promise<Buffer>>();
+const SECTIONS = new Set<DailyReportImageSection>(["stories", "hotlist"]);
+const imagePromiseCache = new Map<string, Promise<Buffer>>();
 
-function cachedPdf(key: string, build: () => Promise<Buffer>): Promise<Buffer> {
-  const cached = pdfPromiseCache.get(key);
+function cachedImage(key: string, build: () => Promise<Buffer>): Promise<Buffer> {
+  const cached = imagePromiseCache.get(key);
   if (cached) return cached;
   const pending = build().catch((error) => {
-    pdfPromiseCache.delete(key);
+    imagePromiseCache.delete(key);
     throw error;
   });
-  pdfPromiseCache.set(key, pending);
-  if (pdfPromiseCache.size > 32) {
-    const oldest = pdfPromiseCache.keys().next().value;
-    if (oldest && oldest !== key) pdfPromiseCache.delete(oldest);
+  imagePromiseCache.set(key, pending);
+  if (imagePromiseCache.size > 32) {
+    const oldest = imagePromiseCache.keys().next().value;
+    if (oldest && oldest !== key) imagePromiseCache.delete(oldest);
   }
   return pending;
 }
@@ -35,9 +32,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ reportId: string }> }
 ) {
-  const requestedSection = request.nextUrl.searchParams.get("section") ?? "full";
-  if (!SECTIONS.has(requestedSection as DailyReportExportSection)) {
-    return NextResponse.json({ error: "不支持的导出范围" }, { status: 400 });
+  const requestedSection = request.nextUrl.searchParams.get("section") ?? "stories";
+  if (!SECTIONS.has(requestedSection as DailyReportImageSection)) {
+    return NextResponse.json({ error: "不支持的图片类型" }, { status: 400 });
   }
 
   const { reportId } = await params;
@@ -47,31 +44,26 @@ export async function GET(
   }
 
   try {
-    const pdf = await cachedPdf(
-      `${report.id}:${requestedSection}:${DAILY_REPORT_PDF_LAYOUT_VERSION}`,
-      () => buildDailyReportPdf(
-        report.snapshot,
-        requestedSection as DailyReportExportSection
-      )
+    const png = await cachedImage(
+      `${report.id}:${requestedSection}:${DAILY_REPORT_IMAGE_LAYOUT_VERSION}`,
+      () => buildDailyReportPng(report.snapshot, requestedSection as DailyReportImageSection)
     );
-    const filename = `alphapercept-osint-${report.reportDate}-${report.edition}-v${report.version}-${DAILY_REPORT_PDF_LAYOUT_VERSION}-${requestedSection}.pdf`;
-    return new NextResponse(new Uint8Array(pdf), {
+    const label = requestedSection === "stories" ? "morning-hotspots" : "stock-hotlist";
+    const filename = `alphapercept-${report.reportDate}-${label}-${DAILY_REPORT_IMAGE_LAYOUT_VERSION}.png`;
+    return new NextResponse(new Uint8Array(png), {
       headers: {
-        "Content-Type": "application/pdf",
+        "Content-Type": "image/png",
         "Cache-Control": "public, max-age=86400, s-maxage=31536000, immutable",
         "CDN-Cache-Control": "public, s-maxage=31536000, immutable",
         "Vercel-CDN-Cache-Control": "public, s-maxage=31536000, immutable",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": String(pdf.length),
+        "Content-Length": String(png.length),
         "X-Content-Type-Options": "nosniff",
-        "ETag": `"${report.id}-${requestedSection}-${DAILY_REPORT_PDF_LAYOUT_VERSION}"`,
+        "ETag": `"${report.id}-${requestedSection}-${DAILY_REPORT_IMAGE_LAYOUT_VERSION}"`,
       },
     });
   } catch (error) {
-    console.error("[osint reports] pdf export failed", error);
-    return NextResponse.json(
-      { error: "PDF 生成失败，请稍后重试" },
-      { status: 500 }
-    );
+    console.error("[osint reports] image export failed", error);
+    return NextResponse.json({ error: "图片生成失败，请稍后重试" }, { status: 500 });
   }
 }

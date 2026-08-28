@@ -9,7 +9,7 @@ import {
   ExternalLink,
   ShieldCheck,
 } from "lucide-react";
-import { getUziReportById } from "@/lib/uzi-reports";
+import { getOwnedUziReport, requireResearchUserId } from "@/lib/uzi/report-access";
 
 interface PageProps {
   params: Promise<{ reportId: string }>;
@@ -17,18 +17,12 @@ interface PageProps {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { reportId } = await params;
-  const report = getUziReportById(decodeURIComponent(reportId));
-  return report
-    ? {
-        title: `${report.name} Uzi 深度报告 | Alpha-Quant-Copilot`,
-        description: `${report.ticker} · ${report.overallScore ?? "—"} 分 · ${report.verdict}`,
-        robots: { index: false, follow: false, archive: false },
-      }
-    : {
-        title: "Uzi 报告未找到 | Alpha-Quant-Copilot",
-        robots: { index: false, follow: false, archive: false },
-      };
+  await params;
+  return {
+    title: "深度研究报告 | AlphaPercept",
+    description: "仅当前账号可访问的 AlphaPercept 深度研究报告。",
+    robots: { index: false, follow: false, noarchive: true },
+  };
 }
 
 export default async function UziReportViewerPage({
@@ -36,7 +30,9 @@ export default async function UziReportViewerPage({
   searchParams,
 }: PageProps) {
   const [{ reportId }, query] = await Promise.all([params, searchParams]);
-  const report = getUziReportById(decodeURIComponent(reportId));
+  const clerkUserId = await requireResearchUserId(`/uzi-reports/${encodeURIComponent(reportId)}`);
+  const decodedReportId = decodeURIComponent(reportId);
+  const report = await getOwnedUziReport(clerkUserId, decodedReportId);
   if (!report) notFound();
 
   const sectionHash =
@@ -45,7 +41,8 @@ export default async function UziReportViewerPage({
       : query.section === "chat"
         ? "#section-chat"
         : "";
-  const frameSrc = `${report.reportPath}${sectionHash}`;
+  const contentPath = `/api/uzi/reports/${encodeURIComponent(report.id)}/content`;
+  const frameSrc = `${contentPath}${sectionHash}`;
 
   return (
     <main className="flex h-full min-h-[calc(100dvh-2.5rem)] flex-col bg-[#060a12] text-slate-100">

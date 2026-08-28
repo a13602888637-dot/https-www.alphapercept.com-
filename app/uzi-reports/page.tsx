@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { UziResearchWorkbench } from "@/components/uzi/UziResearchWorkbench";
-import { uziReports } from "@/lib/uzi-reports";
+import { getOwnedUziReports, requireResearchUserId } from "@/lib/uzi/report-access";
 
 export const metadata: Metadata = {
   title: "Uzi 深度研判 | AlphaPercept",
@@ -9,10 +9,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, noarchive: true },
 };
 
-export default function UziReportsPage() {
+export default async function UziReportsPage() {
+  const clerkUserId = await requireResearchUserId();
+  const reports = await getOwnedUziReports(clerkUserId);
   return (
     <Suspense fallback={<div className="min-h-[calc(100dvh-40px)] bg-[#080b10]" />}>
-      <UziResearchWorkbench reports={uziReports} />
+      <UziResearchWorkbench reports={reports} />
     </Suspense>
   );
 }

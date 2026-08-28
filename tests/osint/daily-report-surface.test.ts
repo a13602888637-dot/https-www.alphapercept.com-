@@ -46,16 +46,17 @@ assert.equal(generateRoute.includes("currentUser"), false);
 assert.equal(generateRoute.includes("export async function POST"), false);
 assert.equal(generateRoute.includes("previousShanghaiDate"), true);
 assert.equal(detailRoute.includes("getDailyReport"), true);
-assert.equal(detailRoute.includes("isDailyReportPdfReady"), true);
+assert.equal(detailRoute.includes("isDailyReportImageReady"), true);
 assert.equal(detailRoute.includes("isDailyReportExportReady"), false);
-assert.equal(exportRoute.includes("buildDailyReportPdf"), true);
-assert.equal(exportRoute.includes("application/pdf"), true);
+assert.equal(exportRoute.includes("buildDailyReportPng"), true);
+assert.equal(exportRoute.includes("image/png"), true);
 assert.equal(exportRoute.includes("attachment;"), true);
-assert.equal(exportRoute.includes(".pdf"), true);
+assert.equal(exportRoute.includes(".png"), true);
 assert.equal(exportRoute.includes("text/html; charset=utf-8"), false);
 assert.equal(exportRoute.includes("autoPrint"), false);
-assert.equal(exportRoute.includes('"markets"'), false);
-assert.equal(exportRoute.includes("pdfPromiseCache"), true);
+assert.equal(exportRoute.includes('"stories"'), true);
+assert.equal(exportRoute.includes('"hotlist"'), true);
+assert.equal(exportRoute.includes("imagePromiseCache"), true);
 assert.equal(exportRoute.includes("s-maxage=31536000"), true);
 assert.equal(exportRoute.includes("immutable"), true);
 
@@ -76,8 +77,8 @@ assert.equal(center.includes("max-w-4xl"), false);
 assert.equal(center.includes("selectedReportId"), true);
 assert.equal(center.includes("DailyReportView"), true);
 assert.equal(center.includes("报告直接预览"), true);
-assert.equal(center.includes("个股 {report.lhbStockCount}"), true);
-assert.equal(center.includes("游资 {report.lhbHotMoneyCount}"), true);
+assert.equal(center.includes("当日热点"), true);
+assert.equal(center.includes("热榜 {report.lhbStockCount + report.lhbHotMoneyCount}"), true);
 assert.equal(center.includes("行情 {report.marketAvailable}"), false);
 assert.equal(view.includes("text-base"), true);
 assert.equal(view.includes("embedded"), true);
@@ -86,23 +87,25 @@ assert.equal(view.includes("selectReportHotMoney"), true);
 for (const machineCopy of ["低重要度单源杂讯", "达到日报筛选标准", "观察可信度", "组内最新优先", "重要度"] ) {
   assert.equal(view.includes(machineCopy), false);
 }
-for (const viewLabel of ["热点", "个股资金", "游资"]) {
+for (const viewLabel of ["当日热点", "个股热榜", "个股资金榜", "游资席位榜"]) {
   assert.equal(view.includes(viewLabel), true);
 }
 assert.equal(view.includes('{ value: "markets"'), false);
 assert.equal(printActions.includes("fixed inset-x-3 bottom-3"), true);
-for (const section of ["full", "stories", "stocks", "lhb"]) {
+for (const section of ["stories", "hotlist"]) {
   assert.equal(printActions.includes(`section: "${section}"`), true);
 }
-assert.equal(printActions.includes('section: "markets"'), false);
+for (const section of ["full", "stocks", "lhb", "markets"]) {
+  assert.equal(printActions.includes(`section: "${section}"`), false);
+}
 assert.equal(printActions.includes("disabled={!exportReady}"), true);
 assert.equal(printActions.includes("window.open"), false);
 assert.equal(printActions.includes("download"), true);
 assert.equal(printActions.includes("print=1"), false);
-assert.equal(printActions.includes("DAILY_REPORT_PDF_LAYOUT_VERSION"), true);
-assert.equal(printActions.includes("layout=${DAILY_REPORT_PDF_LAYOUT_VERSION}"), true);
-assert.equal(exportRoute.includes("DAILY_REPORT_PDF_LAYOUT_VERSION"), true);
-assert.equal(exportRoute.includes("${report.id}:${requestedSection}:${DAILY_REPORT_PDF_LAYOUT_VERSION}"), true);
+assert.equal(printActions.includes("DAILY_REPORT_IMAGE_LAYOUT_VERSION"), true);
+assert.equal(printActions.includes("layout=${DAILY_REPORT_IMAGE_LAYOUT_VERSION}"), true);
+assert.equal(exportRoute.includes("DAILY_REPORT_IMAGE_LAYOUT_VERSION"), true);
+assert.equal(exportRoute.includes("${report.id}:${requestedSection}:${DAILY_REPORT_IMAGE_LAYOUT_VERSION}"), true);
 
 const exportHtml = read("lib/osint/daily-report/export-html.ts");
 const pdfExport = read("lib/osint/daily-report/pdf-export.ts");
