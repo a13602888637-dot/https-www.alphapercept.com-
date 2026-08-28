@@ -13,15 +13,6 @@ function validEdition(value: unknown): DailyReportEdition {
   return value === "global" ? "global" : "close";
 }
 
-function previousShanghaiDate(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(now.getTime() - 24 * 60 * 60 * 1_000));
-}
-
 export async function GET(request: NextRequest) {
   if (!hasCronSecret(request)) {
     return NextResponse.json(
@@ -32,7 +23,6 @@ export async function GET(request: NextRequest) {
   const edition = validEdition(request.nextUrl.searchParams.get("edition"));
   try {
     const report = await generateAndSaveDailyReport({
-      reportDate: edition === "global" ? previousShanghaiDate() : undefined,
       edition,
       status: "final",
     });
