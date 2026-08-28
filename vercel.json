@@ -19,11 +19,11 @@
     },
     {
       "path": "/api/osint/v1/reports/generate?edition=close",
-      "schedule": "0 8 * * 1-5"
+      "schedule": "30 7 * * 1-5"
     },
     {
       "path": "/api/osint/v1/reports/generate?edition=global",
-      "schedule": "15 0 * * 2-6"
+      "schedule": "0 1 * * 1-5"
     }
   ]
 }
