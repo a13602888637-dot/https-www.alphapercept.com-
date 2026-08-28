@@ -1,7 +1,33 @@
 export function compactShareHeadline(value: string): string {
-  const text = value.replace(/\s+/g, " ").trim();
+  return value
+    .replace(/Inside India's AI Ambitions/gi, "印度加速布局人工智能产业")
+    .replace(/Bloomberg Tech:\s*Asia/gi, "彭博亚洲科技")
+    .replace(/Economic Outlook and Financial Inclusion/gi, "经济前景与金融包容")
+    .replace(/Keynote Remarks/gi, "主题演讲")
+    .replace(/Beige Book/gi, "褐皮书")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isShareHeadlineReady(value: string): boolean {
+  const text = compactShareHeadline(value);
   const characters = Array.from(text);
-  return characters.length <= 46 ? text : `${characters.slice(0, 45).join("")}…`;
+  const hanCount = characters.filter((character) => /\p{Script=Han}/u.test(character)).length;
+  return characters.length > 0 && characters.length <= 46 && hanCount >= 6;
+}
+
+export function shareSourceKey(sourceUrl: string | undefined, title: string): string {
+  if (sourceUrl) {
+    try {
+      const url = new URL(sourceUrl);
+      return `${url.hostname}${url.pathname}`.replace(/\/$/, "").toLowerCase();
+    } catch {
+      // Fall through to the normalized title for malformed source URLs.
+    }
+  }
+  return compactShareHeadline(title)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 export function compactShareLabel(value: string): string {

@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import {
   compactShareHeadline,
   compactShareLabel,
+  isShareHeadlineReady,
+  shareSourceKey,
   sharePosterDate,
 } from "../../lib/osint/daily-report/image-copy.ts";
 
@@ -33,7 +35,7 @@ assert.match(imageExport, /fontSize:\s*(?:3[0-9]|[4-9][0-9])/);
 assert.equal(imageExport.includes("fontSize: 18"), false);
 assert.equal(imageExport.includes("fontSize: 20"), false);
 assert.equal(imageExport.includes("fontSize: 22"), false);
-assert.equal(imageExport.includes("slice(0, 10)"), true);
+assert.equal(imageExport.includes("unique.length === 10"), true);
 assert.equal(imageExport.includes("slice(0, 6)"), true);
 assert.equal(imageExport.includes('justifyContent: "space-between"'), true);
 assert.equal(imageExport.includes("calc(50%"), false);
@@ -41,11 +43,24 @@ assert.equal(imageExport.includes('whiteSpace: "nowrap"'), true);
 assert.equal(imageExport.includes("主要买入："), true);
 assert.equal(imageExport.includes("compactShareHeadline"), true);
 assert.equal(imageExport.includes("compactShareLabel"), true);
+assert.equal(imageExport.includes("isShareHeadlineReady"), true);
+assert.equal(imageExport.includes("shareSourceKey"), true);
 
 const longHeadline = "超长财经新闻标题".repeat(12);
 const compactHeadline = compactShareHeadline(longHeadline);
-assert.ok(Array.from(compactHeadline).length <= 46);
-assert.equal(compactHeadline.endsWith("…"), true);
+assert.equal(compactHeadline.endsWith("…"), false);
+assert.equal(isShareHeadlineReady(longHeadline), false);
+assert.equal(
+  compactShareHeadline("Inside India's AI Ambitions | Bloomberg Tech: Asia 8/28/2026"),
+  "印度加速布局人工智能产业 | 彭博亚洲科技 8/28/2026"
+);
+assert.equal(isShareHeadlineReady("Inside India's AI Ambitions | Bloomberg Tech: Asia 8/28/2026"), true);
+assert.equal(compactShareHeadline("美联储主席Kevin Warsh：Keynote Remarks"), "美联储主席Kevin Warsh：主题演讲");
+assert.equal(compactShareHeadline("美联储发布Beige Book"), "美联储发布褐皮书");
+assert.equal(
+  shareSourceKey("https://www.bloomberg.com/a?utm_source=x", "Yotta董事长称将IPO"),
+  shareSourceKey("https://www.bloomberg.com/a", "Yotta CEO称将IPO")
+);
 const compactLabel = compactShareLabel("某某证券股份有限公司超长地区证券营业部观察席");
 assert.ok(Array.from(compactLabel).length <= 12);
 assert.equal(/[\r\n]/.test(compactLabel), false);

@@ -4,7 +4,13 @@ import { ImageResponse } from "next/og";
 import type { OsintStory } from "../contracts";
 import type { LhbHotMoneyFlow, LhbStock } from "../../lhb/contracts";
 import type { OsintDailyReportSnapshot } from "./contracts";
-import { compactShareHeadline, compactShareLabel, sharePosterDate } from "./image-copy";
+import {
+  compactShareHeadline,
+  compactShareLabel,
+  isShareHeadlineReady,
+  sharePosterDate,
+  shareSourceKey,
+} from "./image-copy";
 import { DAILY_REPORT_DISCLAIMER, DAILY_REPORT_WATERMARK } from "./export-html";
 import {
   curateReportStories,
@@ -116,23 +122,35 @@ function posterShell(
 }
 
 function selectedStories(report: OsintDailyReportSnapshot): Array<{ story: OsintStory; category: string }> {
-  const curated = curateReportStories(report.stories.stories, { maxPerCategory: 2 });
+  const shareReadyStories = report.stories.stories.filter((story) =>
+    isShareHeadlineReady(story.title)
+  );
+  const curated = curateReportStories(shareReadyStories, { maxPerCategory: 2 });
   const firstPass = curated.categories.flatMap((category) =>
     category.stories.slice(0, 1).map((story) => ({ story, category: category.label }))
   );
   const secondPass = curated.categories.flatMap((category) =>
     category.stories.slice(1, 2).map((story) => ({ story, category: category.label }))
   );
-  const selected = [...firstPass, ...secondPass];
-  const selectedIds = new Set(selected.map(({ story }) => story.id));
-  const fillers = [...report.stories.stories]
-    .filter((story) => !selectedIds.has(story.id))
+  const prioritized = [...firstPass, ...secondPass];
+  const prioritizedIds = new Set(prioritized.map(({ story }) => story.id));
+  const fillers = [...shareReadyStories]
+    .filter((story) => !prioritizedIds.has(story.id))
     .sort((left, right) => right.importance - left.importance || right.publishedAt.localeCompare(left.publishedAt))
     .map((story) => ({
       story,
       category: story.eventType === "upcoming" ? "未来事件" : story.tags.topic[0] || "市场动态",
     }));
-  return [...selected, ...fillers].slice(0, 10);
+  const unique: Array<{ story: OsintStory; category: string }> = [];
+  const seen = new Set<string>();
+  for (const item of [...prioritized, ...fillers]) {
+    const key = shareSourceKey(item.story.sources[0]?.url, item.story.title);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+    if (unique.length === 10) break;
+  }
+  return unique;
 }
 
 export function renderHotspotPoster(report: OsintDailyReportSnapshot): React.ReactElement {
