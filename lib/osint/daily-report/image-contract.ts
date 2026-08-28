@@ -1,1 +1,1 @@
-export const DAILY_REPORT_IMAGE_LAYOUT_VERSION = "tiktok-v1";
+export const DAILY_REPORT_IMAGE_LAYOUT_VERSION = "tiktok-v2";

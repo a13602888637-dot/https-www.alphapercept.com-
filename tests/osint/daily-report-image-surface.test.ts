@@ -82,7 +82,7 @@ assert.equal(
 );
 
 const imageContract = read("lib/osint/daily-report/image-contract.ts");
-assert.equal(imageContract.includes('DAILY_REPORT_IMAGE_LAYOUT_VERSION = "tiktok-v1"'), true);
+assert.equal(imageContract.includes('DAILY_REPORT_IMAGE_LAYOUT_VERSION = "tiktok-v2"'), true);
 const readiness = read("lib/osint/daily-report/image-readiness.ts");
 assert.equal(readiness.includes("isDailyReportImageReady"), true);
 assert.equal(readiness.includes("NotoSansSC-Medium-static.ttf"), true);
