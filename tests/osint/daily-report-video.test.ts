@@ -3,6 +3,7 @@ import type { OsintDailyReportSnapshot } from "../../lib/osint/daily-report/cont
 import { buildVideoStoryboard } from "../../lib/osint/daily-video/storyboard.ts";
 import { themeForDate, DAILY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
 import { compactVideoShareName, videoShareAmount } from "../../lib/osint/daily-video/copy.ts";
+import { pageIndexAtTime, pageTransitionAtTime, wrapMeasuredText } from "../../lib/osint/daily-video/canvas-renderer.ts";
 
 const MODULES = ["宏观", "科技", "能源"] as const;
 
@@ -103,6 +104,16 @@ for (const module of new Set(morningPages.map((page) => page.module))) {
 }
 assert.equal(morning.pages.every((page) => page.reportUrl === reportUrl), true);
 assert.equal(morning.durationMs, 1_800 + morningPages.length * 4_200 + 1_200);
+assert.equal(pageIndexAtTime(morning, 0), 0);
+assert.equal(pageIndexAtTime(morning, 1_800), 1);
+assert.equal(pageIndexAtTime(morning, 5_999), 1);
+assert.equal(pageIndexAtTime(morning, 6_000), 2);
+assert.equal(pageTransitionAtTime(morning, 1_800), 0);
+assert.equal(pageTransitionAtTime(morning, 2_020), 1);
+assert.equal(pageTransitionAtTime(morning, 5_900) < 1, true);
+const wrappedSummary = wrapMeasuredText("一页内容必须完整呈现并保持手机可读", 320, (value) => Array.from(value).length * 40);
+assert.equal(wrappedSummary.length > 1, true);
+assert.equal(wrappedSummary.every((line) => Array.from(line).length * 40 <= 320), true);
 
 const close = buildVideoStoryboard(snapshot, "close", { reportUrl });
 assert.equal(close.mode, "close");
