@@ -112,6 +112,21 @@ assert.equal(actions.includes('section: "hotlist"'), true);
 assert.equal(actions.includes("下载当日热点图片"), true);
 assert.equal(actions.includes("下载个股热榜图片"), true);
 assert.equal(actions.includes("PDF"), false);
+assert.equal(actions.includes("ReportVideoActions"), true);
+
+const videoActionsPath = "components/osint-reports/ReportVideoActions.tsx";
+assert.equal(existsSync(resolve(videoActionsPath)), true);
+const videoActions = read(videoActionsPath);
+for (const contract of [
+  "生成早报短视频",
+  "生成收盘短视频",
+  "generateReportVideo",
+  "buildVideoStoryboard",
+  "STALE_CLOSE_DATA",
+  "生成进度",
+]) {
+  assert.equal(videoActions.includes(contract), true, `missing video action contract: ${contract}`);
+}
 
 const view = read("components/osint-reports/DailyReportView.tsx");
 assert.equal(view.includes('{ value: "stories", label: "当日热点" }'), true);

@@ -2,6 +2,7 @@
 
 import { ImageDown } from "lucide-react";
 import { DAILY_REPORT_IMAGE_LAYOUT_VERSION } from "@/lib/osint/daily-report/image-contract";
+import { ReportVideoActions } from "./ReportVideoActions";
 
 const EXPORT_ACTIONS = [
   { section: "stories", label: "下载当日热点图片" },
@@ -32,6 +33,7 @@ export function PrintActions({
           </a>
         ))}
       </div>
+      <ReportVideoActions reportId={reportId} exportReady={exportReady} />
       {!exportReady && (
         <p className="text-sm text-amber-300" role="alert">
           水印或免责声明校验未通过，导出已禁用。
