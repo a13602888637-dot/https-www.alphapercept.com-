@@ -11,6 +11,16 @@ export function sceneIndexAtTime(storyboard: VideoStoryboard, elapsedMs: number)
   return Math.min(storyboard.scenes.length - 1, Math.floor((elapsedMs - COVER_END) / sceneDuration));
 }
 
+export function sceneOpacityAtTime(storyboard: VideoStoryboard, elapsedMs: number): number {
+  const sceneIndex = sceneIndexAtTime(storyboard, elapsedMs);
+  if (sceneIndex < 0) return 0;
+  const sceneDuration = (OUTRO_START - COVER_END) / storyboard.scenes.length;
+  const local = (elapsedMs - COVER_END - sceneIndex * sceneDuration) / sceneDuration;
+  const enter = easeOut(Math.min(1, local * 3));
+  const exit = Math.min(1, Math.max(0, (1 - local) * 18));
+  return Math.min(1, enter * exit);
+}
+
 function easeOut(value: number): number {
   return 1 - Math.pow(1 - Math.max(0, Math.min(1, value)), 3);
 }
@@ -20,19 +30,23 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width:
   ctx.roundRect(x, y, width, height, radius);
 }
 
-function textLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+export function wrapMeasuredText(text: string, maxWidth: number, measure: (value: string) => number): string[] {
   const characters = Array.from(text);
   const lines: string[] = [];
   let current = "";
   for (const character of characters) {
     const next = `${current}${character}`;
-    if (current && ctx.measureText(next).width > maxWidth) {
+    if (current && measure(next) > maxWidth) {
       lines.push(current);
       current = character;
     } else current = next;
   }
   if (current) lines.push(current);
   return lines;
+}
+
+function textLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  return wrapMeasuredText(text, maxWidth, (value) => ctx.measureText(value).width);
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, theme: VideoTheme, elapsedMs: number) {
@@ -97,7 +111,7 @@ function drawScene(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, e
   const local = (elapsedMs - COVER_END - sceneIndex * sceneDuration) / sceneDuration;
   const enter = easeOut(Math.min(1, local * 3));
   ctx.save();
-  ctx.globalAlpha = Math.min(1, enter * Math.min(1, (1 - local) * 5));
+  ctx.globalAlpha = sceneOpacityAtTime(storyboard, elapsedMs);
   ctx.translate((1 - enter) * (storyboard.mode === "morning" ? 110 : -110), 0);
   ctx.fillStyle = theme.muted;
   ctx.font = "700 30px system-ui, sans-serif";
@@ -115,16 +129,21 @@ function drawScene(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, e
   for (const [index, item] of scene.items.entries()) {
     ctx.fillStyle = item.tone === "positive" ? theme.accent : item.tone === "negative" ? theme.secondary : theme.ink;
     ctx.font = "700 42px system-ui, sans-serif";
-    ctx.fillText(`${String(index + 1).padStart(2, "0")}  ${item.label}`, 118, y);
+    const labelLines = textLines(ctx, item.label, item.value ? 520 : 760).slice(0, scene.kind === "story" ? 4 : 2);
+    labelLines.forEach((line, labelIndex) => {
+      const prefix = labelIndex === 0 ? `${String(index + 1).padStart(2, "0")}  ` : "";
+      ctx.fillText(`${prefix}${line}`, labelIndex === 0 ? 118 : 178, y + labelIndex * 56);
+    });
     if (item.value) { ctx.textAlign = "right"; ctx.fillText(item.value, 944, y); ctx.textAlign = "left"; }
+    const labelHeight = Math.max(1, labelLines.length) * 56;
     if (item.detail) {
       ctx.fillStyle = theme.muted;
       ctx.font = "500 28px system-ui, sans-serif";
       const detailLines = textLines(ctx, item.detail, 760).slice(0, 2);
-      detailLines.forEach((line, detailIndex) => ctx.fillText(line, 178, y + 46 + detailIndex * 38));
-      y += 92;
+      detailLines.forEach((line, detailIndex) => ctx.fillText(line, 178, y + labelHeight + detailIndex * 38));
+      y += detailLines.length * 38 + 36;
     }
-    y += 100;
+    y += labelHeight + 44;
   }
   ctx.fillStyle = theme.muted;
   ctx.font = "600 26px system-ui, sans-serif";

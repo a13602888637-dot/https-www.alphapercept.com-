@@ -3,7 +3,7 @@ import type { OsintDailyReportSnapshot } from "../../lib/osint/daily-report/cont
 import { buildVideoStoryboard } from "../../lib/osint/daily-video/storyboard.ts";
 import { themeForDate } from "../../lib/osint/daily-video/themes.ts";
 import { compactVideoShareName, videoShareAmount } from "../../lib/osint/daily-video/copy.ts";
-import { sceneIndexAtTime } from "../../lib/osint/daily-video/canvas-renderer.ts";
+import { sceneIndexAtTime, sceneOpacityAtTime, wrapMeasuredText } from "../../lib/osint/daily-video/canvas-renderer.ts";
 import { selectVideoMimeType } from "../../lib/osint/daily-video/generate.ts";
 import { DAILY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
 
@@ -57,6 +57,10 @@ assert.equal(morning.durationMs, 12_000);
 assert.equal(sceneIndexAtTime(morning, 1_500), 0);
 assert.equal(sceneIndexAtTime(morning, 9_499), 4);
 assert.equal(sceneIndexAtTime(morning, 9_500), -1);
+assert.equal(sceneOpacityAtTime(morning, 3_000) > 0.9, true);
+const wrappedSummary = wrapMeasuredText("Beige Book。关注利率路径、美元、美债与风险资产。", 320, (value) => Array.from(value).length * 40);
+assert.equal(wrappedSummary.length > 1, true);
+assert.equal(wrappedSummary.every((line) => Array.from(line).length * 40 <= 320), true);
 assert.equal(
   selectVideoMimeType((type) => type === "video/webm;codecs=vp8,opus"),
   "video/webm;codecs=vp8,opus"
@@ -66,6 +70,16 @@ const close = buildVideoStoryboard(snapshot, "close");
 assert.equal(close.mode, "close");
 assert.notEqual(close.cover.layout, morning.cover.layout);
 assert.equal(close.scenes.length > 0, true);
+
+const withEnglishLead = {
+  ...snapshot,
+  stories: {
+    ...snapshot.stories,
+    stories: [{ ...stories[0], id: "english", title: "Exclusive Market Outlook From New York", summary: "English only", importance: 10 }, ...stories],
+  },
+};
+const chineseMorning = buildVideoStoryboard(withEnglishLead, "morning");
+assert.equal(chineseMorning.scenes.some((scene) => scene.title.includes("Exclusive Market")), false);
 
 assert.throws(
   () => buildVideoStoryboard({ ...snapshot, lhb: { ...snapshot.lhb, tradeDate: "2026-08-28" } }, "close"),

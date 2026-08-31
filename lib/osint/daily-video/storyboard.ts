@@ -1,5 +1,5 @@
 import type { OsintDailyReportSnapshot } from "../daily-report/contracts";
-import { compactShareHeadline } from "../daily-report/image-copy";
+import { compactShareHeadline, isChineseReadableText, isShareHeadlineReady } from "../daily-report/image-copy";
 import { selectReportHotMoney, selectReportStocks } from "../daily-report/story-curation";
 import { compactVideoAccountLabel, compactVideoShareName, videoShareAmount } from "./copy";
 import type { VideoMode, VideoScene, VideoStoryboard } from "./contracts";
@@ -18,7 +18,7 @@ function shanghaiTime(value: string): string {
 
 function morningScenes(report: OsintDailyReportSnapshot): VideoScene[] {
   return [...report.stories.stories]
-    .filter((story) => compactShareHeadline(story.title).length > 0)
+    .filter((story) => isShareHeadlineReady(story.title))
     .sort((left, right) => right.importance - left.importance || right.publishedAt.localeCompare(left.publishedAt))
     .slice(0, 5)
     .map((story, index) => ({
@@ -26,7 +26,7 @@ function morningScenes(report: OsintDailyReportSnapshot): VideoScene[] {
       kind: "story",
       title: compactShareHeadline(story.title),
       eyebrow: story.eventType === "upcoming" ? "未来事件" : story.tags.topic[0] || "全球动态",
-      items: [{ label: story.summary || "关注后续发展", detail: shanghaiTime(story.scheduledFor || story.publishedAt), tone: "neutral" }],
+      items: [{ label: isChineseReadableText(story.summary) ? story.summary : "关注后续发展", detail: shanghaiTime(story.scheduledFor || story.publishedAt), tone: "neutral" }],
     }));
 }
 
