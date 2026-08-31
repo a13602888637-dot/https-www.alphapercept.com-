@@ -127,6 +127,9 @@ for (const contract of [
 ]) {
   assert.equal(videoActions.includes(contract), true, `missing video action contract: ${contract}`);
 }
+assert.equal(videoActions.includes(".mp4"), true);
+assert.equal(videoActions.includes(".webm"), false);
+assert.equal(videoActions.includes("MP4"), true);
 
 const view = read("components/osint-reports/DailyReportView.tsx");
 assert.equal(view.includes('{ value: "stories", label: "当日热点" }'), true);

@@ -6,15 +6,17 @@ export interface VideoAudioHandle {
   stop: () => Promise<void>;
 }
 
-export function createVideoAudio(theme: VideoTheme, durationMs: number): VideoAudioHandle {
+export function createVideoAudio(theme: VideoTheme, durationMs: number, cueTimesMs: number[] = []): VideoAudioHandle {
   const context = new AudioContext({ sampleRate: 48_000 });
   const destination = context.createMediaStreamDestination();
   const master = context.createGain();
   master.gain.value = 0.045;
   master.connect(destination);
-  const starts = [0.15, 1.5, 3.1, 4.7, 6.3, 7.9, 9.5, 11.0];
-  starts.forEach((start, index) => {
-    if (start * 1_000 >= durationMs) return;
+  const starts = [150, ...cueTimesMs.map((value) => value + 60), Math.max(0, durationMs - 900)]
+    .filter((value, index, values) => value >= 0 && value < durationMs && values.indexOf(value) === index)
+    .sort((left, right) => left - right);
+  starts.forEach((startMs, index) => {
+    const start = startMs / 1_000;
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     oscillator.type = index % 2 === 0 ? "sine" : "triangle";

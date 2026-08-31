@@ -4,6 +4,7 @@ import { buildVideoStoryboard } from "../../lib/osint/daily-video/storyboard.ts"
 import { themeForDate, DAILY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
 import { compactVideoShareName, videoShareAmount } from "../../lib/osint/daily-video/copy.ts";
 import { pageIndexAtTime, pageTransitionAtTime, wrapMeasuredText } from "../../lib/osint/daily-video/canvas-renderer.ts";
+import { selectVideoMimeType } from "../../lib/osint/daily-video/generate.ts";
 
 const MODULES = ["宏观", "科技", "能源"] as const;
 
@@ -114,6 +115,11 @@ assert.equal(pageTransitionAtTime(morning, 5_900) < 1, true);
 const wrappedSummary = wrapMeasuredText("一页内容必须完整呈现并保持手机可读", 320, (value) => Array.from(value).length * 40);
 assert.equal(wrappedSummary.length > 1, true);
 assert.equal(wrappedSummary.every((line) => Array.from(line).length * 40 <= 320), true);
+assert.equal(
+  selectVideoMimeType((type) => type === "video/mp4;codecs=avc1.42E01E,mp4a.40.2"),
+  "video/mp4;codecs=avc1.42E01E,mp4a.40.2"
+);
+assert.equal(selectVideoMimeType((type) => type.includes("webm")), "");
 
 const close = buildVideoStoryboard(snapshot, "close", { reportUrl });
 assert.equal(close.mode, "close");
