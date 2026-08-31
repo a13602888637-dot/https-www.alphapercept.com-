@@ -3,6 +3,9 @@ import type { OsintDailyReportSnapshot } from "../../lib/osint/daily-report/cont
 import { buildVideoStoryboard } from "../../lib/osint/daily-video/storyboard.ts";
 import { themeForDate } from "../../lib/osint/daily-video/themes.ts";
 import { compactVideoShareName, videoShareAmount } from "../../lib/osint/daily-video/copy.ts";
+import { sceneIndexAtTime } from "../../lib/osint/daily-video/canvas-renderer.ts";
+import { selectVideoMimeType } from "../../lib/osint/daily-video/generate.ts";
+import { DAILY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
 
 const stories = Array.from({ length: 6 }, (_, index) => ({
   id: `story-${index}`,
@@ -40,6 +43,9 @@ const themeIds = Array.from({ length: 7 }, (_, index) => {
   return themeForDate(date).id;
 });
 assert.equal(new Set(themeIds).size, 7);
+assert.equal(new Set(DAILY_VIDEO_THEMES.map((theme) => theme.sound.join("-"))).size, 7);
+assert.equal(new Set(DAILY_VIDEO_THEMES.map((theme) => theme.morningLayout)).size, 7);
+assert.equal(new Set(DAILY_VIDEO_THEMES.map((theme) => theme.closeLayout)).size, 7);
 assert.equal(compactVideoShareName("嘉立创"), "J立创");
 assert.equal(compactVideoShareName("*ST萃华"), "C华");
 assert.equal(videoShareAmount(652436808.6), "65,244🥣");
@@ -48,6 +54,13 @@ const morning = buildVideoStoryboard(snapshot, "morning");
 assert.equal(morning.mode, "morning");
 assert.equal(morning.scenes.length, 5);
 assert.equal(morning.durationMs, 12_000);
+assert.equal(sceneIndexAtTime(morning, 1_500), 0);
+assert.equal(sceneIndexAtTime(morning, 9_499), 4);
+assert.equal(sceneIndexAtTime(morning, 9_500), -1);
+assert.equal(
+  selectVideoMimeType((type) => type === "video/webm;codecs=vp8,opus"),
+  "video/webm;codecs=vp8,opus"
+);
 
 const close = buildVideoStoryboard(snapshot, "close");
 assert.equal(close.mode, "close");
