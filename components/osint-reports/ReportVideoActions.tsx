@@ -4,7 +4,6 @@ import { Film, Loader2 } from "lucide-react";
 import { useState } from "react";
 import type { OsintDailyReportRecord } from "@/lib/osint/daily-report/contracts";
 import type { VideoMode } from "@/lib/osint/daily-video/contracts";
-import { generateReportVideo } from "@/lib/osint/daily-video/generate";
 import { buildVideoStoryboard } from "@/lib/osint/daily-video/storyboard";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -35,6 +34,7 @@ export function ReportVideoActions({ reportId, exportReady }: { reportId: string
       const reportUrl = `${window.location.origin}/osint/reports/${encodeURIComponent(reportId)}`;
       const storyboard = buildVideoStoryboard(payload.report.snapshot, mode, { reportUrl });
       setEstimatedSeconds(Math.ceil(storyboard.durationMs / 1_000));
+      const { generateReportVideo } = await import("@/lib/osint/daily-video/generate");
       const blob = await generateReportVideo(storyboard, setProgress);
       downloadBlob(blob, `alphapercept-${storyboard.date}-${mode}-${storyboard.theme.id}.mp4`);
     } catch (reason) {

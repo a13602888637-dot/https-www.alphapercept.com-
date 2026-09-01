@@ -97,7 +97,9 @@ const morningCards = morningPages.flatMap((page) => page.stories);
 assert.equal(morningCards.length, 20);
 assert.equal(new Set(morningCards.map((story) => story.id)).size, 20);
 assert.equal(morningPages.every((page) => page.stories.length === 2), true);
+assert.equal(morningPages.every((page) => new Set(page.stories.map((story) => story.module)).size === 1), true);
 assert.equal(morningCards.every((story) => story.sourceName.length > 0 && story.sourceUrl.startsWith("https://")), true);
+assert.equal(morningCards.some((story) => story.summary.includes("待补充")), false);
 for (const module of new Set(morningCards.map((story) => story.module))) {
   const indexes = morningCards.flatMap((story, index) => story.module === module ? [index] : []);
   assert.equal(indexes.at(-1)! - indexes[0] + 1, indexes.length);
@@ -134,11 +136,16 @@ const withEnglishLead = {
   ...snapshot,
   stories: {
     ...snapshot.stories,
-    stories: [{ ...stories[0], id: "english", title: "Exclusive Market Outlook From New York", summary: "English only", importance: 99 }, ...stories],
+    stories: [{ ...stories[0], id: "english", title: "纽约市场最新观察", summary: "English only", importance: 99 }, ...stories],
   },
 };
 const chineseMorning = buildVideoStoryboard(withEnglishLead, "morning", { reportUrl });
-assert.equal(chineseMorning.pages.flatMap((page) => page.kind === "stories" ? page.stories : []).some((story) => story.title.includes("Exclusive Market")), false);
+assert.equal(chineseMorning.pages.flatMap((page) => page.kind === "stories" ? page.stories : []).some((story) => story.id === "english"), false);
+
+const retailLead = { ...stories[0], id: "retail", title: "零售市场更新", importance: 99, tags: { ...stories[0].tags, topic: ["Retail"], assets: [] } };
+const retailMorning = buildVideoStoryboard({ ...snapshot, stories: { ...snapshot.stories, stories: [retailLead, ...stories] } }, "morning", { reportUrl });
+const retailCard = retailMorning.pages.flatMap((page) => page.kind === "stories" ? page.stories : []).find((story) => story.id === "retail");
+assert.notEqual(retailCard?.module, "科技产业");
 
 assert.throws(
   () => buildVideoStoryboard({ ...snapshot, lhb: { ...snapshot.lhb, tradeDate: "2026-08-28" } }, "close", { reportUrl }),

@@ -288,7 +288,7 @@ function drawStoryCard(
 }
 
 function drawStoriesPage(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, page: VideoStoriesPage) {
-  drawPageHeader(ctx, storyboard, page.module, `内容 ${page.modulePage} / ${page.modulePageTotal}`);
+  drawPageHeader(ctx, storyboard, page.module, `模块 ${page.modulePage} / ${page.modulePageTotal}`);
   const expanded = page.stories.length === 1;
   if (expanded) {
     drawStoryCard(ctx, storyboard.theme, page.stories[0], 1, SAFE_X, 230, SAFE_WIDTH, 1_430, true);

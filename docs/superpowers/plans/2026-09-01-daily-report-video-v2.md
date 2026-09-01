@@ -101,7 +101,7 @@ export interface BuildVideoStoryboardOptions {
 }
 ```
 
-`storyboard.ts` 使用稳定模块分组：每个模块两条一页；奇数末条独占一页。动态时长为 `cover 1800 + contentPages * (morning ? 4200 : 4800) + 1200`。
+`storyboard.ts` 使用稳定大模块分组：每个模块两条一页；奇数余项统一进入“综合观察”模块后成对分页，无法成对的单条不入选。动态时长为 `cover 1800 + contentPages * (morning ? 4200 : 4800) + 1200`。
 
 - [ ] **Step 4: 运行 GREEN**
 

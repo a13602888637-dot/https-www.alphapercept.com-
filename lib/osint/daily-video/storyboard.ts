@@ -37,11 +37,14 @@ function hasChinese(value: string): boolean {
 
 function storyModule(story: OsintStory): string {
   if (story.eventType === "upcoming") return "未来事件";
-  const labels = [...story.tags.topic, ...story.tags.assets].join(" ").toLowerCase();
-  if (/宏观|货币|央行|利率|通胀|债券|macro|rates/u.test(labels)) return "宏观政策";
-  if (/地缘|外交|制裁|国防|冲突|战争/u.test(labels)) return "国际局势";
-  if (/能源|原油|天然气|大宗|黄金|白银|铜/u.test(labels)) return "能源商品";
-  if (/科技|人工智能|ai|芯片|半导体|英伟达/u.test(labels)) return "科技产业";
+  const labels = [...story.tags.topic, ...story.tags.assets]
+    .map((label) => label.trim().toLowerCase())
+    .filter(Boolean);
+  const matches = (keywords: string[]) => labels.some((label) => keywords.some((keyword) => label.includes(keyword)));
+  if (matches(["宏观", "货币", "央行", "利率", "通胀", "债券", "macro", "rates"])) return "宏观政策";
+  if (matches(["地缘", "外交", "制裁", "国防", "冲突", "战争"])) return "国际局势";
+  if (matches(["能源", "原油", "天然气", "大宗", "黄金", "白银", "铜"])) return "能源商品";
+  if (labels.some((label) => label === "ai") || matches(["科技", "人工智能", "芯片", "半导体", "英伟达"])) return "科技产业";
   return story.tags.topic.find(hasChinese) ? "市场公司" : "全球动态";
 }
 
@@ -65,9 +68,7 @@ function toStoryCard(story: OsintStory): VideoStoryCard {
     id: story.id,
     module: storyModule(story),
     title: compactShareHeadline(story.title),
-    summary: isChineseReadableText(story.summary)
-      ? story.summary.trim()
-      : "信息摘要待补充，请通过下方来源查看原文。",
+    summary: story.summary.trim(),
     tags: storyTags(story),
     publishedAt: shanghaiTime(story.scheduledFor || story.publishedAt),
     sourceName: source?.name?.trim() || "公开来源",
@@ -76,34 +77,47 @@ function toStoryCard(story: OsintStory): VideoStoryCard {
 }
 
 function morningPages(report: OsintDailyReportSnapshot, reportUrl: string): { pages: VideoPage[]; selected: VideoStoryCard[]; moduleCount: number; sourceCount: number } {
-  const selected = [...report.stories.stories]
-    .filter((story) => isShareHeadlineReady(story.title))
+  const candidates = [...report.stories.stories]
+    .filter((story) => isShareHeadlineReady(story.title) && isChineseReadableText(story.summary))
     .sort((left, right) => right.importance - left.importance || right.publishedAt.localeCompare(left.publishedAt))
     .slice(0, 20)
     .map(toStoryCard);
 
   const grouped = new Map<string, VideoStoryCard[]>();
-  for (const story of selected) {
+  for (const story of candidates) {
     const stories = grouped.get(story.module) || [];
     stories.push(story);
     grouped.set(story.module, stories);
   }
 
-  const orderedStories = [...grouped.values()].flat();
+  const balancedGroups = new Map<string, VideoStoryCard[]>();
+  const leftovers: VideoStoryCard[] = [];
+  for (const [module, stories] of grouped) {
+    const evenCount = stories.length - (stories.length % 2);
+    if (evenCount > 0) balancedGroups.set(module, stories.slice(0, evenCount));
+    if (evenCount < stories.length) leftovers.push(stories[stories.length - 1]);
+  }
+  const balancedLeftovers = leftovers
+    .slice(0, leftovers.length - (leftovers.length % 2))
+    .map((story) => ({ ...story, module: "综合观察" }));
+  if (balancedLeftovers.length > 0) balancedGroups.set("综合观察", balancedLeftovers);
+
   const contentPages: VideoStoriesPage[] = [];
-  const pageTotal = Math.ceil(orderedStories.length / 2);
-  for (let index = 0; index < orderedStories.length; index += 2) {
-    const pageStories = orderedStories.slice(index, index + 2);
-    contentPages.push({
-      kind: "stories",
-      module: [...new Set(pageStories.map((story) => story.module))].join(" / "),
-      modulePage: Math.floor(index / 2) + 1,
-      modulePageTotal: pageTotal,
-      stories: pageStories,
-      reportUrl,
-    });
+  for (const [module, stories] of balancedGroups) {
+    const modulePageTotal = stories.length / 2;
+    for (let index = 0; index < stories.length; index += 2) {
+      contentPages.push({
+        kind: "stories",
+        module,
+        modulePage: Math.floor(index / 2) + 1,
+        modulePageTotal,
+        stories: stories.slice(index, index + 2),
+        reportUrl,
+      });
+    }
   }
 
+  const selected = [...balancedGroups.values()].flat();
   const sourceCount = new Set(selected.map((story) => story.sourceName)).size;
   const cover: VideoPage = {
     kind: "cover",
