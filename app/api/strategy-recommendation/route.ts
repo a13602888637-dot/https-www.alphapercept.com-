@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { getAuthUserId } from "@/lib/auth-helpers"
+import { logDeepSeekUsage } from "@/lib/ai/deepseek-usage"
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
 
@@ -94,6 +95,7 @@ export async function GET(req: Request) {
     }
 
     const aiData = await response.json()
+    logDeepSeekUsage("strategy-recommendation", aiData)
     const content = aiData.choices?.[0]?.message?.content || '[]'
 
     // Parse the JSON response

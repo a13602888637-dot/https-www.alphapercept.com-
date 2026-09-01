@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { OsintStory, ScheduledPrecision, ScheduledSession, StorySnapshot, StoryTags } from "./contracts";
+import { logDeepSeekUsage } from "../ai/deepseek-usage";
 import { fetchAihotItemsV1 } from "./aihot-v1";
 import { createRefreshCoordinator } from "./refresh-coordinator";
 import { fetchScheduledEvents } from "./scheduled-events";
@@ -345,6 +346,7 @@ async function enrichStoryBatch(stories: OsintStory[], apiKey: string, fetchImpl
     });
     if (!response.ok) return null;
     const payload = await response.json();
+    logDeepSeekUsage("osint-story-batch", payload);
     const content = String(payload?.choices?.[0]?.message?.content ?? "").trim();
     const start = content.indexOf("{");
     const end = content.lastIndexOf("}");

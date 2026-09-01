@@ -9,6 +9,7 @@ import * as path from 'path';
 import { MarketData, fetchMarketDataWithFallback, fetchMultipleStocks } from './data_crawler';
 import { NewsItem, fetchNewsFromMultipleSources, analyzeNewsSummary } from './news_crawler';
 import { prisma } from '../lib/db';
+import { logDeepSeekUsage } from '../lib/ai/deepseek-usage';
 
 // DeepSeek API配置
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
@@ -547,6 +548,7 @@ async function callDeepSeekAPI(
       }
 
       const data = await response.json() as any;
+      logDeepSeekUsage("deepseek-agent", data);
 
       if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
         throw new Error('DeepSeek API返回了无效的响应格式');

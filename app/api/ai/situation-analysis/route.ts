@@ -7,6 +7,7 @@
  */
 
 import { NextRequest } from "next/server";
+import { logDeepSeekUsage } from "@/lib/ai/deepseek-usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -159,6 +160,7 @@ export async function POST(request: NextRequest) {
     }
 
     const deepseekData = await deepseekRes.json();
+    logDeepSeekUsage("osint-situation", deepseekData);
     const content = deepseekData.choices?.[0]?.message?.content ?? "";
 
     // Parse JSON from response (handle potential markdown wrapping)

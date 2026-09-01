@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUserId } from '@/lib/auth-helpers';
+import { logDeepSeekUsage } from '@/lib/ai/deepseek-usage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -448,6 +449,7 @@ async function callDeepSeek(systemPrompt: string): Promise<string> {
   }
 
   const data = await response.json();
+  logDeepSeekUsage("generate-strategy", data);
   return data.choices?.[0]?.message?.content || '';
 }
 

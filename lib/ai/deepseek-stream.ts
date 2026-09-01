@@ -40,6 +40,7 @@ export async function callDeepSeekStream(options: DeepSeekStreamOptions): Promis
       model: options.model || DEEPSEEK_MODEL,
       messages: options.messages,
       stream: true,
+      stream_options: { include_usage: true },
       temperature: options.temperature ?? 0.7,
       max_tokens: options.max_tokens ?? 2000,
     }),

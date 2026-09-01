@@ -5,6 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { callDeepSeekStream, createSSEEncoder, DeepSeekMessage } from '@/lib/ai/deepseek-stream';
+import { logDeepSeekUsage } from '@/lib/ai/deepseek-usage';
 import { buildSystemPrompt } from '@/lib/ai/prompts';
 
 export const runtime = 'nodejs';
@@ -260,6 +261,7 @@ export async function POST(request: NextRequest) {
 
                 try {
                   const parsed = JSON.parse(data);
+                  if (parsed.usage) logDeepSeekUsage("ai-stream", parsed);
                   const content = parsed.choices?.[0]?.delta?.content;
 
                   if (content) {

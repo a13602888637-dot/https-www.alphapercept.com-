@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
+import { logDeepSeekUsage } from "../../../../lib/ai/deepseek-usage";
 import { fetchMultipleStocks, MarketData } from "../../../../skills/data_crawler";
 
 export const dynamic = 'force-dynamic';
@@ -117,6 +118,7 @@ async function callDeepSeekNonStream(prompt: string): Promise<string> {
   }
 
   const data = await response.json();
+  logDeepSeekUsage("intelligence-feed", data);
   return data.choices?.[0]?.message?.content || '';
 }
 
