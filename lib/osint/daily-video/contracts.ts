@@ -81,10 +81,11 @@ export type VideoPage = VideoCoverPage | VideoStoriesPage | VideoRankingPage | V
 export interface VideoStoryboard {
   mode: VideoMode;
   date: string;
+  dataDate: string;
   durationMs: number;
-  coverDurationMs: 1_800;
+  coverDurationMs: number;
   pageDurationMs: number;
-  outroDurationMs: 1_200;
+  outroDurationMs: number;
   theme: VideoTheme;
   pages: VideoPage[];
   outro: {

@@ -122,7 +122,6 @@ for (const contract of [
   "生成收盘短视频",
   "generateReportVideo",
   "buildVideoStoryboard",
-  "STALE_CLOSE_DATA",
   "生成进度",
 ]) {
   assert.equal(videoActions.includes(contract), true, `missing video action contract: ${contract}`);
@@ -131,6 +130,7 @@ assert.equal(videoActions.includes(".mp4"), true);
 assert.equal(videoActions.includes(".webm"), false);
 assert.equal(videoActions.includes("MP4"), true);
 assert.equal(videoActions.includes('await import("@/lib/osint/daily-video/generate")'), true);
+assert.equal(videoActions.includes("STALE_CLOSE_DATA"), false);
 
 const videoGenerator = read("lib/osint/daily-video/generate.ts");
 const mp4Encoder = read("lib/osint/daily-video/mp4-encoder.ts");

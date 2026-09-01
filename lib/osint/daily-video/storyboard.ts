@@ -15,10 +15,13 @@ import type {
 } from "./contracts";
 import { themeForDate } from "./themes";
 
-const COVER_DURATION_MS = 1_800 as const;
-const OUTRO_DURATION_MS = 1_200 as const;
-const MORNING_PAGE_DURATION_MS = 4_200;
-const CLOSE_PAGE_DURATION_MS = 4_800;
+const MORNING_COVER_DURATION_MS = 1_200;
+const MORNING_PAGE_DURATION_MS = 2_400;
+const MORNING_OUTRO_DURATION_MS = 800;
+const CLOSE_COVER_DURATION_MS = 1_200;
+const CLOSE_PAGE_DURATION_MS = 3_600;
+const CLOSE_OUTRO_DURATION_MS = 800;
+const MORNING_STORIES_PER_PAGE = 3;
 
 function shanghaiTime(value: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -33,6 +36,44 @@ function shanghaiTime(value: string): string {
 
 function hasChinese(value: string): boolean {
   return /\p{Script=Han}/u.test(value);
+}
+
+export function normalizeVideoHeadline(value: string): string {
+  return compactShareHeadline(value)
+    .split(/[|｜]/u)[0]
+    .replace(/20\d{2}年\d{1,2}月\d{1,2}日/gu, "")
+    .replace(/\d{1,2}月\d{1,2}日/gu, "")
+    .replace(/重点新闻标题与核心变化|早间更新|最新|新闻|分析/gu, "")
+    .replace(/[^\p{Letter}\p{Number}]/gu, "")
+    .toLowerCase();
+}
+
+function longestCommonSubstringLength(left: string, right: string): number {
+  const previous = new Array<number>(right.length + 1).fill(0);
+  let longest = 0;
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = new Array<number>(right.length + 1).fill(0);
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      if (left[leftIndex - 1] === right[rightIndex - 1]) {
+        current[rightIndex] = previous[rightIndex - 1] + 1;
+        longest = Math.max(longest, current[rightIndex]);
+      }
+    }
+    for (let index = 0; index < current.length; index += 1) previous[index] = current[index];
+  }
+  return longest;
+}
+
+function similarHeadline(left: VideoStoryCard, right: VideoStoryCard): boolean {
+  const leftTitle = normalizeVideoHeadline(left.title);
+  const rightTitle = normalizeVideoHeadline(right.title);
+  if (!leftTitle || !rightTitle) return false;
+  const sameConcreteSource = left.sourceUrl === right.sourceUrl && !left.sourceUrl.endsWith("/osint/reports");
+  if (leftTitle === rightTitle || sameConcreteSource) return true;
+  const common = longestCommonSubstringLength(leftTitle, rightTitle);
+  const shorter = Math.min(leftTitle.length, rightTitle.length);
+  if (left.module === right.module && common >= 4 && common / shorter >= 0.22) return true;
+  return common >= 8 && common / shorter >= 0.32;
 }
 
 function storyModule(story: OsintStory): string {
@@ -77,11 +118,16 @@ function toStoryCard(story: OsintStory): VideoStoryCard {
 }
 
 function morningPages(report: OsintDailyReportSnapshot, reportUrl: string): { pages: VideoPage[]; selected: VideoStoryCard[]; moduleCount: number; sourceCount: number } {
-  const candidates = [...report.stories.stories]
+  const sortedStories = [...report.stories.stories]
     .filter((story) => isShareHeadlineReady(story.title) && isChineseReadableText(story.summary))
-    .sort((left, right) => right.importance - left.importance || right.publishedAt.localeCompare(left.publishedAt))
-    .slice(0, 20)
-    .map(toStoryCard);
+    .sort((left, right) => right.importance - left.importance || right.publishedAt.localeCompare(left.publishedAt));
+  const candidates: VideoStoryCard[] = [];
+  for (const story of sortedStories) {
+    const card = toStoryCard(story);
+    if (candidates.some((candidate) => similarHeadline(candidate, card))) continue;
+    candidates.push(card);
+    if (candidates.length === 20) break;
+  }
 
   const grouped = new Map<string, VideoStoryCard[]>();
   for (const story of candidates) {
@@ -93,25 +139,27 @@ function morningPages(report: OsintDailyReportSnapshot, reportUrl: string): { pa
   const balancedGroups = new Map<string, VideoStoryCard[]>();
   const leftovers: VideoStoryCard[] = [];
   for (const [module, stories] of grouped) {
-    const evenCount = stories.length - (stories.length % 2);
-    if (evenCount > 0) balancedGroups.set(module, stories.slice(0, evenCount));
-    if (evenCount < stories.length) leftovers.push(stories[stories.length - 1]);
+    const fullCount = stories.length - (stories.length % MORNING_STORIES_PER_PAGE);
+    if (fullCount > 0) balancedGroups.set(module, stories.slice(0, fullCount));
+    if (fullCount < stories.length) leftovers.push(...stories.slice(fullCount));
   }
+  const finalRemainder = leftovers.length % MORNING_STORIES_PER_PAGE;
+  const leftoverCount = finalRemainder === 1 ? leftovers.length - 1 : leftovers.length;
   const balancedLeftovers = leftovers
-    .slice(0, leftovers.length - (leftovers.length % 2))
+    .slice(0, leftoverCount)
     .map((story) => ({ ...story, module: "综合观察" }));
   if (balancedLeftovers.length > 0) balancedGroups.set("综合观察", balancedLeftovers);
 
   const contentPages: VideoStoriesPage[] = [];
   for (const [module, stories] of balancedGroups) {
-    const modulePageTotal = stories.length / 2;
-    for (let index = 0; index < stories.length; index += 2) {
+    const modulePageTotal = Math.ceil(stories.length / MORNING_STORIES_PER_PAGE);
+    for (let index = 0; index < stories.length; index += MORNING_STORIES_PER_PAGE) {
       contentPages.push({
         kind: "stories",
         module,
-        modulePage: Math.floor(index / 2) + 1,
+        modulePage: Math.floor(index / MORNING_STORIES_PER_PAGE) + 1,
         modulePageTotal,
-        stories: stories.slice(index, index + 2),
+        stories: stories.slice(index, index + MORNING_STORIES_PER_PAGE),
         reportUrl,
       });
     }
@@ -129,7 +177,11 @@ function morningPages(report: OsintDailyReportSnapshot, reportUrl: string): { pa
       { label: "模块", value: String(grouped.size) },
       { label: "来源", value: String(sourceCount) },
     ],
-    highlights: selected.slice(0, 6).map((story) => story.title),
+    highlights: [
+      ...[...balancedGroups.entries()].map(([module, stories]) => `${module} · ${stories.length} 条`),
+      `阅读节奏 · 每页最多 ${MORNING_STORIES_PER_PAGE} 条`,
+      `数据截至 · ${shanghaiTime(report.asOf)}`,
+    ].slice(0, 6),
     reportUrl,
   };
   return { pages: [cover, ...contentPages], selected, moduleCount: grouped.size, sourceCount };
@@ -184,25 +236,25 @@ function closePages(report: OsintDailyReportSnapshot, reportUrl: string): VideoP
     });
   }
 
-  const strongestIn = inflows[0];
-  const strongestOut = outflows[0];
-  const closeHighlights = [
-    ...inflows.slice(0, 3).map((entry) => `正向 ${entry.label} ${entry.value}`),
-    ...outflows.slice(0, 3).map((entry) => `负向 ${entry.label} ${entry.value}`),
-  ];
+  const dataDate = report.lhb.tradeDate || report.reportDate;
   const cover: VideoPage = {
     kind: "cover",
     kicker: "ALPHAPERCEPT CLOSE",
     title: "💰异动观察",
-    subtitle: `${inflows.length + outflows.length} 项变化 · ${accounts.length} 个活跃account`,
+    subtitle: `${inflows.length + outflows.length} 项变化 · ${accounts.length} 个活跃account · 数据 ${dataDate}`,
     stats: [
       { label: "变化", value: String(inflows.length + outflows.length) },
       { label: "account", value: String(accounts.length) },
-      { label: "数据源", value: report.lhb.source === "eastmoney" ? "公开" : "--" },
+      { label: "数据", value: dataDate.slice(5).replace("-", "/") },
     ],
-    highlights: closeHighlights.length > 0
-      ? closeHighlights
-      : [strongestIn ? `正向 ${strongestIn.label} ${strongestIn.value}` : strongestOut ? `负向 ${strongestOut.label} ${strongestOut.value}` : "暂无变化数据"],
+    highlights: [
+      `流入方向 · ${inflows.length} 项`,
+      `流出方向 · ${outflows.length} 项`,
+      `活跃account · ${accounts.length} 个`,
+      `榜单内容 · ${rankingPages.length} 页`,
+      `account内容 · ${accountPages.length} 页`,
+      `资金数据截至 · ${dataDate}`,
+    ],
     reportUrl,
   };
   return [cover, ...rankingPages, ...accountPages];
@@ -213,22 +265,22 @@ export function buildVideoStoryboard(
   mode: VideoMode,
   options: BuildVideoStoryboardOptions
 ): VideoStoryboard {
-  if (mode === "close" && report.lhb.tradeDate !== report.reportDate) {
-    throw new Error(`STALE_CLOSE_DATA:${report.lhb.tradeDate || "missing"}`);
-  }
   const theme = themeForDate(report.reportDate);
   const pages = mode === "morning"
     ? morningPages(report, options.reportUrl).pages
     : closePages(report, options.reportUrl);
+  const coverDurationMs = mode === "morning" ? MORNING_COVER_DURATION_MS : CLOSE_COVER_DURATION_MS;
   const pageDurationMs = mode === "morning" ? MORNING_PAGE_DURATION_MS : CLOSE_PAGE_DURATION_MS;
+  const outroDurationMs = mode === "morning" ? MORNING_OUTRO_DURATION_MS : CLOSE_OUTRO_DURATION_MS;
   const contentPageCount = Math.max(0, pages.length - 1);
   return {
     mode,
     date: report.reportDate,
-    durationMs: COVER_DURATION_MS + contentPageCount * pageDurationMs + OUTRO_DURATION_MS,
-    coverDurationMs: COVER_DURATION_MS,
+    dataDate: mode === "close" ? report.lhb.tradeDate || report.reportDate : report.reportDate,
+    durationMs: coverDurationMs + contentPageCount * pageDurationMs + outroDurationMs,
+    coverDurationMs,
     pageDurationMs,
-    outroDurationMs: OUTRO_DURATION_MS,
+    outroDurationMs,
     theme,
     pages,
     outro: {

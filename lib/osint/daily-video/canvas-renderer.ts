@@ -14,7 +14,7 @@ const WIDTH = 1080;
 const HEIGHT = 1920;
 const SAFE_X = 64;
 const SAFE_WIDTH = 952;
-const TRANSITION_MS = 220;
+const TRANSITION_MS = 280;
 
 function clamp(value: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, value));
@@ -99,18 +99,8 @@ function pageLocalTime(storyboard: VideoStoryboard, elapsedMs: number, pageIndex
 
 export function pageTransitionAtTime(storyboard: VideoStoryboard, elapsedMs: number): number {
   const pageIndex = pageIndexAtTime(storyboard, elapsedMs);
-  const { local, duration } = pageLocalTime(storyboard, elapsedMs, pageIndex);
-  const entering = easeOut(local / TRANSITION_MS);
-  const exiting = clamp((duration - local) / TRANSITION_MS);
-  return Math.min(entering, exiting);
-}
-
-function pageOffsetAtTime(storyboard: VideoStoryboard, elapsedMs: number): number {
-  const pageIndex = pageIndexAtTime(storyboard, elapsedMs);
-  const { local, duration } = pageLocalTime(storyboard, elapsedMs, pageIndex);
-  if (local < TRANSITION_MS) return (1 - easeOut(local / TRANSITION_MS)) * 92;
-  if (duration - local < TRANSITION_MS) return -(1 - clamp((duration - local) / TRANSITION_MS)) * 72;
-  return 0;
+  const { local } = pageLocalTime(storyboard, elapsedMs, pageIndex);
+  return easeOut(local / TRANSITION_MS);
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, theme: VideoTheme, elapsedMs: number) {
@@ -133,6 +123,12 @@ function drawBackground(ctx: CanvasRenderingContext2D, theme: VideoTheme, elapse
     for (let index = 0; index < 10; index += 1) { const y = 130 + index * 190; ctx.beginPath(); ctx.moveTo(-250 + progress * 280, y); ctx.lineTo(1_050 + progress * 280, y); ctx.stroke(); }
   } else if (theme.motion === "editorial") {
     ctx.fillRect(42, 70, 8, 1_780); ctx.fillRect(1_030, 70, 4, 1_780);
+    for (let index = 0; index < 12; index += 1) {
+      const y = (index * 170 + progress * 170) % 2_040 - 80;
+      ctx.beginPath(); ctx.moveTo(52, y); ctx.lineTo(1_030, y); ctx.stroke();
+    }
+    ctx.fillRect(70 + progress * 760, 118, 190, 7);
+    ctx.fillRect(820 - progress * 560, 1_740, 150, 7);
   } else if (theme.motion === "orbit") {
     ctx.translate(880, 260); ctx.rotate(progress * Math.PI * 2); for (let index = 0; index < 4; index += 1) { ctx.beginPath(); ctx.ellipse(0, 0, 90 + index * 65, 35 + index * 28, index * 0.24, 0, Math.PI * 2); ctx.stroke(); }
   } else {
@@ -164,7 +160,8 @@ function drawFooter(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, 
   ctx.fillStyle = storyboard.theme.muted;
   ctx.font = "600 24px system-ui, sans-serif";
   ctx.fillText(shortenUrl(page.reportUrl, 62), SAFE_X, 1_780);
-  ctx.fillText("公开信息整理 · 不构成投资建议", SAFE_X, 1_824);
+  const dataNote = storyboard.mode === "close" ? ` · 资金数据 ${storyboard.dataDate}` : "";
+  ctx.fillText(`公开信息整理 · 不构成投资建议${dataNote}`, SAFE_X, 1_824);
   ctx.textAlign = "right";
   ctx.fillStyle = storyboard.theme.ink;
   ctx.font = "800 25px system-ui, sans-serif";
@@ -206,7 +203,7 @@ function drawCover(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, p
 
   ctx.fillStyle = theme.muted;
   ctx.font = "800 25px system-ui, sans-serif";
-  ctx.fillText("今日重点", SAFE_X, 735);
+  ctx.fillText(storyboard.mode === "morning" ? "模块概览" : "内容概览", SAFE_X, 735);
   page.highlights.slice(0, 6).forEach((highlight, index) => {
     const y = 770 + index * 151;
     ctx.fillStyle = theme.surface;
@@ -244,7 +241,8 @@ function drawStoryCard(
   y: number,
   width: number,
   height: number,
-  expanded: boolean
+  expanded: boolean,
+  compact = false
 ) {
   ctx.fillStyle = theme.surface;
   roundedRect(ctx, x, y, width, height, 30);
@@ -253,34 +251,34 @@ function drawStoryCard(
   ctx.fillRect(x, y, 10, height);
 
   ctx.fillStyle = theme.muted;
-  ctx.font = "800 24px system-ui, sans-serif";
-  ctx.fillText(`${String(index + 1).padStart(2, "0")} · ${story.module}`, x + 38, y + 54);
+  ctx.font = compact ? "800 20px system-ui, sans-serif" : "800 24px system-ui, sans-serif";
+  ctx.fillText(`${String(index + 1).padStart(2, "0")} · ${story.module}`, x + 38, y + (compact ? 40 : 54));
 
   ctx.fillStyle = theme.ink;
-  ctx.font = expanded ? "900 56px system-ui, sans-serif" : "900 48px system-ui, sans-serif";
-  const titleLines = textLines(ctx, story.title, width - 76, expanded ? 4 : 3);
-  drawLines(ctx, titleLines, x + 38, y + 122, expanded ? 70 : 61);
+  ctx.font = compact ? "900 38px system-ui, sans-serif" : expanded ? "900 56px system-ui, sans-serif" : "900 48px system-ui, sans-serif";
+  const titleLines = textLines(ctx, story.title, width - 76, compact ? 2 : expanded ? 4 : 3);
+  drawLines(ctx, titleLines, x + 38, y + (compact ? 92 : 122), compact ? 47 : expanded ? 70 : 61);
 
-  const summaryY = y + (expanded ? 430 : 330);
+  const summaryY = y + (compact ? 205 : expanded ? 430 : 330);
   ctx.fillStyle = theme.ink;
-  ctx.font = expanded ? "600 36px system-ui, sans-serif" : "600 31px system-ui, sans-serif";
-  const summaryLines = textLines(ctx, story.summary, width - 76, expanded ? 13 : 5);
-  drawLines(ctx, summaryLines, x + 38, summaryY, expanded ? 52 : 43);
+  ctx.font = compact ? "600 25px system-ui, sans-serif" : expanded ? "600 36px system-ui, sans-serif" : "600 31px system-ui, sans-serif";
+  const summaryLines = textLines(ctx, story.summary, width - 76, compact ? 3 : expanded ? 13 : 5);
+  drawLines(ctx, summaryLines, x + 38, summaryY, compact ? 34 : expanded ? 52 : 43);
 
   let tagX = x + 38;
-  const tagY = y + height - 148;
-  story.tags.slice(0, 4).forEach((tag) => {
+  const tagY = y + height - (compact ? 105 : 148);
+  story.tags.slice(0, compact ? 3 : 4).forEach((tag) => {
     const tagWidth = Math.min(190, ctx.measureText(tag).width + 32);
     if (tagX + tagWidth > x + width - 38) return;
     tagX += drawTag(ctx, theme, tag, tagX, tagY) + 12;
   });
 
   ctx.fillStyle = theme.muted;
-  ctx.font = "650 24px system-ui, sans-serif";
-  ctx.fillText(`${story.publishedAt} · ${story.sourceName}`, x + 38, y + height - 83);
+  ctx.font = compact ? "650 18px system-ui, sans-serif" : "650 24px system-ui, sans-serif";
+  ctx.fillText(`${story.publishedAt} · ${story.sourceName}`, x + 38, y + height - (compact ? 50 : 83));
   ctx.fillStyle = theme.secondary;
-  ctx.font = "650 22px ui-monospace, SFMono-Regular, monospace";
-  ctx.fillText(shortenUrl(story.sourceUrl, expanded ? 72 : 60), x + 38, y + height - 43);
+  ctx.font = compact ? "650 16px ui-monospace, SFMono-Regular, monospace" : "650 22px ui-monospace, SFMono-Regular, monospace";
+  ctx.fillText(shortenUrl(story.sourceUrl, compact ? 78 : expanded ? 72 : 60), x + 38, y + height - (compact ? 20 : 43));
 }
 
 function drawStoriesPage(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, page: VideoStoriesPage) {
@@ -290,10 +288,11 @@ function drawStoriesPage(ctx: CanvasRenderingContext2D, storyboard: VideoStorybo
     drawStoryCard(ctx, storyboard.theme, page.stories[0], 1, SAFE_X, 230, SAFE_WIDTH, 1_430, true);
     return;
   }
-  const gap = 26;
-  const cardHeight = (1_430 - gap) / 2;
+  const compact = page.stories.length === 3;
+  const gap = compact ? 20 : 26;
+  const cardHeight = (1_430 - gap * (page.stories.length - 1)) / page.stories.length;
   page.stories.forEach((story, index) => {
-    drawStoryCard(ctx, storyboard.theme, story, index + 1, SAFE_X, 230 + index * (cardHeight + gap), SAFE_WIDTH, cardHeight, false);
+    drawStoryCard(ctx, storyboard.theme, story, index + 1, SAFE_X, 230 + index * (cardHeight + gap), SAFE_WIDTH, cardHeight, false, compact);
   });
 }
 
@@ -400,19 +399,28 @@ function drawOutro(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, e
   ctx.fillStyle = storyboard.theme.muted;
   ctx.font = "650 28px system-ui, sans-serif";
   ctx.fillText(`数据截至 ${storyboard.outro.asOf}`, SAFE_X, 952);
-  ctx.fillText(storyboard.date, SAFE_X, 1_012);
+  ctx.fillText(storyboard.mode === "close" ? `报告 ${storyboard.date} · 资金数据 ${storyboard.dataDate}` : storyboard.date, SAFE_X, 1_012);
   ctx.restore();
 }
 
 export function drawVideoFrame(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, elapsedMs: number): void {
-  drawBackground(ctx, storyboard.theme, elapsedMs);
   const pageIndex = pageIndexAtTime(storyboard, elapsedMs);
   const page = storyboard.pages[pageIndex] || storyboard.pages[0];
-  ctx.save();
-  ctx.translate(pageOffsetAtTime(storyboard, elapsedMs), 0);
-  drawPage(ctx, storyboard, page);
-  drawFooter(ctx, storyboard, page, pageIndex);
-  ctx.restore();
+  const transition = pageTransitionAtTime(storyboard, elapsedMs);
+  const drawPositionedPage = (targetPage: VideoPage, targetIndex: number, offsetX: number) => {
+    ctx.save();
+    ctx.translate(offsetX, 0);
+    drawBackground(ctx, storyboard.theme, elapsedMs);
+    drawPage(ctx, storyboard, targetPage);
+    drawFooter(ctx, storyboard, targetPage, targetIndex);
+    ctx.restore();
+  };
+  if (pageIndex > 0 && transition < 1 && elapsedMs < outroStart(storyboard)) {
+    drawPositionedPage(storyboard.pages[pageIndex - 1], pageIndex - 1, -transition * 120);
+    drawPositionedPage(page, pageIndex, (1 - transition) * WIDTH);
+  } else {
+    drawPositionedPage(page, pageIndex, 0);
+  }
   if (elapsedMs >= outroStart(storyboard)) drawOutro(ctx, storyboard, elapsedMs);
 }
 

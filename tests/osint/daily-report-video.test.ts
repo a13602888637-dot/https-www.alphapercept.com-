@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { OsintDailyReportSnapshot } from "../../lib/osint/daily-report/contracts.ts";
-import { buildVideoStoryboard } from "../../lib/osint/daily-video/storyboard.ts";
+import { buildVideoStoryboard, normalizeVideoHeadline } from "../../lib/osint/daily-video/storyboard.ts";
 import { themeForDate, DAILY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
 import { compactVideoShareName, videoShareAmount } from "../../lib/osint/daily-video/copy.ts";
 import { pageIndexAtTime, pageTransitionAtTime, wrapMeasuredText } from "../../lib/osint/daily-video/canvas-renderer.ts";
@@ -96,7 +96,8 @@ const morningPages = morning.pages.filter((page) => page.kind === "stories");
 const morningCards = morningPages.flatMap((page) => page.stories);
 assert.equal(morningCards.length, 20);
 assert.equal(new Set(morningCards.map((story) => story.id)).size, 20);
-assert.equal(morningPages.every((page) => page.stories.length === 2), true);
+assert.equal(morningPages.length, 7);
+assert.equal(morningPages.every((page) => page.stories.length >= 2 && page.stories.length <= 3), true);
 assert.equal(morningPages.every((page) => new Set(page.stories.map((story) => story.module)).size === 1), true);
 assert.equal(morningCards.every((story) => story.sourceName.length > 0 && story.sourceUrl.startsWith("https://")), true);
 assert.equal(morningCards.some((story) => story.summary.includes("待补充")), false);
@@ -106,14 +107,15 @@ for (const module of new Set(morningCards.map((story) => story.module))) {
 }
 assert.equal(morning.pages[0].kind === "cover" && morning.pages[0].highlights.length, 6);
 assert.equal(morning.pages.every((page) => page.reportUrl === reportUrl), true);
-assert.equal(morning.durationMs, 1_800 + morningPages.length * 4_200 + 1_200);
+assert.equal(morning.durationMs >= 15_000 && morning.durationMs <= 20_000, true);
+assert.equal(morning.pages[0].kind === "cover" && morning.pages[0].highlights.every((highlight) => !morningCards.some((story) => normalizeVideoHeadline(story.title) === normalizeVideoHeadline(highlight))), true);
 assert.equal(pageIndexAtTime(morning, 0), 0);
-assert.equal(pageIndexAtTime(morning, 1_800), 1);
-assert.equal(pageIndexAtTime(morning, 5_999), 1);
-assert.equal(pageIndexAtTime(morning, 6_000), 2);
-assert.equal(pageTransitionAtTime(morning, 1_800), 0);
-assert.equal(pageTransitionAtTime(morning, 2_020), 1);
-assert.equal(pageTransitionAtTime(morning, 5_900) < 1, true);
+assert.equal(pageIndexAtTime(morning, 1_200), 1);
+assert.equal(pageIndexAtTime(morning, 3_599), 1);
+assert.equal(pageIndexAtTime(morning, 3_600), 2);
+assert.equal(pageTransitionAtTime(morning, 1_200), 0);
+assert.equal(pageTransitionAtTime(morning, 1_480), 1);
+assert.equal(pageTransitionAtTime(morning, 3_500), 1);
 const wrappedSummary = wrapMeasuredText("一页内容必须完整呈现并保持手机可读", 320, (value) => Array.from(value).length * 40);
 assert.equal(wrappedSummary.length > 1, true);
 assert.equal(wrappedSummary.every((line) => Array.from(line).length * 40 <= 320), true);
@@ -123,6 +125,7 @@ assert.equal(mp4EncodingApisAvailable({ VideoEncoder: {}, AudioEncoder: {}, Vide
 const close = buildVideoStoryboard(snapshot, "close", { reportUrl });
 assert.equal(close.mode, "close");
 assert.equal(close.pages[0].kind, "cover");
+assert.equal(close.durationMs >= 15_000 && close.durationMs <= 20_000, true);
 const rankingEntries = close.pages.flatMap((page) => page.kind === "ranking" ? page.entries : []);
 const accountCards = close.pages.flatMap((page) => page.kind === "accounts" ? page.accounts : []);
 assert.equal(rankingEntries.length, 20);
@@ -130,7 +133,7 @@ assert.equal(accountCards.length, 10);
 assert.equal(close.pages.filter((page) => page.kind === "ranking").every((page) => page.entries.length <= 10), true);
 assert.equal(close.pages.filter((page) => page.kind === "accounts").every((page) => page.accounts.length <= 5), true);
 assert.equal(accountCards.every((account) => account.relatedNames.length <= 2), true);
-assert.equal(close.durationMs, 1_800 + 4 * 4_800 + 1_200);
+assert.equal(close.pages[0].kind === "cover" && close.pages[0].highlights.every((highlight) => !rankingEntries.some((entry) => highlight.includes(entry.label))), true);
 
 const withEnglishLead = {
   ...snapshot,
@@ -147,9 +150,19 @@ const retailMorning = buildVideoStoryboard({ ...snapshot, stories: { ...snapshot
 const retailCard = retailMorning.pages.flatMap((page) => page.kind === "stories" ? page.stories : []).find((story) => story.id === "retail");
 assert.notEqual(retailCard?.module, "科技产业");
 
-assert.throws(
-  () => buildVideoStoryboard({ ...snapshot, lhb: { ...snapshot.lhb, tradeDate: "2026-08-28" } }, "close", { reportUrl }),
-  /STALE_CLOSE_DATA:2026-08-28/
-);
+const duplicateLead = { ...stories[0], id: "duplicate", title: `${stories[0].title} | 早间更新 2026年8月31日`, importance: 99 };
+const deduplicatedMorning = buildVideoStoryboard({ ...snapshot, stories: { ...snapshot.stories, stories: [duplicateLead, ...stories] } }, "morning", { reportUrl });
+const normalizedTitles = deduplicatedMorning.pages.flatMap((page) => page.kind === "stories" ? page.stories : []).map((story) => normalizeVideoHeadline(story.title));
+assert.equal(normalizedTitles.filter((title) => title === normalizeVideoHeadline(stories[0].title)).length, 1);
+
+const eventA = { ...stories[0], id: "event-a", title: "新兴市场股市下跌，沃什助长美联储加息预期", importance: 99 };
+const eventB = { ...stories[1], id: "event-b", title: "美国市场震荡，沃什助长加息预期", importance: 98 };
+const eventMorning = buildVideoStoryboard({ ...snapshot, stories: { ...snapshot.stories, stories: [eventA, eventB, ...stories] } }, "morning", { reportUrl });
+const eventIds = eventMorning.pages.flatMap((page) => page.kind === "stories" ? page.stories : []).map((story) => story.id);
+assert.equal(eventIds.includes("event-a") && eventIds.includes("event-b"), false);
+
+const staleClose = buildVideoStoryboard({ ...snapshot, lhb: { ...snapshot.lhb, tradeDate: "2026-08-28" } }, "close", { reportUrl });
+assert.equal(staleClose.date, "2026-08-31");
+assert.equal(staleClose.dataDate, "2026-08-28");
 
 console.log("DAILY_REPORT_VIDEO_TEST_OK");

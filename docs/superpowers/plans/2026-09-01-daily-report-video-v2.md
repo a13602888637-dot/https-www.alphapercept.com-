@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - 输出 MP4，视频 H.264/AVC，音频 AAC-LC，1080×1920，30fps。
-- 早报最多 20 条新闻，按模块连续分页；通常每页 2 条，单条内容不跨页。
+- 早报最多 20 条新闻，按模块连续分页；每页最多 3 条，单条内容不跨页。
 - 收盘最多 20 个榜单项和 10 个 account；榜单每页 10 项、account 每页 5 个。
 - 首屏和结尾不使用大面积空白；每页固定报告链接、页码和“公开信息整理 · 不构成投资建议”。
 - 7 天主题只改变视觉皮肤和短翻页动效，不改变阅读网格。
@@ -101,7 +101,7 @@ export interface BuildVideoStoryboardOptions {
 }
 ```
 
-`storyboard.ts` 使用稳定大模块分组：每个模块两条一页；奇数余项统一进入“综合观察”模块后成对分页，无法成对的单条不入选。动态时长为 `cover 1800 + contentPages * (morning ? 4200 : 4800) + 1200`。
+`storyboard.ts` 使用稳定大模块分组：每个模块最多三条一页；余项统一进入“综合观察”模块后以 2–3 条分页，无法成组的单条不入选。早报动态时长为 `1200 + contentPages * 2400 + 800`，收盘为 `1200 + contentPages * 3600 + 800`。
 
 - [ ] **Step 4: 运行 GREEN**
 
@@ -153,7 +153,7 @@ drawAccountsPage(ctx, storyboard, page, motion);
 drawPersistentFooter(ctx, storyboard, pageIndex);
 ```
 
-新闻页使用上下两张等高卡片；单条页把摘要、标签、来源区垂直扩展。榜单页固定 10 行；account 页固定 5 卡，每卡一行名称和一行数据。转场只在每页前后 220ms 做水平翻页，不降低中段文字透明度。
+新闻页使用三张等高卡片，最后一页可用两张；榜单页固定 10 行，account 页固定 5 卡。转场使用 280ms 双页连续横向滑动，不降低中段文字透明度、不出现闪白。
 
 - [ ] **Step 4: 运行 GREEN 与边界检查**
 
