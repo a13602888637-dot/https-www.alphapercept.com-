@@ -80,10 +80,6 @@ function shortenUrl(value: string, maxLength = 54): string {
   }
 }
 
-function contentPageCount(storyboard: VideoStoryboard): number {
-  return Math.max(0, storyboard.pages.length - 1);
-}
-
 function outroStart(storyboard: VideoStoryboard): number {
   return storyboard.durationMs - storyboard.outroDurationMs;
 }
