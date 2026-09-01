@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { OsintStory, ScheduledPrecision, ScheduledSession, StorySnapshot, StoryTags } from "./contracts";
 import { fetchAihotItemsV1 } from "./aihot-v1";
+import { createRefreshCoordinator } from "./refresh-coordinator";
 import { fetchScheduledEvents } from "./scheduled-events";
 
 export interface RawStory {
@@ -46,6 +47,7 @@ const ENRICHMENT_TTL_MS = 30 * 60 * 1_000;
 let sourceCache: { results: SourceResult[]; timestamp: number } | null = null;
 const pageCache = new Map<string, { snapshot: StorySnapshot; timestamp: number }>();
 const enrichmentCache = new Map<string, { story: OsintStory; timestamp: number }>();
+const forcedRefreshCoordinator = createRefreshCoordinator<StorySnapshot>(CACHE_TTL_MS);
 
 function decodeXml(value: string): string {
   return value
@@ -738,7 +740,7 @@ async function fetchEastMoneyNews(fetchImpl: typeof fetch): Promise<SourceResult
   }
 }
 
-export async function getStorySnapshot(options: {
+export interface GetStorySnapshotOptions {
   window?: "24h" | "72h";
   limit?: number;
   page?: number;
@@ -746,7 +748,10 @@ export async function getStorySnapshot(options: {
   topic?: string | null;
   apiKey?: string | null;
   fetchImpl?: typeof fetch;
-} = {}): Promise<StorySnapshot> {
+  forceRefresh?: boolean;
+}
+
+async function loadStorySnapshot(options: GetStorySnapshotOptions = {}): Promise<StorySnapshot> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const pageSize = Math.min(50, Math.max(1, options.pageSize ?? options.limit ?? 20));
   const page = Math.max(1, Math.floor(options.page ?? 1));
@@ -754,11 +759,11 @@ export async function getStorySnapshot(options: {
   const topic = options.topic?.trim() || null;
   const pageKey = `${windowHours}|${page}|${pageSize}|${topic ?? "全部"}`;
   const cachedPage = pageCache.get(pageKey);
-  if (fetchImpl === fetch && cachedPage && Date.now() - cachedPage.timestamp < CACHE_TTL_MS) {
+  if (fetchImpl === fetch && !options.forceRefresh && cachedPage && Date.now() - cachedPage.timestamp < CACHE_TTL_MS) {
     return cachedPage.snapshot;
   }
 
-  let results = fetchImpl === fetch && sourceCache && Date.now() - sourceCache.timestamp < CACHE_TTL_MS
+  let results = fetchImpl === fetch && !options.forceRefresh && sourceCache && Date.now() - sourceCache.timestamp < CACHE_TTL_MS
     ? sourceCache.results
     : null;
   if (!results) {
@@ -835,4 +840,18 @@ export async function getStorySnapshot(options: {
   ];
   if (fetchImpl === fetch && snapshot.stories.length > 0) pageCache.set(pageKey, { snapshot, timestamp: Date.now() });
   return snapshot;
+}
+
+export async function getStorySnapshot(options: GetStorySnapshotOptions = {}): Promise<StorySnapshot> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  if (!options.forceRefresh || fetchImpl !== fetch) {
+    return loadStorySnapshot(options);
+  }
+
+  const pageSize = Math.min(50, Math.max(1, options.pageSize ?? options.limit ?? 20));
+  const page = Math.max(1, Math.floor(options.page ?? 1));
+  const windowHours = options.window === "24h" ? 24 : 72;
+  const topic = options.topic?.trim() || "全部";
+  const refreshKey = `${windowHours}|${page}|${pageSize}|${topic}`;
+  return forcedRefreshCoordinator.run(refreshKey, () => loadStorySnapshot(options));
 }

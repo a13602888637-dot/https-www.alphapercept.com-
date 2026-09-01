@@ -59,10 +59,14 @@ export function WorldBriefing() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const snapshotCacheRef = useRef(new Map<string, StorySnapshot>());
+  const requestIdRef = useRef(0);
+  const manualRefreshAbortRef = useRef<AbortController | null>(null);
 
-  const loadStories = useCallback(async (signal?: AbortSignal) => {
+  const loadStories = useCallback(async (signal?: AbortSignal, forceRefresh = false) => {
+    const requestId = ++requestIdRef.current;
     const cacheKey = `${topic}|${page}`;
-    const cachedSnapshot = snapshotCacheRef.current.get(cacheKey);
+    if (forceRefresh) snapshotCacheRef.current.delete(cacheKey);
+    const cachedSnapshot = forceRefresh ? undefined : snapshotCacheRef.current.get(cacheKey);
     if (cachedSnapshot) {
       setSnapshot(cachedSnapshot);
       setLoading(false);
@@ -71,29 +75,44 @@ export function WorldBriefing() {
     }
     try {
       const topicParam = topic === "全部" ? "" : `&topic=${encodeURIComponent(topic)}`;
-      const response = await fetch(`/api/osint/v1/stories?page=${page}&pageSize=20${topicParam}`, { signal });
+      const refreshParam = forceRefresh ? `&refresh=1&_=${Date.now()}` : "";
+      const response = await fetch(`/api/osint/v1/stories?page=${page}&pageSize=20${topicParam}${refreshParam}`, {
+        signal,
+        cache: forceRefresh ? "no-store" : "default",
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const nextSnapshot = (await response.json()) as StorySnapshot;
+      if (requestId !== requestIdRef.current) return;
       snapshotCacheRef.current.set(cacheKey, nextSnapshot);
       setSnapshot(nextSnapshot);
       setError(null);
     } catch (loadError) {
       if (loadError instanceof DOMException && loadError.name === "AbortError") return;
+      if (requestId !== requestIdRef.current) return;
       setError(loadError instanceof Error ? loadError.message : "新闻刷新失败");
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (requestId === requestIdRef.current && !signal?.aborted) setLoading(false);
     }
   }, [page, topic]);
 
   useEffect(() => {
     const controller = new AbortController();
     void loadStories(controller.signal);
-    const interval = window.setInterval(() => void loadStories(), 300_000);
     return () => {
       controller.abort();
-      window.clearInterval(interval);
+      manualRefreshAbortRef.current?.abort();
     };
   }, [loadStories]);
+
+  const handleManualRefresh = useCallback(() => {
+    if (loading) return;
+    manualRefreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    manualRefreshAbortRef.current = controller;
+    void loadStories(controller.signal, true).finally(() => {
+      if (manualRefreshAbortRef.current === controller) manualRefreshAbortRef.current = null;
+    });
+  }, [loadStories, loading]);
 
   const stories = snapshot?.stories ?? [];
   const sourceNames = useMemo(
@@ -128,7 +147,7 @@ export function WorldBriefing() {
               <Search className="h-3.5 w-3.5 text-[#718096]" /><span className="sr-only">搜索热点</span>
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索事件、资产、标签" className="min-w-0 flex-1 bg-transparent text-sm text-[#D6DEE8] outline-none placeholder:text-[#4b586b] sm:text-[11px]" />
             </label>
-            <button type="button" onClick={() => void loadStories()} disabled={loading} className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-3 text-xs text-[#718096] hover:text-[#D6DEE8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] disabled:opacity-50 sm:h-9 sm:w-auto sm:text-[10px]">
+            <button type="button" onClick={handleManualRefresh} disabled={loading} aria-busy={loading} className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-[#1F2A3A] bg-[#0D1420] px-3 text-xs text-[#718096] hover:text-[#D6DEE8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-auto sm:text-[10px]">
               <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`} />刷新新闻
             </button>
           </div>

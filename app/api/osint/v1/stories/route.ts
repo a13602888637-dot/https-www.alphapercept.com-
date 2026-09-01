@@ -7,6 +7,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const { page, pageSize, topic } = parseStoryRequest(request.nextUrl.searchParams);
-  const snapshot = await getStorySnapshot({ window: "72h", page, pageSize, topic });
-  return jsonWithEtag(request, snapshot, "public, s-maxage=300, stale-while-revalidate=900");
+  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+  const snapshot = await getStorySnapshot({ window: "72h", page, pageSize, topic, forceRefresh });
+  const cacheControl = forceRefresh
+    ? "private, no-store"
+    : "private, max-age=0, must-revalidate";
+  return jsonWithEtag(request, snapshot, cacheControl);
 }
