@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
 import { logDeepSeekUsage } from "../../../../lib/ai/deepseek-usage";
+import { cronAccessDecision } from "../../../../lib/auth/cron-access";
 import { fetchMultipleStocks, MarketData } from "../../../../skills/data_crawler";
 
 export const dynamic = 'force-dynamic';
@@ -122,15 +123,17 @@ async function callDeepSeekNonStream(prompt: string): Promise<string> {
   return data.choices?.[0]?.message?.content || '';
 }
 
-export async function POST(req: Request) {
+async function handleGenerate(req: Request) {
   try {
-    // Verify API key for security (use a simple shared secret)
-    const { searchParams } = new URL(req.url);
-    const cronSecret = searchParams.get('secret');
-    const expectedSecret = process.env.CRON_SECRET;
-
-    // Allow if CRON_SECRET is not set (development) or matches
-    if (expectedSecret && cronSecret !== expectedSecret) {
+    const access = cronAccessDecision(
+      req.headers.get("authorization"),
+      process.env.CRON_SECRET,
+      process.env.NODE_ENV,
+    );
+    if (access === "misconfigured") {
+      return NextResponse.json({ error: "Cron authentication is not configured" }, { status: 503 });
+    }
+    if (access !== "allow") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -218,8 +221,5 @@ export async function POST(req: Request) {
   }
 }
 
-// GET handler for Vercel Cron Jobs
-export async function GET(req: Request) {
-  // Vercel Cron sends GET requests
-  return POST(req);
-}
+export const GET = handleGenerate;
+export const POST = handleGenerate;

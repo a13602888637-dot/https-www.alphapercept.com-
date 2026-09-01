@@ -18,7 +18,7 @@ const isOwnerApi = createRouteMatcher([
   "/api/ai/stream(.*)",
   "/api/ai/situation-analysis(.*)",
   "/api/ai/generate-strategy(.*)",
-  "/api/strategy-recommendation(.*)",
+  "/api/strategy-recommendation",
   "/api/analyze-watchlist(.*)",
 ]);
 

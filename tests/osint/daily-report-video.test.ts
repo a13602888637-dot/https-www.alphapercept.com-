@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { OsintDailyReportSnapshot } from "../../lib/osint/daily-report/contracts.ts";
 import { buildVideoStoryboard, normalizeVideoHeadline } from "../../lib/osint/daily-video/storyboard.ts";
 import { themeForDate, DAILY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
@@ -164,5 +166,9 @@ assert.equal(eventIds.includes("event-a") && eventIds.includes("event-b"), false
 const staleClose = buildVideoStoryboard({ ...snapshot, lhb: { ...snapshot.lhb, tradeDate: "2026-08-28" } }, "close", { reportUrl });
 assert.equal(staleClose.date, "2026-08-31");
 assert.equal(staleClose.dataDate, "2026-08-28");
+
+const canvasRenderer = readFileSync(resolve("lib/osint/daily-video/canvas-renderer.ts"), "utf8");
+assert.equal(canvasRenderer.includes("calendarOffset"), true);
+assert.equal(canvasRenderer.includes("calendarPulse"), true);
 
 console.log("DAILY_REPORT_VIDEO_TEST_OK");

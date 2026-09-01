@@ -20,7 +20,7 @@ for (const protectedPath of [
   "/api/ai/stream(.*)",
   "/api/ai/situation-analysis(.*)",
   "/api/ai/generate-strategy(.*)",
-  "/api/strategy-recommendation(.*)",
+  "/api/strategy-recommendation",
   "/api/analyze-watchlist(.*)",
 ]) {
   assert.equal(middleware.includes(protectedPath), true, `middleware must protect ${protectedPath}`);
@@ -31,6 +31,7 @@ assert.equal(middleware.includes('"/api/osint/v1/reports(.*)"'), true);
 assert.equal(middleware.includes('"/osint(.*)"'), true);
 assert.equal(middleware.includes("OSINT_ALLOWED_CLERK_USER_IDS"), true);
 assert.equal(middleware.includes("ownerAccessDecision"), true);
+assert.equal(middleware.includes('"/api/strategy-recommendation(.*)"'), false);
 assert.equal(signUpPage.includes('redirect("/sign-in?reason=registration-closed")'), true);
 assert.equal(signUpPage.includes("<SignUp"), false);
 

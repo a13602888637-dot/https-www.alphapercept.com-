@@ -58,5 +58,9 @@ for (const [file, expected] of usageIntegrations) {
 
 const streamClient = readFileSync(resolve("lib/ai/deepseek-stream.ts"), "utf8");
 assert.equal(streamClient.includes("stream_options: { include_usage: true }"), true);
+const streamRoute = readFileSync(resolve("app/api/ai/stream/route.ts"), "utf8");
+assert.equal(streamRoute.includes('let pending = ""'), true);
+assert.equal(streamRoute.includes("let usageLogged = false"), true);
+assert.equal(streamRoute.includes("if (parsed.usage && !usageLogged)"), true);
 
 console.log("DEEPSEEK_USAGE_OK");

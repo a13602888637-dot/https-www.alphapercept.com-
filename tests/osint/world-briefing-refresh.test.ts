@@ -20,5 +20,9 @@ assert.equal(worldBriefing.includes("setInterval(() => void loadStories(), 300_0
 assert.equal(storiesRoute.includes('"private, no-store"'), true);
 assert.equal(storiesRoute.includes('"private, max-age=0, must-revalidate"'), true);
 assert.equal(storyService.includes("createRefreshCoordinator"), true);
+assert.equal(storyService.includes('forcedRefreshCoordinator.run("global"'), true);
+assert.equal(storyService.includes("const refreshKey ="), false);
+assert.equal(storyService.includes("hasUsableSourceResult"), true);
+assert.equal(storyService.includes("sourceCache = { results, timestamp: Date.now() }"), false);
 
 console.log("WORLD_BRIEFING_REFRESH_OK");

@@ -43,6 +43,10 @@ interface SourceResult {
   error?: string | null;
 }
 
+function hasUsableSourceResult(results: SourceResult[]): boolean {
+  return results.some((result) => result.ok && result.stories.length > 0);
+}
+
 const CACHE_TTL_MS = 5 * 60 * 1_000;
 const ENRICHMENT_TTL_MS = 30 * 60 * 1_000;
 let sourceCache: { results: SourceResult[]; timestamp: number } | null = null;
@@ -805,10 +809,15 @@ async function loadStorySnapshot(options: GetStorySnapshotOptions = {}): Promise
       error: source.error,
       stories: scheduled.stories.filter((story) => story.sourceName === storySourceNames[source.name]),
     }));
-    results = [...standardResults, ...scheduledResults];
-    if (fetchImpl === fetch) {
-      sourceCache = { results, timestamp: Date.now() };
+    const nextResults = [...standardResults, ...scheduledResults];
+    if (fetchImpl === fetch && hasUsableSourceResult(nextResults)) {
+      results = nextResults;
+      sourceCache = { results: nextResults, timestamp: Date.now() };
       pageCache.clear();
+    } else if (fetchImpl === fetch && sourceCache) {
+      results = sourceCache.results;
+    } else {
+      results = nextResults;
     }
   }
 
@@ -850,10 +859,21 @@ export async function getStorySnapshot(options: GetStorySnapshotOptions = {}): P
     return loadStorySnapshot(options);
   }
 
-  const pageSize = Math.min(50, Math.max(1, options.pageSize ?? options.limit ?? 20));
-  const page = Math.max(1, Math.floor(options.page ?? 1));
-  const windowHours = options.window === "24h" ? 24 : 72;
-  const topic = options.topic?.trim() || "全部";
-  const refreshKey = `${windowHours}|${page}|${pageSize}|${topic}`;
-  return forcedRefreshCoordinator.run(refreshKey, () => loadStorySnapshot(options));
+  await forcedRefreshCoordinator.run("global", async () => {
+    const warmSnapshot = await loadStorySnapshot({
+      window: options.window,
+      page: 1,
+      pageSize: 20,
+      apiKey: options.apiKey,
+      fetchImpl,
+      forceRefresh: true,
+    });
+    const hasFreshOrStaleSource = warmSnapshot.sources.some((source) =>
+      source.name !== "持久缓存" && source.ok && source.count > 0
+    );
+    if (!hasFreshOrStaleSource) throw new Error("No usable OSINT story source is available");
+    return warmSnapshot;
+  });
+
+  return loadStorySnapshot({ ...options, forceRefresh: false });
 }

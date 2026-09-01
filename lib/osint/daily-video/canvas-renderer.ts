@@ -132,7 +132,15 @@ function drawBackground(ctx: CanvasRenderingContext2D, theme: VideoTheme, elapse
   } else if (theme.motion === "orbit") {
     ctx.translate(880, 260); ctx.rotate(progress * Math.PI * 2); for (let index = 0; index < 4; index += 1) { ctx.beginPath(); ctx.ellipse(0, 0, 90 + index * 65, 35 + index * 28, index * 0.24, 0, Math.PI * 2); ctx.stroke(); }
   } else {
-    for (let row = 0; row < 9; row += 1) for (let column = 0; column < 5; column += 1) ctx.fillRect(80 + column * 205, 100 + row * 195, 74, 54);
+    const calendarOffset = progress * 195;
+    const calendarPulse = 1 + Math.sin(progress * Math.PI * 2) * 0.08;
+    for (let row = 0; row < 10; row += 1) {
+      for (let column = 0; column < 5; column += 1) {
+        const y = (100 + row * 195 + calendarOffset) % 2_050 - 100;
+        const size = 74 * calendarPulse;
+        ctx.fillRect(80 + column * 205, y, size, 54 * calendarPulse);
+      }
+    }
   }
   ctx.restore();
 }
