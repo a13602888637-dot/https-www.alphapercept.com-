@@ -36,9 +36,13 @@ function hasChinese(value: string): boolean {
 }
 
 function storyModule(story: OsintStory): string {
-  return story.eventType === "upcoming"
-    ? "未来事件"
-    : story.tags.topic.find(hasChinese) || "全球动态";
+  if (story.eventType === "upcoming") return "未来事件";
+  const labels = [...story.tags.topic, ...story.tags.assets].join(" ").toLowerCase();
+  if (/宏观|货币|央行|利率|通胀|债券|macro|rates/u.test(labels)) return "宏观政策";
+  if (/地缘|外交|制裁|国防|冲突|战争/u.test(labels)) return "国际局势";
+  if (/能源|原油|天然气|大宗|黄金|白银|铜/u.test(labels)) return "能源商品";
+  if (/科技|人工智能|ai|芯片|半导体|英伟达/u.test(labels)) return "科技产业";
+  return story.tags.topic.find(hasChinese) ? "市场公司" : "全球动态";
 }
 
 function storyTags(story: OsintStory): string[] {
@@ -85,19 +89,19 @@ function morningPages(report: OsintDailyReportSnapshot, reportUrl: string): { pa
     grouped.set(story.module, stories);
   }
 
+  const orderedStories = [...grouped.values()].flat();
   const contentPages: VideoStoriesPage[] = [];
-  for (const [module, stories] of grouped) {
-    const modulePageTotal = Math.ceil(stories.length / 2);
-    for (let index = 0; index < stories.length; index += 2) {
-      contentPages.push({
-        kind: "stories",
-        module,
-        modulePage: Math.floor(index / 2) + 1,
-        modulePageTotal,
-        stories: stories.slice(index, index + 2),
-        reportUrl,
-      });
-    }
+  const pageTotal = Math.ceil(orderedStories.length / 2);
+  for (let index = 0; index < orderedStories.length; index += 2) {
+    const pageStories = orderedStories.slice(index, index + 2);
+    contentPages.push({
+      kind: "stories",
+      module: [...new Set(pageStories.map((story) => story.module))].join(" / "),
+      modulePage: Math.floor(index / 2) + 1,
+      modulePageTotal: pageTotal,
+      stories: pageStories,
+      reportUrl,
+    });
   }
 
   const sourceCount = new Set(selected.map((story) => story.sourceName)).size;
@@ -111,7 +115,7 @@ function morningPages(report: OsintDailyReportSnapshot, reportUrl: string): { pa
       { label: "模块", value: String(grouped.size) },
       { label: "来源", value: String(sourceCount) },
     ],
-    highlights: selected.slice(0, 3).map((story) => story.title),
+    highlights: selected.slice(0, 6).map((story) => story.title),
     reportUrl,
   };
   return { pages: [cover, ...contentPages], selected, moduleCount: grouped.size, sourceCount };
@@ -168,6 +172,10 @@ function closePages(report: OsintDailyReportSnapshot, reportUrl: string): VideoP
 
   const strongestIn = inflows[0];
   const strongestOut = outflows[0];
+  const closeHighlights = [
+    ...inflows.slice(0, 3).map((entry) => `正向 ${entry.label} ${entry.value}`),
+    ...outflows.slice(0, 3).map((entry) => `负向 ${entry.label} ${entry.value}`),
+  ];
   const cover: VideoPage = {
     kind: "cover",
     kicker: "ALPHAPERCEPT CLOSE",
@@ -178,10 +186,9 @@ function closePages(report: OsintDailyReportSnapshot, reportUrl: string): VideoP
       { label: "account", value: String(accounts.length) },
       { label: "数据源", value: report.lhb.source === "eastmoney" ? "公开" : "--" },
     ],
-    highlights: [
-      strongestIn ? `正向 ${strongestIn.label} ${strongestIn.value}` : "暂无正向数据",
-      strongestOut ? `负向 ${strongestOut.label} ${strongestOut.value}` : "暂无负向数据",
-    ],
+    highlights: closeHighlights.length > 0
+      ? closeHighlights
+      : [strongestIn ? `正向 ${strongestIn.label} ${strongestIn.value}` : strongestOut ? `负向 ${strongestOut.label} ${strongestOut.value}` : "暂无变化数据"],
     reportUrl,
   };
   return [cover, ...rankingPages, ...accountPages];

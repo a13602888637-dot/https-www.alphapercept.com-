@@ -12,8 +12,9 @@
 - 视频：H.264/AVC，1080×1920，30fps。
 - 音频：AAC-LC，48kHz，双声道。
 - 文件名：`alphapercept-YYYY-MM-DD-morning|close-<theme>.mp4`。
-- Chrome 当前环境已验证原生支持 `video/mp4;codecs=avc1.42E01E,mp4a.40.2`，因此继续使用 Canvas、Web Audio 和 MediaRecorder，不新增视频编码依赖。
-- 若浏览器不支持 H.264/AAC MP4，明确提示改用最新版 Chrome，不生成伪 MP4，也不回退成改扩展名的 WebM。
+- Chrome MediaRecorder 的 Canvas→MP4 路径实测出现时长压缩和 AAC 丢失，因此不用 MediaRecorder 生成最终文件。
+- 使用浏览器 WebCodecs 离线编码 H.264 Baseline Level 4.0（`avc1.420028`）和 AAC-LC（`mp4a.40.2`），再由锁定版本 `mp4-muxer@5.2.2` 封装 MP4。该库约 156KB、无安装脚本，封装在单一模块内；已知风险是上游停止维护。
+- 若浏览器不支持所需 WebCodecs，明确提示改用最新版 Chrome，不生成伪 MP4，也不回退成改扩展名的 WebM。
 
 ## 共同阅读规则
 
@@ -77,7 +78,8 @@
 - `contracts.ts`：分镜改为 `VideoPage`，支持新闻双卡、榜单双页、account 五卡和页面级来源。
 - `storyboard.ts`：20 条新闻模块分页；20 项榜单和 10 个 account 分页；动态计算时长。
 - `canvas-renderer.ts`：高密度杂志网格、模块页眉、固定链接页脚、短翻页转场。
-- `generate.ts`：只选择 H.264/AAC MP4；缺少支持时抛出 `MP4_RECORDING_UNSUPPORTED`。
+- `mp4-encoder.ts`：离线绘制每一帧、生成原创提示音 PCM、编码 H.264/AAC 并封装 MP4。
+- `generate.ts`：创建 Canvas 并调用 MP4 编码器；缺少支持时抛出 `MP4_RECORDING_UNSUPPORTED`。
 - `ReportVideoActions.tsx`：传入报告 URL、下载 `.mp4`，展示 MP4 浏览器提示。
 
 ## 验证标准

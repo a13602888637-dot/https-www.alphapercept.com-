@@ -4,7 +4,7 @@ import { buildVideoStoryboard } from "../../lib/osint/daily-video/storyboard.ts"
 import { themeForDate, DAILY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
 import { compactVideoShareName, videoShareAmount } from "../../lib/osint/daily-video/copy.ts";
 import { pageIndexAtTime, pageTransitionAtTime, wrapMeasuredText } from "../../lib/osint/daily-video/canvas-renderer.ts";
-import { selectVideoMimeType } from "../../lib/osint/daily-video/generate.ts";
+import { mp4EncodingApisAvailable } from "../../lib/osint/daily-video/mp4-encoder.ts";
 
 const MODULES = ["宏观", "科技", "能源"] as const;
 
@@ -96,13 +96,13 @@ const morningPages = morning.pages.filter((page) => page.kind === "stories");
 const morningCards = morningPages.flatMap((page) => page.stories);
 assert.equal(morningCards.length, 20);
 assert.equal(new Set(morningCards.map((story) => story.id)).size, 20);
-assert.equal(morningPages.every((page) => page.stories.length <= 2), true);
-assert.equal(morningPages.some((page) => page.stories.length === 1), true);
+assert.equal(morningPages.every((page) => page.stories.length === 2), true);
 assert.equal(morningCards.every((story) => story.sourceName.length > 0 && story.sourceUrl.startsWith("https://")), true);
-for (const module of new Set(morningPages.map((page) => page.module))) {
-  const indexes = morningPages.flatMap((page, index) => page.module === module ? [index] : []);
+for (const module of new Set(morningCards.map((story) => story.module))) {
+  const indexes = morningCards.flatMap((story, index) => story.module === module ? [index] : []);
   assert.equal(indexes.at(-1)! - indexes[0] + 1, indexes.length);
 }
+assert.equal(morning.pages[0].kind === "cover" && morning.pages[0].highlights.length, 6);
 assert.equal(morning.pages.every((page) => page.reportUrl === reportUrl), true);
 assert.equal(morning.durationMs, 1_800 + morningPages.length * 4_200 + 1_200);
 assert.equal(pageIndexAtTime(morning, 0), 0);
@@ -115,11 +115,8 @@ assert.equal(pageTransitionAtTime(morning, 5_900) < 1, true);
 const wrappedSummary = wrapMeasuredText("一页内容必须完整呈现并保持手机可读", 320, (value) => Array.from(value).length * 40);
 assert.equal(wrappedSummary.length > 1, true);
 assert.equal(wrappedSummary.every((line) => Array.from(line).length * 40 <= 320), true);
-assert.equal(
-  selectVideoMimeType((type) => type === "video/mp4;codecs=avc1.42E01E,mp4a.40.2"),
-  "video/mp4;codecs=avc1.42E01E,mp4a.40.2"
-);
-assert.equal(selectVideoMimeType((type) => type.includes("webm")), "");
+assert.equal(mp4EncodingApisAvailable({ VideoEncoder: {}, AudioEncoder: {}, VideoFrame: {}, AudioData: {} }), true);
+assert.equal(mp4EncodingApisAvailable({ VideoEncoder: {}, AudioEncoder: {}, VideoFrame: {} }), false);
 
 const close = buildVideoStoryboard(snapshot, "close", { reportUrl });
 assert.equal(close.mode, "close");

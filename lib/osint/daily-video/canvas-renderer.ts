@@ -211,17 +211,17 @@ function drawCover(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, p
   ctx.fillStyle = theme.muted;
   ctx.font = "800 25px system-ui, sans-serif";
   ctx.fillText("今日重点", SAFE_X, 735);
-  page.highlights.slice(0, 3).forEach((highlight, index) => {
-    const y = 780 + index * 260;
+  page.highlights.slice(0, 6).forEach((highlight, index) => {
+    const y = 770 + index * 151;
     ctx.fillStyle = theme.surface;
-    roundedRect(ctx, SAFE_X, y, SAFE_WIDTH, 226, 28);
+    roundedRect(ctx, SAFE_X, y, SAFE_WIDTH, 137, 24);
     ctx.fill();
     ctx.fillStyle = theme.accent;
-    ctx.font = "900 29px system-ui, sans-serif";
-    ctx.fillText(String(index + 1).padStart(2, "0"), SAFE_X + 28, y + 57);
+    ctx.font = "900 25px system-ui, sans-serif";
+    ctx.fillText(String(index + 1).padStart(2, "0"), SAFE_X + 26, y + 48);
     ctx.fillStyle = theme.ink;
-    ctx.font = "800 39px system-ui, sans-serif";
-    drawLines(ctx, textLines(ctx, highlight, SAFE_WIDTH - 120, 3), SAFE_X + 90, y + 58, 51);
+    ctx.font = "800 34px system-ui, sans-serif";
+    drawLines(ctx, textLines(ctx, highlight, SAFE_WIDTH - 116, 2), SAFE_X + 86, y + 49, 43);
   });
 }
 
@@ -288,7 +288,7 @@ function drawStoryCard(
 }
 
 function drawStoriesPage(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, page: VideoStoriesPage) {
-  drawPageHeader(ctx, storyboard, page.module, `模块 ${page.modulePage} / ${page.modulePageTotal}`);
+  drawPageHeader(ctx, storyboard, page.module, `内容 ${page.modulePage} / ${page.modulePageTotal}`);
   const expanded = page.stories.length === 1;
   if (expanded) {
     drawStoryCard(ctx, storyboard.theme, page.stories[0], 1, SAFE_X, 230, SAFE_WIDTH, 1_430, true);

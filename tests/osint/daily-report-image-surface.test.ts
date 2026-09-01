@@ -131,6 +131,15 @@ assert.equal(videoActions.includes(".mp4"), true);
 assert.equal(videoActions.includes(".webm"), false);
 assert.equal(videoActions.includes("MP4"), true);
 
+const videoGenerator = read("lib/osint/daily-video/generate.ts");
+const mp4Encoder = read("lib/osint/daily-video/mp4-encoder.ts");
+assert.equal(videoGenerator.includes("MediaRecorder"), false);
+assert.equal(mp4Encoder.includes("new Muxer"), true);
+assert.equal(mp4Encoder.includes("VideoEncoder"), true);
+assert.equal(mp4Encoder.includes("AudioEncoder"), true);
+assert.equal(mp4Encoder.includes('"avc1.420028"'), true);
+assert.equal(mp4Encoder.includes('"mp4a.40.2"'), true);
+
 const view = read("components/osint-reports/DailyReportView.tsx");
 assert.equal(view.includes('{ value: "stories", label: "当日热点" }'), true);
 assert.equal(view.includes('{ value: "hotlist", label: "个股热榜" }'), true);

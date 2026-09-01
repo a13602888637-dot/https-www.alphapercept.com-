@@ -4,9 +4,9 @@
 
 **Goal:** 把早报和收盘视频改成模块化高密度翻页小报，并输出 TikTok 可上传的 H.264/AAC MP4。
 
-**Architecture:** 报告快照先由纯函数整理成动态时长的 `VideoPage[]`；Canvas 使用固定 9:16 杂志网格绘制首屏、新闻双卡、榜单双页和 account 五卡。浏览器使用已验证可用的 MP4 MediaRecorder 编码，缺少原生 H.264/AAC 支持时明确失败，不伪造格式。
+**Architecture:** 报告快照先由纯函数整理成动态时长的 `VideoPage[]`；Canvas 使用固定 9:16 杂志网格绘制首屏、新闻双卡、榜单双页和 account 五卡。浏览器使用 WebCodecs 离线编码 H.264/AAC，由锁定版本 `mp4-muxer@5.2.2` 封装 MP4；缺少编码支持时明确失败，不伪造格式。
 
-**Tech Stack:** TypeScript、React 19、Canvas 2D、Web Audio、MediaRecorder、Next.js 15、ffprobe。
+**Tech Stack:** TypeScript、React 19、Canvas 2D、WebCodecs、mp4-muxer 5.2.2、Next.js 15、ffprobe。
 
 ## Global Constraints
 
@@ -15,7 +15,7 @@
 - 收盘最多 20 个榜单项和 10 个 account；榜单每页 10 项、account 每页 5 个。
 - 首屏和结尾不使用大面积空白；每页固定报告链接、页码和“公开信息整理 · 不构成投资建议”。
 - 7 天主题只改变视觉皮肤和短翻页动效，不改变阅读网格。
-- 不新增视频编码依赖，不回退 WebM，不自动发布 TikTok/抖音，不删除 PNG。
+- 仅新增锁定版本 `mp4-muxer@5.2.2`，不引入 ffmpeg.wasm，不回退 WebM，不自动发布 TikTok/抖音，不删除 PNG。
 - 不实现审核规避、OCR 干扰、拼音混写或用 Emoji 替换敏感关键词。
 
 ---
@@ -173,24 +173,20 @@ git commit -m "feat: 重排日报视频高密度页面"
 ### Task 3: MP4 录制与下载入口
 
 **Files:**
-- Modify: `lib/osint/daily-video/audio.ts`
 - Modify: `lib/osint/daily-video/generate.ts`
+- Create: `lib/osint/daily-video/mp4-encoder.ts`
 - Modify: `components/osint-reports/ReportVideoActions.tsx`
 - Modify: `tests/osint/daily-report-video.test.ts`
 - Modify: `tests/osint/daily-report-image-surface.test.ts`
 
 **Interfaces:**
-- Produces: `selectVideoMimeType(isSupported): "video/mp4;codecs=avc1.42E01E,mp4a.40.2" | "video/mp4" | ""`
 - Produces: `generateReportVideo(storyboard, onProgress): Promise<Blob>` returning MP4 only
 
 - [ ] **Step 1: 写失败测试**
 
 ```ts
-assert.equal(
-  selectVideoMimeType((type) => type === "video/mp4;codecs=avc1.42E01E,mp4a.40.2"),
-  "video/mp4;codecs=avc1.42E01E,mp4a.40.2"
-);
-assert.equal(selectVideoMimeType((type) => type.includes("webm")), "");
+assert.equal(mp4EncodingApisAvailable({ VideoEncoder: {}, AudioEncoder: {}, VideoFrame: {}, AudioData: {} }), true);
+assert.equal(mp4EncodingApisAvailable({ VideoEncoder: {}, AudioEncoder: {}, VideoFrame: {} }), false);
 assert.equal(reportVideoActionsSource.includes(".mp4"), true);
 assert.equal(reportVideoActionsSource.includes(".webm"), false);
 ```
@@ -202,16 +198,15 @@ Expected: MIME 与扩展名断言失败。
 
 - [ ] **Step 3: 实现 MP4-only 录制**
 
-`generate.ts` 的候选仅保留：
+`mp4-encoder.ts` 固定使用：
 
 ```ts
-const MIME_TYPES = [
-  "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-  "video/mp4",
-] as const;
+const VIDEO_CODEC = "avc1.420028";
+const AUDIO_CODEC = "mp4a.40.2";
+const FRAME_RATE = 30;
 ```
 
-无候选时抛出 `MP4_RECORDING_UNSUPPORTED`；Blob 固定使用录制器返回的 MP4 MIME。音频提示点根据动态页起点生成，不再使用固定 12 秒时间数组。
+逐帧绘制 Canvas，用 `VideoEncoder`/`AudioEncoder` 离线编码；原创提示音直接生成 PCM，按动态页起点安排。编码块交给 `Muxer`，最终 Blob 固定为 `video/mp4`。缺少任一 API 或编码配置时抛出 `MP4_RECORDING_UNSUPPORTED`。
 
 `ReportVideoActions.tsx` 把当前报告绝对 URL 传给分镜，下载 `.mp4`，进度文案改为“约 N 秒，可切到其他标签页但不要关闭页面”。
 
@@ -223,7 +218,7 @@ Expected: 两个测试均输出 OK。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add lib/osint/daily-video/audio.ts lib/osint/daily-video/generate.ts components/osint-reports/ReportVideoActions.tsx tests/osint/daily-report-video.test.ts tests/osint/daily-report-image-surface.test.ts
+git add package.json bun.lock lib/osint/daily-video/mp4-encoder.ts lib/osint/daily-video/generate.ts components/osint-reports/ReportVideoActions.tsx tests/osint/daily-report-video.test.ts tests/osint/daily-report-image-surface.test.ts
 git commit -m "feat: 导出TikTok兼容MP4日报视频"
 ```
 
