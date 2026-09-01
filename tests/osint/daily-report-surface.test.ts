@@ -34,6 +34,8 @@ for (const dependency of [
 ]) {
   assert.equal(service.includes(dependency), true);
 }
+assert.equal(service.includes("assertCloseReportReady(snapshot)"), true);
+assert.equal(existsSync(resolve("lib/osint/daily-report/close-readiness.ts")), true);
 
 const listRoute = read("app/api/osint/v1/reports/route.ts");
 const generateRoute = read("app/api/osint/v1/reports/generate/route.ts");
@@ -171,7 +173,7 @@ assert.equal(existsSync(resolve("app/osint/reports/page.tsx")), true);
 assert.equal(existsSync(resolve("app/osint/reports/[reportId]/page.tsx")), true);
 
 const vercelConfig = JSON.parse(read("vercel.json"));
-assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=close" && cron.schedule === "30 7 * * 1-5"), true);
+assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=close" && cron.schedule === "30 8 * * 1-5"), true);
 assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=global" && cron.schedule === "0 1 * * 1-5"), true);
 
 console.log("DAILY_REPORT_SURFACE_OK");

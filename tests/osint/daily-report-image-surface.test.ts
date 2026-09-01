@@ -130,7 +130,8 @@ assert.equal(videoActions.includes(".mp4"), true);
 assert.equal(videoActions.includes(".webm"), false);
 assert.equal(videoActions.includes("MP4"), true);
 assert.equal(videoActions.includes('await import("@/lib/osint/daily-video/generate")'), true);
-assert.equal(videoActions.includes("STALE_CLOSE_DATA"), false);
+assert.equal(videoActions.includes("STALE_CLOSE_DATA"), true);
+assert.equal(videoActions.includes("INCOMPLETE_CLOSE_DATA"), true);
 
 const videoGenerator = read("lib/osint/daily-video/generate.ts");
 const mp4Encoder = read("lib/osint/daily-video/mp4-encoder.ts");

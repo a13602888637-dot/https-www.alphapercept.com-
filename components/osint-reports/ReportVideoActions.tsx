@@ -39,7 +39,11 @@ export function ReportVideoActions({ reportId, exportReady }: { reportId: string
       downloadBlob(blob, `alphapercept-${storyboard.date}-${mode}-${storyboard.theme.id}.mp4`);
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "VIDEO_GENERATION_FAILED";
-      if (message === "MP4_RECORDING_UNSUPPORTED") {
+      if (message.startsWith("STALE_CLOSE_DATA:")) {
+        setError(`收盘数据日期为 ${message.split(":")[1]}，与本期日期不一致，请等待当天数据更新后重试。`);
+      } else if (message.startsWith("INCOMPLETE_CLOSE_DATA:")) {
+        setError(`当天收盘数据状态为 ${message.split(":")[1]}，尚未完整，暂不生成视频。`);
+      } else if (message === "MP4_RECORDING_UNSUPPORTED") {
         setError("当前浏览器无法生成 TikTok 可上传的 MP4，请使用最新版 Chrome 后重试。");
       } else if (message.includes("UNSUPPORTED")) {
         setError("当前浏览器不支持视频录制，请继续使用 PNG 下载。");

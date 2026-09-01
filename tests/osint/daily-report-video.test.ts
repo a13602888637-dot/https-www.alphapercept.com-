@@ -76,7 +76,7 @@ const snapshot = {
   generatedAt: "2026-08-31T08:00:00.000Z",
   asOf: "2026-08-31T07:50:00.000Z",
   stories: { stories },
-  lhb: { tradeDate: "2026-08-31", stocks, hotMoneyFlows },
+  lhb: { status: "live", tradeDate: "2026-08-31", stocks, hotMoneyFlows },
 } as unknown as OsintDailyReportSnapshot;
 
 const reportUrl = "https://www.alphapercept.com/osint/reports/report-1";
@@ -163,9 +163,14 @@ const eventMorning = buildVideoStoryboard({ ...snapshot, stories: { ...snapshot.
 const eventIds = eventMorning.pages.flatMap((page) => page.kind === "stories" ? page.stories : []).map((story) => story.id);
 assert.equal(eventIds.includes("event-a") && eventIds.includes("event-b"), false);
 
-const staleClose = buildVideoStoryboard({ ...snapshot, lhb: { ...snapshot.lhb, tradeDate: "2026-08-28" } }, "close", { reportUrl });
-assert.equal(staleClose.date, "2026-08-31");
-assert.equal(staleClose.dataDate, "2026-08-28");
+assert.throws(
+  () => buildVideoStoryboard({ ...snapshot, lhb: { ...snapshot.lhb, tradeDate: "2026-08-28" } }, "close", { reportUrl }),
+  /STALE_CLOSE_DATA:2026-08-28/
+);
+assert.throws(
+  () => buildVideoStoryboard({ ...snapshot, lhb: { ...snapshot.lhb, status: "degraded" } }, "close", { reportUrl }),
+  /INCOMPLETE_CLOSE_DATA:degraded/
+);
 
 const canvasRenderer = readFileSync(resolve("lib/osint/daily-video/canvas-renderer.ts"), "utf8");
 assert.equal(canvasRenderer.includes("calendarOffset"), true);

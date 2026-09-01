@@ -4,6 +4,7 @@ import type { MarketSnapshot, StorySnapshot } from "../contracts";
 import { getMarketSnapshot } from "../market-service";
 import { getStorySnapshot } from "../story-service";
 import { composeDailyReportSnapshot } from "./compose";
+import { assertCloseReportReady } from "./close-readiness";
 import type { OsintDailyReportSnapshot } from "./contracts";
 import type { DailyReportArchiveStatus, DailyReportEdition } from "./contracts";
 import { saveDailyReport } from "./repository";
@@ -108,5 +109,6 @@ export async function generateAndSaveDailyReport(options: {
   status?: DailyReportArchiveStatus;
 } = {}) {
   const snapshot = await collectDailyReportSnapshot(options);
+  assertCloseReportReady(snapshot);
   return saveDailyReport(snapshot);
 }

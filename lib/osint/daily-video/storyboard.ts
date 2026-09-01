@@ -1,4 +1,5 @@
 import type { OsintStory } from "../contracts";
+import { assertCloseReportReady } from "../daily-report/close-readiness";
 import type { OsintDailyReportSnapshot } from "../daily-report/contracts";
 import { compactShareHeadline, isChineseReadableText, isShareHeadlineReady } from "../daily-report/image-copy";
 import { selectReportStocks } from "../daily-report/story-curation";
@@ -265,6 +266,7 @@ export function buildVideoStoryboard(
   mode: VideoMode,
   options: BuildVideoStoryboardOptions
 ): VideoStoryboard {
+  if (mode === "close") assertCloseReportReady(report);
   const theme = themeForDate(report.reportDate);
   const pages = mode === "morning"
     ? morningPages(report, options.reportUrl).pages
