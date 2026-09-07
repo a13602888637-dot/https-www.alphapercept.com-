@@ -7,7 +7,7 @@ import {
   isReusableDailyReport,
 } from "@/lib/osint/daily-report/generation";
 import { isDailyReportImageReady } from "@/lib/osint/daily-report/image-readiness";
-import { getLatestFinalDailyReport } from "@/lib/osint/daily-report/repository";
+import { getLatestFinalDailyReport, summarizeDailyReport } from "@/lib/osint/daily-report/repository";
 import { generateAndSaveDailyReport } from "@/lib/osint/daily-report/service";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     );
   }
   const edition = validEdition(request.nextUrl.searchParams.get("edition"));
+  const compact = request.nextUrl.searchParams.get("compact") === "true";
   const reportDate = shanghaiDateKey(new Date());
   const startedAt = Date.now();
   const requestId = request.headers.get("x-vercel-id");
@@ -68,7 +69,11 @@ export async function GET(request: NextRequest) {
       durationMs: Date.now() - startedAt,
     }));
     return NextResponse.json(
-      { success: true, created: result.created, report: result.report },
+      {
+        success: true,
+        created: result.created,
+        report: compact ? summarizeDailyReport(result.report) : result.report,
+      },
       { status: result.created ? 201 : 200 }
     );
   } catch (error) {
