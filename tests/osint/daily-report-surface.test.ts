@@ -43,6 +43,18 @@ const detailRoute = read("app/api/osint/v1/reports/[reportId]/route.ts");
 const exportRoute = read("app/api/osint/v1/reports/[reportId]/export/route.ts");
 assert.equal(listRoute.includes("listDailyReports"), true);
 assert.equal(generateRoute.includes("generateAndSaveDailyReport"), true);
+assert.equal(generateRoute.includes("ensureDailyReportGenerated"), true);
+assert.equal(generateRoute.includes("getLatestFinalDailyReport"), true);
+assert.equal(generateRoute.includes("created: result.created"), true);
+assert.equal(generateRoute.includes('msg: "generation-start"'), true);
+assert.equal(generateRoute.includes('msg: "generation-complete"'), true);
+assert.equal(generateRoute.includes("isDailyReportImageReady"), true);
+assert.equal(generateRoute.includes('"Retry-After": "300"'), true);
+assert.equal(generateRoute.includes("CLOSE_DATA_NOT_READY"), true);
+assert.equal(generateRoute.includes("REPORT_GENERATION_FAILED"), true);
+assert.equal(generateRoute.includes("error.message"), false);
+assert.equal(generateRoute.includes('searchParams.get("force")'), false);
+assert.equal(generateRoute.includes("force=true"), false);
 assert.equal(generateRoute.includes("CRON_SECRET"), true);
 assert.equal(generateRoute.includes("currentUser"), false);
 assert.equal(generateRoute.includes("export async function POST"), false);
@@ -175,5 +187,26 @@ assert.equal(existsSync(resolve("app/osint/reports/[reportId]/page.tsx")), true)
 const vercelConfig = JSON.parse(read("vercel.json"));
 assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=close" && cron.schedule === "30 8 * * 1-5"), true);
 assert.equal(vercelConfig.crons.some((cron: { path: string; schedule: string }) => cron.path === "/api/osint/v1/reports/generate?edition=global" && cron.schedule === "0 0 * * 1-5"), true);
+
+const closeSlaRunbookPath = resolve("docs/runbooks/osint-close-report-sla.md");
+assert.equal(existsSync(closeSlaRunbookPath), true);
+const closeSlaRunbook = read("docs/runbooks/osint-close-report-sla.md");
+for (const requiredText of [
+  "16:30",
+  "16:40",
+  "16:50",
+  "16:55",
+  "16:58",
+  "Authorization",
+  "CRON_SECRET",
+  "HTTP 201",
+  "HTTP 200",
+  "HTTP 503",
+]) {
+  assert.equal(closeSlaRunbook.includes(requiredText), true);
+}
+assert.equal(closeSlaRunbook.includes("不要把 CRON_SECRET 放进 URL"), true);
+assert.equal(closeSlaRunbook.includes("force=true"), false);
+assert.equal(closeSlaRunbook.includes("probe-osint-close-report.mjs"), true);
 
 console.log("DAILY_REPORT_SURFACE_OK");

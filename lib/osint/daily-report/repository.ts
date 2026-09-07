@@ -135,3 +135,18 @@ export async function getDailyReport(id: string): Promise<OsintDailyReportRecord
   const row = await prisma.osintDailyReport.findUnique({ where: { id } });
   return row ? toRecord(row) : null;
 }
+
+export async function getLatestFinalDailyReport(input: {
+  reportDate: string;
+  edition: DailyReportEdition;
+}): Promise<OsintDailyReportRecord | null> {
+  const row = await prisma.osintDailyReport.findFirst({
+    where: {
+      reportDate: input.reportDate,
+      edition: input.edition,
+      status: "final",
+    },
+    orderBy: { version: "desc" },
+  });
+  return row ? toRecord(row) : null;
+}
