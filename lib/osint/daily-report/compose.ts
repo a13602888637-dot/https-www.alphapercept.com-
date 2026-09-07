@@ -2,7 +2,7 @@ import type { LhbSnapshot } from "../../lhb/contracts";
 import type { MarketSnapshot, StorySnapshot } from "../contracts";
 import type { DailyReportArchiveStatus, DailyReportEdition, OsintDailyReportSnapshot } from "./contracts";
 
-function shanghaiDateKey(date: Date): string {
+export function shanghaiDateKey(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
