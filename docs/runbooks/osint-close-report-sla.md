@@ -14,7 +14,7 @@ Vercel Hobby cron 只有小时级精度，不能单独承担这个时效目标�
 
 | 时间（Asia/Shanghai） | 请求 |
 | --- | --- |
-| 16:30，周一至周五 | `GET https://www.alphapercept.com/api/osint/v1/reports/generate?edition=close` |
+| 16:30，周一至周五 | `GET https://www.alphapercept.com/api/osint/v1/reports/generate?edition=close&compact=true` |
 | 16:40，周一至周五 | 同上 |
 | 16:50，周一至周五 | 同上 |
 | 16:55，周一至周五 | 同上 |
@@ -27,6 +27,8 @@ Authorization: Bearer <CRON_SECRET>
 ```
 
 不要把 CRON_SECRET 放进 URL、日志或截图。所有任务使用相同请求头，生产环境中的 `CRON_SECRET` 仍是唯一真源。
+
+外部任务必须带 `compact=true`，只返回报告摘要；完整报告响应会超过 cron-job.org 的输出上限，产生 `Failed (output too large)`。完整快照仍由报告详情接口读取。
 
 ## 返回值与重试判定
 
