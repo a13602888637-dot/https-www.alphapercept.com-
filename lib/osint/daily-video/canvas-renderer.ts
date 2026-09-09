@@ -9,12 +9,14 @@ import type {
   VideoStoryboard,
   VideoTheme,
 } from "./contracts";
+import { drawTemplatePage } from "./template-renderer";
 
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const SAFE_X = 64;
 const SAFE_WIDTH = 952;
 const TRANSITION_MS = 280;
+const pageLayers = new WeakMap<VideoStoryboard, Map<number, HTMLCanvasElement>>();
 
 function clamp(value: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, value));
@@ -381,6 +383,7 @@ function drawAccountsPage(ctx: CanvasRenderingContext2D, storyboard: VideoStoryb
 }
 
 function drawPage(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, page: VideoPage) {
+  if (storyboard.theme.layout) { drawTemplatePage(ctx, storyboard, page); return; }
   if (page.kind === "cover") drawCover(ctx, storyboard, page);
   else if (page.kind === "stories") drawStoriesPage(ctx, storyboard, page);
   else if (page.kind === "ranking") drawRankingPage(ctx, storyboard, page);
@@ -411,21 +414,52 @@ function drawOutro(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, e
   ctx.restore();
 }
 
+function drawPageLayer(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, page: VideoPage, pageIndex: number) {
+  // Text and cards do not change during a page. Rasterise them once, while
+  // continuing to animate the background and page transition on every frame.
+  // Weak keys release the layers when an export/preview is no longer retained.
+  if (typeof document === "undefined") {
+    drawPage(ctx, storyboard, page); drawFooter(ctx, storyboard, page, pageIndex); return;
+  }
+  let layers = pageLayers.get(storyboard);
+  if (!layers) { layers = new Map(); pageLayers.set(storyboard, layers); }
+  let layer = layers.get(pageIndex);
+  if (!layer) {
+    layer = document.createElement("canvas"); layer.width = WIDTH; layer.height = HEIGHT;
+    const layerContext = layer.getContext("2d");
+    if (!layerContext) throw new Error("CANVAS_CAPTURE_UNSUPPORTED");
+    drawPage(layerContext, storyboard, page); drawFooter(layerContext, storyboard, page, pageIndex);
+    layers.set(pageIndex, layer);
+  }
+  ctx.drawImage(layer, 0, 0);
+}
+
 export function drawVideoFrame(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, elapsedMs: number): void {
   const pageIndex = pageIndexAtTime(storyboard, elapsedMs);
   const page = storyboard.pages[pageIndex] || storyboard.pages[0];
   const transition = pageTransitionAtTime(storyboard, elapsedMs);
-  const drawPositionedPage = (targetPage: VideoPage, targetIndex: number, offsetX: number) => {
+  const drawPositionedPage = (targetPage: VideoPage, targetIndex: number, offsetX: number, offsetY = 0) => {
     ctx.save();
-    ctx.translate(offsetX, 0);
+    ctx.translate(offsetX, offsetY);
     drawBackground(ctx, storyboard.theme, elapsedMs);
-    drawPage(ctx, storyboard, targetPage);
-    drawFooter(ctx, storyboard, targetPage, targetIndex);
+    drawPageLayer(ctx, storyboard, targetPage, targetIndex);
     ctx.restore();
   };
   if (pageIndex > 0 && transition < 1 && elapsedMs < outroStart(storyboard)) {
-    drawPositionedPage(storyboard.pages[pageIndex - 1], pageIndex - 1, -transition * 120);
-    drawPositionedPage(page, pageIndex, (1 - transition) * WIDTH);
+    const direction = storyboard.theme.layout?.transition || "left";
+    if (direction === "reveal") {
+      drawPositionedPage(storyboard.pages[pageIndex - 1], pageIndex - 1, 0);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, WIDTH * transition, HEIGHT); ctx.clip();
+      drawPositionedPage(page, pageIndex, 0); ctx.restore();
+    } else if (direction === "up" || direction === "down") {
+      const sign = direction === "up" ? 1 : -1;
+      drawPositionedPage(storyboard.pages[pageIndex - 1], pageIndex - 1, 0, -sign * transition * 120);
+      drawPositionedPage(page, pageIndex, 0, sign * (1 - transition) * HEIGHT);
+    } else {
+      const sign = direction === "left" ? 1 : -1;
+      drawPositionedPage(storyboard.pages[pageIndex - 1], pageIndex - 1, -sign * transition * 120);
+      drawPositionedPage(page, pageIndex, sign * (1 - transition) * WIDTH);
+    }
   } else {
     drawPositionedPage(page, pageIndex, 0);
   }

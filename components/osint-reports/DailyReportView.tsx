@@ -108,7 +108,7 @@ export function DailyReportView({
           <p className="text-sm tracking-[0.14em] text-[#2EC4C7]">ALPHAPERCEPT DAILY</p>
           <h1 className="mt-1 text-2xl font-semibold text-white">{snapshot.title}</h1>
           <p className="mt-2 text-sm text-[#718096]">{report.edition === "global" ? "早间版" : "收盘版"} · 数据截至 {new Date(snapshot.asOf).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}</p>
-          <div className="mt-4"><PrintActions reportId={report.id} exportReady={exportReady} /></div>
+          <div className="mt-4"><PrintActions reportId={report.id} reportDate={report.reportDate} exportReady={exportReady} /></div>
         </header>
 
         <nav className="sticky top-0 z-20 grid grid-cols-2 gap-1 rounded-xl border border-[#1F2A3A] bg-[#070B12]/95 p-1 backdrop-blur" aria-label="复盘内容">

@@ -11,9 +11,11 @@ const EXPORT_ACTIONS = [
 
 export function PrintActions({
   reportId,
+  reportDate,
   exportReady,
 }: {
   reportId: string;
+  reportDate: string;
   exportReady: boolean;
 }) {
   return (
@@ -33,7 +35,7 @@ export function PrintActions({
           </a>
         ))}
       </div>
-      <ReportVideoActions reportId={reportId} exportReady={exportReady} />
+      <ReportVideoActions reportId={reportId} reportDate={reportDate} exportReady={exportReady} />
       {!exportReady && (
         <p className="text-sm text-amber-300" role="alert">
           水印或免责声明校验未通过，导出已禁用。

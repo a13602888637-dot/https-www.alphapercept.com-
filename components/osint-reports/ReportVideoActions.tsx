@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { OsintDailyReportRecord } from "@/lib/osint/daily-report/contracts";
 import type { VideoMode } from "@/lib/osint/daily-video/contracts";
 import { buildVideoStoryboard } from "@/lib/osint/daily-video/storyboard";
+import { themeForDate } from "@/lib/osint/daily-video/themes";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -15,11 +16,13 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-export function ReportVideoActions({ reportId, exportReady }: { reportId: string; exportReady: boolean }) {
+export function ReportVideoActions({ reportId, reportDate, exportReady }: { reportId: string; reportDate: string; exportReady: boolean }) {
   const [activeMode, setActiveMode] = useState<VideoMode | null>(null);
   const [progress, setProgress] = useState(0);
   const [estimatedSeconds, setEstimatedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const morningTheme = themeForDate(reportDate, "morning");
+  const closeTheme = themeForDate(reportDate, "close");
 
   async function generate(mode: VideoMode) {
     if (activeMode || !exportReady) return;
@@ -43,6 +46,8 @@ export function ReportVideoActions({ reportId, exportReady }: { reportId: string
         setError(`收盘数据日期为 ${message.split(":")[1]}，与本期日期不一致，请等待当天数据更新后重试。`);
       } else if (message.startsWith("INCOMPLETE_CLOSE_DATA:")) {
         setError(`当天收盘数据状态为 ${message.split(":")[1]}，尚未完整，暂不生成视频。`);
+      } else if (message === "MP4_ENCODER_STALLED") {
+        setError("视频编码器没有响应，请关闭其他视频导出任务后刷新重试。");
       } else if (message === "MP4_RECORDING_UNSUPPORTED") {
         setError("当前浏览器无法生成 TikTok 可上传的 MP4，请使用最新版 Chrome 后重试。");
       } else if (message.includes("UNSUPPORTED")) {
@@ -57,6 +62,14 @@ export function ReportVideoActions({ reportId, exportReady }: { reportId: string
 
   return (
     <div className="space-y-2" aria-label="短视频生成">
+      {morningTheme.layout && (
+        <details className="text-xs text-[#A5B3C5]">
+          <summary className="cursor-pointer rounded py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4C7]">本期样式与配乐 · 100 天不重复</summary>
+          <p className="mt-2 leading-5">早报：{morningTheme.name}<br />配乐：{morningTheme.music?.name}</p>
+          <p className="mt-1 leading-5">收盘：{closeTheme.name}<br />配乐：{closeTheme.music?.name}</p>
+          <p className="mt-1 leading-5">同一期重新下载保留原样式；音乐和转场音效一同导出。</p>
+        </details>
+      )}
       <div className="grid grid-cols-2 gap-2">
         {([
           ["morning", "生成早报短视频"],
@@ -77,7 +90,7 @@ export function ReportVideoActions({ reportId, exportReady }: { reportId: string
       {activeMode && (
         <div className="space-y-1" aria-label="生成进度">
           <div className="h-1.5 overflow-hidden rounded-full bg-[#1C2737]"><div className="h-full bg-[#2EC4C7] transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-          <p className="text-xs text-[#718096]">生成进度 {Math.round(progress * 100)}% · 请保持本页打开{estimatedSeconds > 0 ? `约 ${estimatedSeconds} 秒` : ""}</p>
+          <p className="text-xs text-[#718096]">生成进度 {Math.round(progress * 100)}%{estimatedSeconds > 0 ? ` · 视频约 ${estimatedSeconds} 秒` : ""} · 请保持本页打开</p>
         </div>
       )}
       {error && <p className="text-sm text-amber-300" role="alert">{error}</p>}

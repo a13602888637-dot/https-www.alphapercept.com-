@@ -12,6 +12,8 @@ import {
   shareSourceKey,
 } from "./image-copy";
 import { DAILY_REPORT_DISCLAIMER, DAILY_REPORT_WATERMARK } from "./export-html";
+import { themeForDate } from "../daily-video/themes";
+import type { VideoTheme } from "../daily-video/contracts";
 import {
   curateReportStories,
   plainCategoryLabel,
@@ -40,6 +42,22 @@ const COLORS = {
   yellow: "#D6CD95",
   white: "#FFFFFF",
 } as const;
+
+type PosterColors = { [Key in keyof typeof COLORS]: string };
+
+function posterTheme(report: OsintDailyReportSnapshot, section: DailyReportImageSection): VideoTheme {
+  const date = sharePosterDate(section, { reportDate: report.reportDate, generatedAt: report.generatedAt, tradeDate: report.lhb.tradeDate });
+  return themeForDate(date, section === "stories" ? "morning" : "close");
+}
+
+function posterColors(theme: VideoTheme): PosterColors {
+  if (!theme.layout) return COLORS;
+  return {
+    paper: theme.background, white: theme.surface, ink: theme.ink, muted: theme.muted,
+    rule: theme.muted, red: theme.accent, redSoft: theme.surface,
+    teal: theme.secondary, tealSoft: theme.surface, violet: theme.accent, yellow: theme.secondary,
+  };
+}
 
 let fontDataPromise: Promise<ArrayBuffer> | null = null;
 
@@ -79,8 +97,13 @@ function posterShell(
   report: OsintDailyReportSnapshot,
   title: string,
   kicker: string,
-  children: React.ReactNode
+  children: React.ReactNode,
+  theme: VideoTheme
 ): React.ReactElement {
+  const COLORS = posterColors(theme);
+  const family = theme.layout?.cover ?? -1;
+  const headerVariant = family % 10;
+  const reverse = family >= 10;
   return (
     <div
       style={{
@@ -99,10 +122,10 @@ function posterShell(
       <div style={{ position: "absolute", left: 90, top: 720, display: "flex", transform: "rotate(-18deg)", fontSize: 116, fontWeight: 700, letterSpacing: 12, color: "rgba(43,44,48,0.035)" }}>
         ALPHAPERCEPT
       </div>
-      <header style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", borderBottom: `5px solid ${COLORS.ink}`, paddingBottom: 32 }}>
+      <header style={{ display: "flex", flexDirection: [1, 6].includes(headerVariant) ? (reverse ? "column-reverse" : "column") : reverse ? "row-reverse" : "row", gap: theme.layout ? 18 : 0, alignItems: [1, 6].includes(headerVariant) ? "flex-start" : "flex-end", justifyContent: "space-between", borderBottom: `5px solid ${COLORS.ink}`, ...([3, 8].includes(headerVariant) ? { borderLeft: `12px solid ${COLORS.red}` } : {}), ...([2, 4, 7].includes(headerVariant) ? { background: COLORS.white } : {}), padding: [2, 3, 4, 7, 8].includes(headerVariant) ? "24px 24px 28px" : "0 0 32px" }}>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: 5, color: COLORS.teal }}>{kicker}</span>
-          <h1 style={{ margin: "12px 0 0", fontSize: 76, lineHeight: 1.05, fontWeight: 700, letterSpacing: -2 }}>{title}</h1>
+          <h1 style={{ margin: "12px 0 0", fontSize: headerVariant === 5 || headerVariant === 9 ? 90 : 76, lineHeight: 1.05, fontWeight: 700, letterSpacing: headerVariant === 0 ? 6 : -2 }}>{title}</h1>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
           <span style={{ fontSize: 34, fontWeight: 700 }}>{sharePosterDate(title === "当日热点" ? "stories" : "hotlist", { reportDate: report.reportDate, generatedAt: report.generatedAt, tradeDate: report.lhb.tradeDate })}</span>
@@ -153,13 +176,16 @@ function selectedStories(report: OsintDailyReportSnapshot): Array<{ story: Osint
   return unique;
 }
 
-export function renderHotspotPoster(report: OsintDailyReportSnapshot): React.ReactElement {
+export function renderHotspotPoster(report: OsintDailyReportSnapshot, theme = posterTheme(report, "stories")): React.ReactElement {
   const stories = selectedStories(report);
+  const COLORS = posterColors(theme);
+  const layout = theme.layout?.content ?? -1;
+  const columns = [1, 2, 4, 7].includes(layout);
   return posterShell(
     report,
     "当日热点",
     "ALPHAPERCEPT · MORNING BRIEF",
-    <div style={{ display: "flex", flex: 1, minHeight: 0, flexDirection: "column", justifyContent: "space-between", gap: 8 }}>
+    <div style={{ display: "flex", flex: 1, minHeight: 0, flexDirection: columns ? "row" : "column", flexWrap: columns ? "wrap" : "nowrap", justifyContent: "space-between", gap: columns ? 14 : 8 }}>
       {stories.map(({ story, category }, index) => {
         const upcoming = story.eventType === "upcoming";
         return (
@@ -167,23 +193,28 @@ export function renderHotspotPoster(report: OsintDailyReportSnapshot): React.Rea
             key={story.id}
             style={{
               display: "flex",
-              minHeight: 108,
+              width: columns ? "49%" : layout === 5 ? "94%" : "100%",
+              marginLeft: layout === 5 && index % 2 ? "6%" : 0,
+              flexDirection: layout === 1 ? "column" : layout === 4 ? "column-reverse" : [6, 7, 9].includes(layout) ? "row-reverse" : "row",
+              minHeight: columns ? 248 : 108,
+              ...(columns ? { height: 248, flexShrink: 0 } : {}),
+              minWidth: 0,
               alignItems: "stretch",
               border: `3px solid ${upcoming ? COLORS.yellow : COLORS.rule}`,
               background: COLORS.white,
-              borderRadius: 18,
+              borderRadius: theme.layout?.frame === "rule" || layout === 8 ? 0 : 18,
               overflow: "hidden",
             }}
           >
-            <div style={{ display: "flex", width: 82, flexShrink: 0, alignItems: "center", justifyContent: "center", background: upcoming ? COLORS.red : COLORS.ink, color: COLORS.white, fontSize: 34, fontWeight: 700 }}>
+            <div style={{ display: "flex", width: [1, 4].includes(layout) ? "100%" : [2, 3, 7, 8, 9].includes(layout) ? 52 : 82, flexShrink: 0, alignItems: "center", justifyContent: [1, 4].includes(layout) ? "flex-start" : "center", padding: [1, 4].includes(layout) ? "4px 18px" : 0, background: layout === 8 ? COLORS.white : upcoming ? COLORS.red : COLORS.ink, color: layout === 8 ? COLORS.red : COLORS.white, fontSize: columns ? 26 : 34, fontWeight: 700 }}>
               {String(index + 1).padStart(2, "0")}
             </div>
             <div style={{ display: "flex", minWidth: 0, flex: 1, flexDirection: "column", justifyContent: "center", padding: "8px 22px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14, color: upcoming ? COLORS.red : COLORS.teal, fontSize: 26, fontWeight: 700 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: columns ? 4 : 14, color: upcoming ? COLORS.red : COLORS.teal, fontSize: columns ? 24 : 26, fontWeight: 700 }}>
                 <span>{upcoming ? "未来事件" : category || plainCategoryLabel("markets")}</span>
                 <span style={{ color: COLORS.muted, fontWeight: 400 }}>{shanghaiDate(story.scheduledFor || story.publishedAt)}</span>
               </div>
-              <h2 style={{ margin: "4px 0 0", fontSize: 34, lineHeight: 1.3, fontWeight: 700, color: COLORS.ink }}>{compactShareHeadline(story.title)}</h2>
+              <h2 style={{ margin: "4px 0 0", fontSize: columns ? 30 : 34, lineHeight: 1.3, fontWeight: 700, color: COLORS.ink }}>{compactShareHeadline(story.title)}</h2>
             </div>
           </article>
         );
@@ -191,19 +222,20 @@ export function renderHotspotPoster(report: OsintDailyReportSnapshot): React.Rea
       {stories.length === 0 && (
         <div style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center", fontSize: 34, color: COLORS.muted }}>暂无已归档热点</div>
       )}
-    </div>
+    </div>,
+    theme
   );
 }
 
-function stockColumn(title: string, stocks: LhbStock[], positive: boolean): React.ReactElement {
+function stockColumn(title: string, stocks: LhbStock[], positive: boolean, COLORS: PosterColors, layout: number): React.ReactElement {
   const accent = positive ? COLORS.red : COLORS.teal;
   const soft = positive ? COLORS.redSoft : COLORS.tealSoft;
   return (
-    <section style={{ display: "flex", minWidth: 0, flex: 1, flexDirection: "column", overflow: "hidden", border: `3px solid ${COLORS.rule}`, borderRadius: 18, background: COLORS.white }}>
+    <section style={{ display: "flex", minWidth: 0, flex: 1, flexDirection: "column", overflow: "hidden", border: `3px solid ${COLORS.rule}`, borderRadius: layout < 0 ? 18 : [0, 10, 18, 28][layout % 4], background: COLORS.white }}>
       <h3 style={{ display: "flex", margin: 0, padding: "14px 20px", background: soft, color: accent, fontSize: 32, fontWeight: 700 }}>{title}</h3>
       <div style={{ display: "flex", flexDirection: "column", padding: "4px 18px 8px" }}>
         {stocks.slice(0, 8).map((stock, index) => (
-          <div key={stock.tradeId} style={{ display: "flex", minHeight: 64, alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: index === Math.min(stocks.length, 8) - 1 ? "none" : `2px solid ${COLORS.rule}` }}>
+          <div key={stock.tradeId} style={{ display: "flex", flexDirection: [7, 8, 9].includes(layout) ? "row-reverse" : "row", minHeight: 64, alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: index === Math.min(stocks.length, 8) - 1 ? "none" : `2px solid ${COLORS.rule}` }}>
             <div style={{ display: "flex", minWidth: 0, alignItems: "baseline", gap: 9 }}>
               <span style={{ width: 32, fontSize: 26, color: COLORS.muted }}>{index + 1}</span>
               <span style={{ fontSize: 31, fontWeight: 700 }}>{stock.name}</span>
@@ -217,15 +249,15 @@ function stockColumn(title: string, stocks: LhbStock[], positive: boolean): Reac
   );
 }
 
-function hotMoneyCard(flow: LhbHotMoneyFlow, index: number): React.ReactElement {
+function hotMoneyCard(flow: LhbHotMoneyFlow, index: number, COLORS: PosterColors, layout: number): React.ReactElement {
   const positive = flow.totalNetAmount >= 0;
   const topStocks = [...flow.stocks].sort((left, right) => right.buyAmount - left.buyAmount).slice(0, 2);
   return (
-    <article style={{ display: "flex", width: "100%", minHeight: 176, flexDirection: "column", justifyContent: "space-between", border: `3px solid ${COLORS.rule}`, borderLeft: `10px solid ${positive ? COLORS.red : COLORS.teal}`, borderRadius: 18, background: COLORS.white, padding: "16px 20px" }}>
+    <article style={{ display: "flex", width: "100%", minHeight: 176, flexDirection: "column", justifyContent: "space-between", border: `3px solid ${COLORS.rule}`, ...(layout >= 5 ? { borderRight: `10px solid ${positive ? COLORS.red : COLORS.teal}` } : { borderLeft: `10px solid ${positive ? COLORS.red : COLORS.teal}` }), borderRadius: layout < 0 ? 18 : [0, 10, 18, 28][layout % 4], background: COLORS.white, padding: "16px 20px" }}>
       <div style={{ display: "flex", alignItems: "baseline" }}>
         <h3 style={{ margin: 0, width: "100%", whiteSpace: "nowrap", fontSize: 29, fontWeight: 700 }}>{index + 1}. {compactShareLabel(flow.label)}</h3>
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 25 }}>
+      <div style={{ display: "flex", flexDirection: [2, 4, 8].includes(layout) ? "row-reverse" : "row", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 25 }}>
         <span style={{ whiteSpace: "nowrap", color: positive ? COLORS.red : COLORS.teal }}>净 {signedAmount(flow.totalNetAmount)}</span>
         <span style={{ whiteSpace: "nowrap", color: COLORS.red }}>买 {amount(flow.totalBuyAmount)}</span>
         <span style={{ whiteSpace: "nowrap", color: COLORS.teal }}>卖 {amount(flow.totalSellAmount)}</span>
@@ -237,36 +269,39 @@ function hotMoneyCard(flow: LhbHotMoneyFlow, index: number): React.ReactElement 
   );
 }
 
-export function renderStockHotlistPoster(report: OsintDailyReportSnapshot): React.ReactElement {
+export function renderStockHotlistPoster(report: OsintDailyReportSnapshot, theme = posterTheme(report, "hotlist")): React.ReactElement {
   const { inflows, outflows } = selectReportStocks(report.lhb.stocks);
   const flows = selectReportHotMoney(report.lhb.hotMoneyFlows).slice(0, 6);
+  const COLORS = posterColors(theme);
+  const layout = theme.layout?.content ?? -1;
   return posterShell(
     report,
     "个股热榜",
     "ALPHAPERCEPT · CLOSING BOARD",
-    <div style={{ display: "flex", flex: 1, minHeight: 0, flexDirection: "column", gap: 22 }}>
+    <div style={{ display: "flex", flex: 1, minHeight: 0, flexDirection: theme.layout?.order === "accounts-first" ? "column-reverse" : "column", gap: 22 }}>
       <section style={{ display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
           <h2 style={{ margin: 0, fontSize: 40, fontWeight: 700 }}>个股资金榜</h2>
           <span style={{ fontSize: 26, color: COLORS.muted }}>交易日 {report.lhb.tradeDate || "--"}</span>
         </div>
-        <div style={{ display: "flex", gap: 18 }}>
-          {stockColumn("净买入靠前", inflows, true)}
-          {stockColumn("净卖出靠前", outflows, false)}
+        <div style={{ display: "flex", flexDirection: theme.layout?.order === "outflows-first" ? "row-reverse" : "row", gap: 18 }}>
+          {stockColumn("净买入靠前", inflows, true, COLORS, layout)}
+          {stockColumn("净卖出靠前", outflows, false, COLORS, layout)}
         </div>
       </section>
       <section style={{ display: "flex", minHeight: 0, flex: 1, flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
           <h2 style={{ margin: 0, fontSize: 40, fontWeight: 700 }}>游资席位榜</h2>
-          <span style={{ fontSize: 26, color: COLORS.muted }}>净额 / 买入红 · 卖出绿</span>
+          <span style={{ fontSize: 26, color: COLORS.muted }}>净额 / 买入 / 卖出</span>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", flexDirection: [6, 9].includes(layout) ? "row-reverse" : "row", gap: 14 }}>
           {flows.map((flow, index) => (
-            <div key={flow.flowId} style={{ display: "flex", width: "49%" }}>{hotMoneyCard(flow, index)}</div>
+            <div key={flow.flowId} style={{ display: "flex", width: "49%" }}>{hotMoneyCard(flow, index, COLORS, layout)}</div>
           ))}
         </div>
       </section>
-    </div>
+    </div>,
+    theme
   );
 }
 

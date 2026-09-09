@@ -10,7 +10,7 @@ export async function generateReportVideo(
   const canvas = document.createElement("canvas");
   canvas.width = DAILY_VIDEO_WIDTH;
   canvas.height = DAILY_VIDEO_HEIGHT;
-  const context = canvas.getContext("2d", { alpha: false });
+  const context = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
   if (!context) throw new Error("CANVAS_CAPTURE_UNSUPPORTED");
   return encodeStoryboardMp4(canvas, context, storyboard, onProgress);
 }

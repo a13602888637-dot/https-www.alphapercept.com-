@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { OsintDailyReportSnapshot } from "../../lib/osint/daily-report/contracts.ts";
 import { buildVideoStoryboard, normalizeVideoHeadline } from "../../lib/osint/daily-video/storyboard.ts";
-import { themeForDate, DAILY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
+import { themeForDate, LEGACY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
 import { compactVideoShareName, videoShareAmount } from "../../lib/osint/daily-video/copy.ts";
 import { pageIndexAtTime, pageTransitionAtTime, wrapMeasuredText } from "../../lib/osint/daily-video/canvas-renderer.ts";
 import { mp4EncodingApisAvailable } from "../../lib/osint/daily-video/mp4-encoder.ts";
@@ -86,7 +86,7 @@ const themeIds = Array.from({ length: 7 }, (_, index) => {
   return themeForDate(date).id;
 });
 assert.equal(new Set(themeIds).size, 7);
-assert.equal(new Set(DAILY_VIDEO_THEMES.map((theme) => theme.sound.join("-"))).size, 7);
+assert.equal(new Set(LEGACY_VIDEO_THEMES.map((theme) => theme.sound.join("-"))).size, 7);
 assert.equal(compactVideoShareName("嘉立创"), "J立创");
 assert.equal(compactVideoShareName("*ST萃华"), "C华");
 assert.equal(videoShareAmount(652436808.6), "65,244🥣");
