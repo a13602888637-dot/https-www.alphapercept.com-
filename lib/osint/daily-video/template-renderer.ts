@@ -101,7 +101,7 @@ function pageHeader(ctx: CanvasRenderingContext2D, storyboard: VideoStoryboard, 
   ctx.fillText(storyboard.mode === "morning" ? "ALPHAPERCEPT / MORNING" : "ALPHAPERCEPT / CLOSE", 64, 82);
   ctx.textAlign = "right"; ctx.fillText(storyboard.date, 1016, 82); ctx.textAlign = "left";
   if ([2, 4, 8].includes(variant)) {
-    ctx.fillStyle = theme.accent; ctx.fillRect(64, 112, 952, 104);
+    ctx.fillStyle = theme.accent; ctx.fillRect(64, 112, 952, 96);
     ctx.fillStyle = theme.background;
   } else { ctx.fillStyle = theme.ink; }
   font(ctx, 52, 850, display);
