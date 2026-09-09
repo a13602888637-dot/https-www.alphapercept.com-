@@ -267,10 +267,15 @@ export function buildVideoStoryboard(
   options: BuildVideoStoryboardOptions
 ): VideoStoryboard {
   if (mode === "close") assertCloseReportReady(report);
-  const theme = themeForDate(report.reportDate);
-  const pages = mode === "morning"
+  const theme = themeForDate(report.reportDate, mode);
+  let pages = mode === "morning"
     ? morningPages(report, options.reportUrl).pages
     : closePages(report, options.reportUrl);
+  if (mode === "close" && theme.layout?.order === "accounts-first") {
+    pages = [pages[0], ...pages.filter((page) => page.kind === "accounts"), ...pages.filter((page) => page.kind === "ranking")];
+  } else if (mode === "close" && theme.layout?.order === "outflows-first") {
+    pages = [pages[0], ...pages.filter((page) => page.kind === "ranking" && page.direction === "out"), ...pages.filter((page) => page.kind === "ranking" && page.direction === "in"), ...pages.filter((page) => page.kind === "accounts")];
+  }
   const coverDurationMs = mode === "morning" ? MORNING_COVER_DURATION_MS : CLOSE_COVER_DURATION_MS;
   const pageDurationMs = mode === "morning" ? MORNING_PAGE_DURATION_MS : CLOSE_PAGE_DURATION_MS;
   const outroDurationMs = mode === "morning" ? MORNING_OUTRO_DURATION_MS : CLOSE_OUTRO_DURATION_MS;

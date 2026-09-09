@@ -1,5 +1,28 @@
 export type VideoMode = "morning" | "close";
 
+export interface VideoTemplateLayout {
+  cover: number;
+  content: number;
+  frame: "rule" | "panel" | "tab" | "outline" | "stripe";
+  transition: "left" | "up" | "right" | "down" | "reveal";
+  typography: "sans" | "serif" | "mono";
+  order: "rankings-first" | "accounts-first" | "outflows-first";
+}
+
+export interface VideoMusicProfile {
+  id: string;
+  name: string;
+  tempo: number;
+  root: number;
+  scale: number[];
+  progression: number[];
+  melody: number[];
+  rhythm: number[];
+  instrument: "keys" | "pluck" | "bell" | "mallet" | "reed";
+  percussion: "brush" | "pulse" | "shaker" | "click" | "none";
+  cue: "chime" | "wood" | "sweep" | "drop" | "glass";
+}
+
 export interface VideoTheme {
   id: string;
   name: string;
@@ -13,6 +36,8 @@ export interface VideoTheme {
   closeLayout: string;
   motion: "grid" | "ripple" | "slices" | "track" | "editorial" | "orbit" | "calendar";
   sound: number[];
+  layout?: VideoTemplateLayout;
+  music?: VideoMusicProfile;
 }
 
 export interface VideoStoryCard {
