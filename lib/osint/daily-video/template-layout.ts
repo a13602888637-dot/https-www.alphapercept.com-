@@ -2,48 +2,26 @@ export interface TemplateBox { x: number; y: number; width: number; height: numb
 
 export const TEMPLATE_BODY = { x: 64, y: 252, width: 952, height: 1410 };
 
-/** All rectangles stay inside the mobile reading area; no item crosses pages. */
-export function storyTemplateBoxes(layout: number, count: number): TemplateBox[] {
+/**
+ * News cards stay wide inside the portrait video canvas. Template rotation may
+ * change colour, typography and framing, but must never squeeze stories into
+ * narrow side-by-side columns.
+ */
+export function storyTemplateBoxes(_layout: number, count: number): TemplateBox[] {
   if (count <= 0) return [];
   const { x, y, width, height } = TEMPLATE_BODY;
-  if (count === 1) return [{ x, y, width, height }];
   const gap = 22;
-  if (count === 3 && (layout === 1 || layout === 2)) {
-    const leadHeight = 650;
-    const smallHeight = height - leadHeight - gap;
-    const smallWidth = (width - gap) / 2;
-    if (layout === 1) return [
-      { x, y, width, height: leadHeight },
-      { x, y: y + leadHeight + gap, width: smallWidth, height: smallHeight },
-      { x: x + smallWidth + gap, y: y + leadHeight + gap, width: smallWidth, height: smallHeight },
-    ];
-    return [
-      { x, y, width: smallWidth, height: smallHeight },
-      { x: x + smallWidth + gap, y, width: smallWidth, height: smallHeight },
-      { x, y: y + smallHeight + gap, width, height: leadHeight },
-    ];
-  }
-  if (layout === 4) {
-    const leadWidth = count === 2 ? 465 : 520;
-    const sideHeight = (height - gap * (count - 2)) / (count - 1);
-    return [
-      { x, y, width: leadWidth, height },
-      ...Array.from({ length: count - 1 }, (_, index) => ({
-        x: x + leadWidth + gap, y: y + index * (sideHeight + gap),
-        width: width - leadWidth - gap, height: sideHeight,
-      })),
-    ];
-  }
-  if (layout === 7) {
-    const columnWidth = (width - gap * (count - 1)) / count;
-    return Array.from({ length: count }, (_, index) => ({ x: x + index * (columnWidth + gap), y, width: columnWidth, height }));
+  if (count === 1) {
+    const cardHeight = Math.min(720, height);
+    return [{ x, y: y + (height - cardHeight) / 2, width, height: cardHeight }];
   }
   const rowHeight = (height - gap * (count - 1)) / count;
-  return Array.from({ length: count }, (_, index) => {
-    const inset = layout === 3 ? 98 : layout === 6 ? 140 : layout === 5 ? 68 : layout === 9 ? 32 : 0;
-    const offset = layout === 3 ? inset : layout === 5 ? index % 2 * inset : layout === 9 ? (index % 2 === 0 ? inset : 0) : 0;
-    return { x: x + offset, y: y + index * (rowHeight + gap), width: width - inset, height: rowHeight };
-  });
+  return Array.from({ length: count }, (_, index) => ({
+    x,
+    y: y + index * (rowHeight + gap),
+    width,
+    height: rowHeight,
+  }));
 }
 
 export function rankingTemplateBoxes(layout: number, count: number): TemplateBox[] {

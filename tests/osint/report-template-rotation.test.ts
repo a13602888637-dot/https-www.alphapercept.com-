@@ -41,7 +41,15 @@ function assertBoxes(boxes: TemplateBox[]) {
   }
 }
 for (let layout = 0; layout < 10; layout += 1) {
-  for (let count = 0; count <= 3; count += 1) assertBoxes(storyTemplateBoxes(layout, count));
+  for (let count = 0; count <= 3; count += 1) {
+    const storyBoxes = storyTemplateBoxes(layout, count);
+    assertBoxes(storyBoxes);
+    for (const box of storyBoxes) {
+      assert.equal(box.x, TEMPLATE_BODY.x, "news cards must use the full horizontal reading width");
+      assert.equal(box.width, TEMPLATE_BODY.width, "news cards must not become narrow columns");
+      assert.ok(box.width > box.height, `news card must be horizontal: ${JSON.stringify(box)}`);
+    }
+  }
   for (let count = 0; count <= 10; count += 1) assertBoxes(rankingTemplateBoxes(layout, count));
   for (let count = 0; count <= 5; count += 1) assertBoxes(accountTemplateBoxes(layout, count));
 }

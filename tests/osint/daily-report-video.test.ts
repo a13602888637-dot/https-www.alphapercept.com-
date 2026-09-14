@@ -5,7 +5,13 @@ import type { OsintDailyReportSnapshot } from "../../lib/osint/daily-report/cont
 import { buildVideoStoryboard, normalizeVideoHeadline } from "../../lib/osint/daily-video/storyboard.ts";
 import { themeForDate, LEGACY_VIDEO_THEMES } from "../../lib/osint/daily-video/themes.ts";
 import { compactVideoShareName, videoShareAmount } from "../../lib/osint/daily-video/copy.ts";
-import { pageIndexAtTime, pageTransitionAtTime, wrapMeasuredText } from "../../lib/osint/daily-video/canvas-renderer.ts";
+import {
+  DAILY_VIDEO_HEIGHT,
+  DAILY_VIDEO_WIDTH,
+  pageIndexAtTime,
+  pageTransitionAtTime,
+  wrapMeasuredText,
+} from "../../lib/osint/daily-video/canvas-renderer.ts";
 import { mp4EncodingApisAvailable } from "../../lib/osint/daily-video/mp4-encoder.ts";
 
 const MODULES = ["宏观", "科技", "能源"] as const;
@@ -92,6 +98,8 @@ assert.equal(compactVideoShareName("*ST萃华"), "C华");
 assert.equal(videoShareAmount(652436808.6), "65,244🥣");
 
 const morning = buildVideoStoryboard(snapshot, "morning", { reportUrl });
+assert.equal(DAILY_VIDEO_WIDTH, 1080);
+assert.equal(DAILY_VIDEO_HEIGHT, 1920);
 assert.equal(morning.mode, "morning");
 assert.equal(morning.pages[0].kind, "cover");
 const morningPages = morning.pages.filter((page) => page.kind === "stories");
